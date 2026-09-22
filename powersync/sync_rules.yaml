@@ -1,0 +1,56 @@
+# ==============================================================================
+# PowerSync Sync Rules for DoseDiary
+# Partitions data by authenticated user_id and permitted caregiver relationships
+# ==============================================================================
+
+bucket_definitions:
+  # 1. User Private Bucket: Everything owned by the active user
+  user_data:
+    parameters:
+      - select request.user_id() as current_user_id
+    data:
+      - select * from profiles where id = bucket.current_user_id
+      - select * from medications where user_id = bucket.current_user_id
+      - select * from schedules where user_id = bucket.current_user_id
+      - select * from dose_occurrences where user_id = bucket.current_user_id
+      - select * from dose_events where user_id = bucket.current_user_id
+      - select * from stock_events where user_id = bucket.current_user_id
+      - select * from caregiver_invitations where user_id = bucket.current_user_id
+      - select * from caregiver_permissions where user_id = bucket.current_user_id
+      - select * from notification_attempts where occurrence_id in (
+          select id from dose_occurrences where user_id = bucket.current_user_id
+        )
+
+  # 2. Caregiver Bucket: Synchronizes patient data for authorized caregivers
+  caregiver_patient_data:
+    parameters:
+      # Find all patients who have granted permissions to current user as caregiver
+      - select user_id as patient_id, perm_view_schedule, perm_view_history, perm_view_refills, perm_view_adherence
+        from caregiver_permissions
+        where caregiver_id = request.user_id()
+    data:
+      # Patient profile information
+      - select id, full_name, avatar_url, preferred_language
+        from profiles
+        where id = bucket.patient_id
+
+      # Patient medications (if schedule or refills permission granted)
+      - select id, user_id, name, strength, strength_unit, amount_per_dose, dose_unit,
+               instructions, is_active, quantity_on_hand, quantity_unit, refill_threshold_qty
+        from medications
+        where user_id = bucket.patient_id
+          and (bucket.perm_view_schedule = true or bucket.perm_view_refills = true)
+
+      # Patient schedules (if schedule permission granted)
+      - select * from schedules
+        where user_id = bucket.patient_id
+          and bucket.perm_view_schedule = true
+
+      # Patient dose occurrences (if schedule or history permission granted)
+      - select * from dose_occurrences
+        where user_id = bucket.patient_id
+          and (bucket.perm_view_schedule = true or bucket.perm_view_history = true)
+
+      # Caregiver alerts assigned to this caregiver
+      - select * from caregiver_alerts
+        where caregiver_id = request.user_id()
