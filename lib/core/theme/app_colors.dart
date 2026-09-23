@@ -6,13 +6,13 @@ class AppColors {
   AppColors._();
 
   // ── Brand ────────────────────────────────────────────────
-  static const Color primaryBackground = Color(0xFFF2EFE7); // Warm cream
+  static const Color primaryBackground = Color(0xFFF9F9F9); // Clean modern grey
   static const Color primaryAction = Color(0xFFDC143C);     // Crimson
   static const Color primaryActionDark = Color(0xFFB91032); // Pressed crimson
 
   // ── Surface ───────────────────────────────────────────────
   static const Color cardSurface = Color(0xFFFFFFFF);
-  static const Color scaffoldBackground = Color(0xFFF2EFE7);
+  static const Color scaffoldBackground = Color(0xFFF9F9F9);
 
   // ── Text ─────────────────────────────────────────────────
   static const Color textPrimary = Color(0xFF000000);
@@ -21,13 +21,13 @@ class AppColors {
   static const Color textOnPrimary = Color(0xFFFFFFFF);
 
   // ── Borders / Dividers ────────────────────────────────────
-  static const Color borderLight = Color(0xFFE2DDD5);
-  static const Color borderMedium = Color(0xFFD4CEBF);
+  static const Color borderLight = Color(0xFFEEEEEE);
+  static const Color borderMedium = Color(0xFFE2E2E2);
   static const Color borderDark = Color(0xFF916F6E);
 
   // ── Navigation ────────────────────────────────────────────
   static const Color navBarBackground = Color(0xFFFFFFFF);
-  static const Color navBarBorder = Color(0xFFD4CEBF);
+  static const Color navBarBorder = Color(0xFFEEEEEE);
   static const Color navBarInactive = Color(0xFF64748B);
   static const Color navBarActive = Color(0xFFDC143C);
 

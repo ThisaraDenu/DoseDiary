@@ -35,20 +35,8 @@ class CaregiverInvitation {
   final bool viewAdherence;
 }
 
-// Provider (demo state)
-final caregiversProvider = StateProvider<List<CaregiverInvitation>>((ref) => [
-  CaregiverInvitation(
-    id: 'cg-001',
-    email: 'family@example.com',
-    relationship: 'Daughter',
-    status: 'active',
-    createdAt: DateTime.now().subtract(const Duration(days: 7)),
-    viewSchedule: true,
-    viewHistory: true,
-    viewRefills: true,
-    viewAdherence: true,
-  ),
-]);
+// Provider (user caregiver invitations)
+final caregiversProvider = StateProvider<List<CaregiverInvitation>>((ref) => []);
 
 // Screen
 class CaregiverManagementScreen extends ConsumerWidget {

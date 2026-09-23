@@ -12,6 +12,7 @@ import '../../../core/widgets/dd_logo.dart';
 import '../../../core/router/route_names.dart';
 import '../../../data/remote/auth_service.dart';
 import '../../../data/remote/supabase_sync_service.dart';
+import '../../../core/services/permission_service.dart';
 import '../../../main.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -56,7 +57,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       SupabaseSyncService.pullFromCloud().ignore();
 
       if (!mounted) return;
-      context.go(RouteNames.home);
+      if (!PermissionService.hasPrompted(prefs)) {
+        context.go(RouteNames.permissions);
+      } else {
+        context.go(RouteNames.home);
+      }
     } catch (e) {
       setState(() => _error = _friendlyError(e.toString()));
     } finally {
@@ -83,7 +88,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       SupabaseSyncService.pullFromCloud().ignore();
 
       if (!mounted) return;
-      context.go(RouteNames.home);
+      if (!PermissionService.hasPrompted(prefs)) {
+        context.go(RouteNames.permissions);
+      } else {
+        context.go(RouteNames.home);
+      }
     } catch (e) {
       setState(() => _error = _friendlyGoogleError(e.toString()));
     } finally {

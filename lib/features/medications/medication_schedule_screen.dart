@@ -76,7 +76,12 @@ class MedicationScheduleScreen extends ConsumerWidget {
                     );
                   }
                   return ListView.separated(
-                    padding: const EdgeInsets.all(AppDimensions.screenMargin),
+                    padding: const EdgeInsets.fromLTRB(
+                      AppDimensions.screenMargin,
+                      AppDimensions.screenMargin,
+                      AppDimensions.screenMargin,
+                      110,
+                    ),
                     itemCount: occs.length,
                     separatorBuilder: (_, __) => const SizedBox(height: AppDimensions.stackMd),
                     itemBuilder: (ctx, i) {

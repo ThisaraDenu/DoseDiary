@@ -88,6 +88,9 @@ class DoseRepository {
     final db = await _database;
     final userId = _activeUserId;
     final localDate = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    
+    await _ensureOccurrencesForDate(db, userId, date, localDate);
+
     final rows = await db.query(
       'dose_occurrences',
       where: 'user_id = ? AND local_date = ?',
@@ -95,6 +98,80 @@ class DoseRepository {
       orderBy: 'scheduled_at ASC',
     );
     return rows.map(DoseOccurrence.fromMap).toList();
+  }
+
+  Future<void> _ensureOccurrencesForDate(
+    Database db,
+    String userId,
+    DateTime date,
+    String localDate,
+  ) async {
+    try {
+      final schedules = await db.query(
+        'schedules',
+        where: 'user_id = ? AND superseded_at IS NULL',
+        whereArgs: [userId],
+      );
+      if (schedules.isEmpty) return;
+
+      final startOfDay = DateTime(date.year, date.month, date.day);
+      final nowUtc = DateTime.now().toUtc().toIso8601String();
+
+      for (final s in schedules) {
+        final schedId = s['id'] as String;
+        final medId = s['medication_id'] as String;
+        final timesStr = s['times_of_day'] as String? ?? '';
+        final times = timesStr.split(',').map((t) => t.trim()).where((t) => t.isNotEmpty).toList();
+
+        final startDateStr = s['start_date'] as String?;
+        if (startDateStr != null) {
+          final sDate = DateTime.tryParse(startDateStr);
+          if (sDate != null && startOfDay.isBefore(DateTime(sDate.year, sDate.month, sDate.day))) {
+            continue;
+          }
+        }
+        final endDateStr = s['end_date'] as String?;
+        if (endDateStr != null) {
+          final eDate = DateTime.tryParse(endDateStr);
+          if (eDate != null && startOfDay.isAfter(DateTime(eDate.year, eDate.month, eDate.day))) {
+            continue;
+          }
+        }
+
+        final repeatDaysStr = s['repeat_days'] as String?;
+        if (repeatDaysStr != null && repeatDaysStr.isNotEmpty) {
+          final days = repeatDaysStr.split(',').map((d) => int.tryParse(d.trim())).whereType<int>().toList();
+          if (days.isNotEmpty && !days.contains(date.weekday)) {
+            continue;
+          }
+        }
+
+        for (final time in times) {
+          final key = '$schedId-$localDate-$time';
+          final parts = time.split(':');
+          if (parts.length < 2) continue;
+          final h = int.tryParse(parts[0]) ?? 0;
+          final m = int.tryParse(parts[1]) ?? 0;
+          final scheduledAt = DateTime(date.year, date.month, date.day, h, m).toUtc();
+
+          await db.insert(
+            'dose_occurrences',
+            {
+              'id': '${schedId}_${localDate}_$time',
+              'schedule_id': schedId,
+              'medication_id': medId,
+              'user_id': userId,
+              'scheduled_at': scheduledAt.toIso8601String(),
+              'local_date': localDate,
+              'occurrence_key': key,
+              'status': 'pending',
+              'created_at': nowUtc,
+            },
+            conflictAlgorithm: ConflictAlgorithm.ignore,
+          );
+        }
+      }
+    } catch (_) {}
   }
 
   Future<List<DoseOccurrence>> getOccurrencesForDateRange(

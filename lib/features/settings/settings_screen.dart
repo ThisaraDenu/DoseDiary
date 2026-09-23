@@ -28,6 +28,7 @@ class SettingsScreen extends ConsumerWidget {
         automaticallyImplyLeading: false,
       ),
       body: ListView(
+        padding: const EdgeInsets.only(bottom: 110),
         children: [
           // App brand header
           Container(

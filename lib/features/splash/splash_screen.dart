@@ -8,6 +8,7 @@ import '../../core/theme/app_text_styles.dart';
 import '../../core/theme/app_dimensions.dart';
 import '../../core/widgets/dd_logo.dart';
 import '../../core/router/route_names.dart';
+import '../../core/services/permission_service.dart';
 import '../../data/remote/supabase_sync_service.dart';
 import '../../main.dart';
 
@@ -50,9 +51,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     if (!onboardingDone) {
       context.go(RouteNames.onboarding);
     } else if (isLoggedIn) {
-      // Pull latest cloud data in background then navigate home
+      // Pull latest cloud data in background then navigate
       SupabaseSyncService.pullFromCloud().ignore();
-      context.go(RouteNames.home);
+      if (!PermissionService.hasPrompted(prefs)) {
+        context.go(RouteNames.permissions);
+      } else {
+        context.go(RouteNames.home);
+      }
     } else {
       context.go(RouteNames.login);
     }
