@@ -549,3 +549,165 @@ final allocatedPatientsProvider = FutureProvider<List<AllocatedPatient>>((ref) a
   final repo = ref.watch(patientRepositoryProvider);
   return repo.getAllocatedPatients();
 });
+
+// -- PatientCaregiverLink Repository (many-to-many) --
+
+class PatientCaregiverLinkRepository {
+  PatientCaregiverLinkRepository(this._db);
+  final AppDatabase _db;
+
+  Future<Database> get _database => _db.database;
+
+  // ---- Caregiver side: get all patients this caregiver monitors ----
+  Future<List<PatientCaregiverLink>> getPatientsForCaregiver({String? caregiverUserId}) async {
+    final cid = caregiverUserId ?? _activeUserId;
+    final db = await _database;
+    final rows = await db.query(
+      'patient_caregiver_links',
+      where: 'caregiver_user_id = ? AND status = ?',
+      whereArgs: [cid, 'active'],
+      orderBy: 'created_at ASC',
+    );
+    return rows.map(PatientCaregiverLink.fromMap).toList();
+  }
+
+  // ---- Patient side: get all caregivers watching this patient ----
+  Future<List<PatientCaregiverLink>> getCaregiversForPatient({String? patientUserId}) async {
+    final pid = patientUserId ?? _activeUserId;
+    final db = await _database;
+    final rows = await db.query(
+      'patient_caregiver_links',
+      where: 'patient_user_id = ? AND status = ?',
+      whereArgs: [pid, 'active'],
+      orderBy: 'created_at ASC',
+    );
+    return rows.map(PatientCaregiverLink.fromMap).toList();
+  }
+
+  // ---- Create a new link (e.g., after invitation accepted) ----
+  Future<PatientCaregiverLink> createLink({
+    required String patientUserId,
+    required String caregiverUserId,
+    String relationship = 'Caregiver',
+    String? invitationId,
+  }) async {
+    final link = PatientCaregiverLink.create(
+      patientUserId: patientUserId,
+      caregiverUserId: caregiverUserId,
+      relationship: relationship,
+      invitationId: invitationId,
+    );
+    final db = await _database;
+    await db.insert(
+      'patient_caregiver_links',
+      link.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    return link;
+  }
+
+  // ---- Update status (pause / revoke) ----
+  Future<void> updateLinkStatus(String linkId, String status) async {
+    final db = await _database;
+    await db.update(
+      'patient_caregiver_links',
+      {'status': status, 'updated_at': DateTime.now().toUtc().toIso8601String()},
+      where: 'id = ?',
+      whereArgs: [linkId],
+    );
+  }
+
+  // ---- Remove a link entirely ----
+  Future<void> deleteLink(String linkId) async {
+    final db = await _database;
+    await db.delete('patient_caregiver_links', where: 'id = ?', whereArgs: [linkId]);
+  }
+
+  // ---- Check if a specific link exists ----
+  Future<bool> linkExists({
+    required String patientUserId,
+    required String caregiverUserId,
+  }) async {
+    final db = await _database;
+    final rows = await db.query(
+      'patient_caregiver_links',
+      where: 'patient_user_id = ? AND caregiver_user_id = ?',
+      whereArgs: [patientUserId, caregiverUserId],
+      limit: 1,
+    );
+    return rows.isNotEmpty;
+  }
+}
+
+final patientCaregiverLinkRepositoryProvider = Provider<PatientCaregiverLinkRepository>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  return PatientCaregiverLinkRepository(db);
+});
+
+/// All active patients that the current caregiver is monitoring.
+final caregiverPatientsProvider = FutureProvider<List<PatientCaregiverLink>>((ref) async {
+  final repo = ref.watch(patientCaregiverLinkRepositoryProvider);
+  return repo.getPatientsForCaregiver();
+});
+
+/// All active caregivers assigned to the current patient.
+final patientCaregiversProvider = FutureProvider<List<PatientCaregiverLink>>((ref) async {
+  final repo = ref.watch(patientCaregiverLinkRepositoryProvider);
+  return repo.getCaregiversForPatient();
+});
+
+// ── Caregiver Repository (Patient Mode) ───────────────────────────────────────
+// Manages the caregivers that a patient sees in Patient Mode.
+// Backed by SQLite table 'allocated_caregivers'.
+
+class CaregiverRepository {
+  CaregiverRepository(this._db);
+  final AppDatabase _db;
+
+  Future<Database> get _database => _db.database;
+
+  /// Returns all caregivers assigned to this patient.
+  Future<List<AllocatedCaregiver>> getCaregiversForPatient({String? patientId}) async {
+    final pid = patientId ?? _activeUserId;
+    final db = await _database;
+    final rows = await db.query(
+      'allocated_caregivers',
+      where: 'patient_id = ?',
+      whereArgs: [pid],
+      orderBy: 'created_at ASC',
+    );
+    return rows.map((r) => AllocatedCaregiver.fromMap(r)).toList();
+  }
+
+  /// Adds a caregiver for this patient into local SQLite.
+  Future<void> addCaregiver(AllocatedCaregiver caregiver) async {
+    final db = await _database;
+    await db.insert(
+      'allocated_caregivers',
+      caregiver.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// Removes a caregiver by their ID.
+  Future<void> removeCaregiver(String caregiverId) async {
+    final db = await _database;
+    await db.delete(
+      'allocated_caregivers',
+      where: 'id = ?',
+      whereArgs: [caregiverId],
+    );
+  }
+}
+
+final caregiverRepositoryProvider = Provider<CaregiverRepository>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  return CaregiverRepository(db);
+});
+
+/// Patient Mode: all caregivers linked to the current patient.
+final patientCaregiversListProvider = FutureProvider<List<AllocatedCaregiver>>((ref) async {
+  final repo = ref.watch(caregiverRepositoryProvider);
+  return repo.getCaregiversForPatient();
+});
+

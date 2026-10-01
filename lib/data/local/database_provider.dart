@@ -30,7 +30,15 @@ class AppDatabase {
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
+    // Ensure tables added after initial schema creation exist
     await db.execute(_createAllocatedPatientsTable);
+    await db.execute(_createPatientCaregiverLinksTable);
+    await db.execute(_createAllocatedCaregiversTable);
+    // Add patient_user_id column if upgrading from older schema
+    try {
+      await db.execute('ALTER TABLE allocated_patients ADD COLUMN patient_user_id TEXT');
+    } catch (_) { /* column already exists — safe to ignore */ }
+    await _clearSeedData(db);
     return db;
   }
 
@@ -46,10 +54,21 @@ class AppDatabase {
     await db.execute(_createCaregiverAlertsTable);
     await db.execute(_createNotificationAttemptsTable);
     await db.execute(_createAllocatedPatientsTable);
+    await db.execute(_createPatientCaregiverLinksTable);
+    await db.execute(_createAllocatedCaregiversTable);
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     // Future migration logic
+  }
+
+  /// Removes any rows that were inserted by the old seedSampleCaregiverData()
+  /// helper. Safe to call repeatedly — it is a no-op once the rows are gone.
+  Future<void> _clearSeedData(Database db) async {
+    const tables = ['dose_events', 'dose_occurrences', 'schedules', 'medications'];
+    for (final table in tables) {
+      await db.delete(table, where: "id LIKE 'sample-%' OR id LIKE 'past_%'");
+    }
   }
 
   // ── Table DDL ──────────────────────────────────────────────────────────────
@@ -220,12 +239,47 @@ class AppDatabase {
     CREATE TABLE IF NOT EXISTS allocated_patients (
       id TEXT PRIMARY KEY,
       caregiver_id TEXT NOT NULL,
+      patient_user_id TEXT,
       full_name TEXT NOT NULL,
       relationship TEXT NOT NULL DEFAULT 'Patient',
       avatar_url TEXT,
       location TEXT NOT NULL DEFAULT 'Colombo Home',
       last_active TEXT NOT NULL DEFAULT 'Active now',
       phone_battery INTEGER NOT NULL DEFAULT 85,
+      battery_status TEXT NOT NULL DEFAULT 'Balanced',
+      smart_hub_status TEXT NOT NULL DEFAULT 'Synced 2m ago',
+      phone_number TEXT,
+      created_at TEXT NOT NULL
+    )
+  ''';
+
+  /// Many-to-many junction: each row = one confirmed patient↔caregiver relationship.
+  static const _createPatientCaregiverLinksTable = '''
+    CREATE TABLE IF NOT EXISTS patient_caregiver_links (
+      id TEXT PRIMARY KEY,
+      patient_user_id TEXT NOT NULL,
+      caregiver_user_id TEXT NOT NULL,
+      relationship TEXT NOT NULL DEFAULT 'Caregiver',
+      invitation_id TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE (patient_user_id, caregiver_user_id)
+    )
+  ''';
+
+  /// Caregivers allocated/linked to a patient in Patient Mode.
+  static const _createAllocatedCaregiversTable = '''
+    CREATE TABLE IF NOT EXISTS allocated_caregivers (
+      id TEXT PRIMARY KEY,
+      patient_id TEXT NOT NULL,
+      caregiver_user_id TEXT,
+      full_name TEXT NOT NULL,
+      relationship TEXT NOT NULL DEFAULT 'Caregiver',
+      avatar_url TEXT,
+      location TEXT NOT NULL DEFAULT 'Colombo Home',
+      last_active TEXT NOT NULL DEFAULT 'Active now',
+      phone_battery INTEGER NOT NULL DEFAULT 84,
       battery_status TEXT NOT NULL DEFAULT 'Balanced',
       smart_hub_status TEXT NOT NULL DEFAULT 'Synced 2m ago',
       phone_number TEXT,
@@ -243,6 +297,7 @@ class AppDatabase {
     await db.delete('stock_events', where: 'user_id = ?', whereArgs: ['demo-user-001']);
     await db.delete('profiles', where: 'id = ?', whereArgs: ['demo-user-001']);
     await db.delete('allocated_patients', where: 'caregiver_id = ?', whereArgs: ['demo-user-001']);
+    await db.delete('allocated_caregivers', where: 'patient_id = ?', whereArgs: ['demo-user-001']);
   }
 
   /// Wipes all user-specific local SQLite tables (called on sign out).
@@ -259,6 +314,8 @@ class AppDatabase {
     await db.delete('notification_attempts');
     await db.delete('profiles');
     await db.delete('allocated_patients');
+    await db.delete('allocated_caregivers');
+    await db.delete('patient_caregiver_links');
   }
 
   Future<void> close() async => _db?.close();

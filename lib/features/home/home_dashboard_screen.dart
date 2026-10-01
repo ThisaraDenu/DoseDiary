@@ -11,10 +11,9 @@ import '../../data/local/models/app_models.dart';
 import '../../data/local/models/dose_status.dart';
 import '../../data/remote/supabase_sync_service.dart';
 import '../../data/remote/auth_service.dart';
-import '../caregivers/caregiver_management_screen.dart';
 import 'caregiver_home_view.dart';
 
-// ── Home Providers ────────────────────────────────────────────────────────────
+// â”€â”€ Home Providers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 final userAvatarUrlProvider = FutureProvider<String?>((ref) async {
   final profile = await AuthService.getProfile();
@@ -63,7 +62,7 @@ final userNameProvider = FutureProvider<String>((ref) async {
 // (Providers todayOccurrencesProvider, todayMedicationsProvider, todayAdherenceProvider,
 // lowStockProvider, weeklyAdherenceProvider are exported from app_repositories.dart)
 
-// ── Screen ────────────────────────────────────────────────────────────────────
+// â”€â”€ Screen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class HomeDashboardScreen extends ConsumerStatefulWidget {
   const HomeDashboardScreen({super.key});
@@ -195,11 +194,12 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
               ref.invalidate(lowStockProvider);
               ref.invalidate(weeklyAdherenceProvider);
               ref.invalidate(lowestStockMedicationProvider);
+              ref.invalidate(patientCaregiversListProvider);
             },
             child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
-                // ── Sticky Header / App Bar ────────────────────────────────────
+                // â”€â”€ Sticky Header / App Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                 SliverAppBar(
                   backgroundColor: const Color(0xFFF9F9F9),
                   pinned: true,
@@ -241,7 +241,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                   ],
                 ),
 
-                // ── Main Content Body ──────────────────────────────────────────
+                // â”€â”€ Main Content Body â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(20, 8, 20, 110),
@@ -294,7 +294,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     );
   }
 
-  // ── 1. Greeting Section ─────────────────────────────────────────────────────
+  // â”€â”€ 1. Greeting Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildGreetingSection(
     String dateStr,
     String greetingText,
@@ -400,7 +400,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     );
   }
 
-  // ── 2. Mode Switcher ────────────────────────────────────────────────────────
+  // â”€â”€ 2. Mode Switcher â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildModeSwitcher(String userName) {
     return Container(
       width: double.infinity,
@@ -611,7 +611,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     );
   }
 
-  // ── 3. Next Medication Card ─────────────────────────────────────────────────
+  // â”€â”€ 3. Next Medication Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildNextMedicationCard(
     AsyncValue<List<DoseOccurrence>> occsAsync,
     AsyncValue<List<Medication>> medsAsync,
@@ -622,7 +622,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     final actionable = occs.where((o) => o.status.isActionable).toList()
       ..sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
 
-    // Case 1: Empty state — user has not added any medications to the database
+    // Case 1: Empty state â€” user has not added any medications to the database
     if (meds.isEmpty) {
       return Container(
         width: double.infinity,
@@ -831,7 +831,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
 
     final medName = matchedMed?.name ?? 'Scheduled Medication';
     final medDetails = matchedMed != null
-        ? '${matchedMed.displayStrength} • ${matchedMed.displayDose}'
+        ? '${matchedMed.displayStrength} â€¢ ${matchedMed.displayDose}'
         : '1 Dose';
     final medInstructions = (matchedMed?.instructions != null &&
             matchedMed!.instructions!.trim().isNotEmpty)
@@ -989,7 +989,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('✓ Marked $medName as taken!'),
+                          content: Text('âœ“ Marked $medName as taken!'),
                           backgroundColor: const Color(0xFF157F5D),
                           duration: const Duration(seconds: 2),
                         ),
@@ -1027,7 +1027,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     );
   }
 
-  // ── 4. Today's Schedule Section ─────────────────────────────────────────────
+  // â”€â”€ 4. Today's Schedule Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildTodayScheduleSection(
     AsyncValue<List<DoseOccurrence>> occsAsync,
     AsyncValue<List<Medication>> medsAsync,
@@ -1094,7 +1094,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                       DateFormat('h:mm a').format(occ.scheduledAt.toLocal());
                   final strengthStr = med != null ? med.displayStrength : '';
                   final subtitle =
-                      strengthStr.isNotEmpty ? '$strengthStr • $timeStr' : timeStr;
+                      strengthStr.isNotEmpty ? '$strengthStr â€¢ $timeStr' : timeStr;
                   final isTaken = occ.status == DoseStatus.taken;
 
                   return _buildScheduleItem(
@@ -1313,7 +1313,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     );
   }
 
-  // ── 5. Stats Grid (Adherence & Refills) ──────────────────────────────────────
+  // â”€â”€ 5. Stats Grid (Adherence & Refills) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildStatsGrid(
     AsyncValue<AdherenceSummary> adherenceAsync,
     AsyncValue<List<Medication>> lowStockAsync,
@@ -1321,7 +1321,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     final adherence = adherenceAsync.asData?.value;
     final bool hasDosesToday = adherence != null && adherence.countable > 0;
     final String adherencePercent =
-        hasDosesToday ? adherence.percentageStr : '—';
+        hasDosesToday ? adherence.percentageStr : 'â€”';
     final String adherenceTakenDesc = hasDosesToday
         ? '${adherence.taken} of ${adherence.countable} taken today'
         : 'No doses today';
@@ -1555,7 +1555,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                         ],
                       ),
                       const Text(
-                        'Refills ›',
+                        'Refills â€º',
                         style: TextStyle(
                           color: Color(0xFF545F73),
                           fontSize: 12,
@@ -1572,93 +1572,633 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     );
   }
 
-  // ── 6. Caregiver Connected Card ─────────────────────────────────────────────
+  // ── 6. My Caregivers Section (Patient Mode) ─────────────────────────────────
   Widget _buildCaregiverConnectedCard() {
-    final caregivers = ref.watch(caregiversProvider);
-    final caregiver = caregivers.firstOrNull;
-    final hasCaregiver = caregiver != null;
+    final caregiversAsync = ref.watch(patientCaregiversListProvider);
+    final caregivers = caregiversAsync.valueOrNull ?? [];
 
-    final title = hasCaregiver ? 'Caregiver Connected' : 'Family & Caregivers';
-    final name = hasCaregiver
-        ? '${caregiver.email} (${caregiver.relationship})'
-        : 'No Caregiver Connected';
-    final buttonLabel = hasCaregiver ? 'Status' : 'Invite';
-    final buttonAction = hasCaregiver
-        ? () => context.push(RouteNames.caregivers)
-        : () => context.push(RouteNames.inviteCaregiver);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFE8E8E8),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              hasCaregiver
-                  ? Icons.supervised_user_circle_rounded
-                  : Icons.person_add_outlined,
-              color: const Color(0xFFB1002C),
-              size: 22,
-            ),
+    final header = Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        const Text(
+          'My Caregivers',
+          style: TextStyle(
+            color: Color(0xFF1B1B1B),
+            fontSize: 19,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.2,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        ),
+        InkWell(
+          onTap: () => _showAddCaregiverSheet(context),
+          borderRadius: BorderRadius.circular(6),
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            child: Row(
               children: [
+                Icon(Icons.person_add_rounded, color: Color(0xFFB1002C), size: 16),
+                SizedBox(width: 4),
                 Text(
-                  title,
-                  style: const TextStyle(
-                    color: Color(0xFF545F73),
-                    fontSize: 12,
-                  ),
-                ),
-                Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF1B1B1B),
-                    fontSize: 15,
+                  'Add Caregiver',
+                  style: TextStyle(
+                    color: Color(0xFFB1002C),
+                    fontSize: 13.5,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
             ),
           ),
-          ElevatedButton(
-            onPressed: buttonAction,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: const Color(0xFF1B1B1B),
-              elevation: 1,
-              shadowColor: Colors.black.withOpacity(0.08),
-              minimumSize: const Size(64, 38),
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
+        ),
+      ],
+    );
+
+    if (caregivers.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          header,
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
-            child: Text(
-              buttonLabel,
-              style: const TextStyle(
-                fontSize: 13.5,
-                fontWeight: FontWeight.w600,
+            child: Column(
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFDAD9).withOpacity(0.6),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.volunteer_activism_rounded,
+                    color: Color(0xFFB1002C),
+                    size: 26,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'No Caregivers Added',
+                  style: TextStyle(
+                    color: Color(0xFF1B1B1B),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Add a family member or caregiver to monitor your medications and stay connected.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Color(0xFF545F73), fontSize: 13.5),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: () => _showAddCaregiverSheet(context),
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: const Text(
+                    'Add First Caregiver',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFDC143C),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        header,
+        const SizedBox(height: 12),
+        for (int i = 0; i < caregivers.length; i++) ...[
+          if (i > 0) const SizedBox(height: 12),
+          _buildSingleCaregiverCard(caregivers[i]),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildSingleCaregiverCard(AllocatedCaregiver caregiver) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Avatar with online dot
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(28),
+                    child: Container(
+                      width: 56,
+                      height: 56,
+                      color: const Color(0xFFD5E0F8),
+                      child: caregiver.avatarUrl != null
+                          ? Image.network(
+                              caregiver.avatarUrl!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) =>
+                                  _buildCaregiverAvatarFallback(caregiver.fullName),
+                            )
+                          : _buildCaregiverAvatarFallback(caregiver.fullName),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: Container(
+                      width: 15,
+                      height: 15,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF006448),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2.5),
+                      ),
+                    ),
+                  ),
+                ],
               ),
+              const SizedBox(width: 14),
+
+              // Name & status
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      caregiver.fullName,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1B1B1B),
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.cell_tower_rounded,
+                          size: 16,
+                          color: Color(0xFF006448),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            '${caregiver.lastActive} • ${caregiver.location}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFF545F73),
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              // Action Buttons: Call, Chat & Manage Menu
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  InkWell(
+                    onTap: () {
+                      final phone = caregiver.phoneNumber;
+                      _showCaregiverToast(phone != null && phone.isNotEmpty
+                          ? 'Calling ${caregiver.fullName} at $phone...'
+                          : 'Calling ${caregiver.fullName} via in-app audio...');
+                    },
+                    borderRadius: BorderRadius.circular(24),
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFEEEEEE),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.call_rounded,
+                        color: Color(0xFFDC143C),
+                        size: 21,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: () {
+                      _showCaregiverToast(
+                          "Prepared message: 'Hi ${caregiver.fullName}, checking in!'");
+                    },
+                    borderRadius: BorderRadius.circular(24),
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFEEEEEE),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.chat_bubble_rounded,
+                        color: Color(0xFF1B1B1B),
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                  PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF545F73), size: 20),
+                    padding: EdgeInsets.zero,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    onSelected: (value) async {
+                      if (value == 'add') {
+                        _showAddCaregiverSheet(context);
+                      } else if (value == 'remove') {
+                        await ref.read(caregiverRepositoryProvider).removeCaregiver(caregiver.id);
+                        ref.invalidate(patientCaregiversListProvider);
+                        _showCaregiverToast('Removed ${caregiver.fullName} from caregivers.');
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'add',
+                        child: Row(
+                          children: [
+                            Icon(Icons.person_add_rounded, size: 18, color: Color(0xFF1B1B1B)),
+                            SizedBox(width: 8),
+                            Text('Add Another Caregiver'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'remove',
+                        child: Row(
+                          children: [
+                            Icon(Icons.person_remove_rounded, size: 18, color: Color(0xFFDC143C)),
+                            SizedBox(width: 8),
+                            Text('Remove Caregiver', style: TextStyle(color: Color(0xFFDC143C))),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Live Telemetry Pill Bar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF3F3F3),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                // Phone Battery
+                Expanded(
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.battery_5_bar_rounded,
+                        color: Color(0xFF545F73),
+                        size: 22,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Phone Battery',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF545F73),
+                              ),
+                            ),
+                            Text(
+                              '${caregiver.phoneBattery}% • ${caregiver.batteryStatus}',
+                              style: const TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF1B1B1B),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  width: 1,
+                  height: 28,
+                  color: const Color(0xFFE2E2E2),
+                ),
+                const SizedBox(width: 12),
+
+                // Smart Hub & Band
+                Expanded(
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.wifi_rounded,
+                        color: Color(0xFF006448),
+                        size: 22,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Smart Hub & Band',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF545F73),
+                              ),
+                            ),
+                            Text(
+                              caregiver.smartHubStatus,
+                              style: const TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF1B1B1B),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         ],
       ),
     );
   }
+
+  void _showAddCaregiverSheet(BuildContext context) {
+    final nameController = TextEditingController();
+    final locationController = TextEditingController(text: 'Colombo Home');
+    final phoneController = TextEditingController();
+    String selectedRelationship = 'Family Member';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Container(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+              ),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE2E2E2),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Row(
+                      children: [
+                        Icon(Icons.person_add_rounded, color: Color(0xFFDC143C), size: 24),
+                        SizedBox(width: 8),
+                        Text(
+                          'Add Caregiver',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1B1B1B),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Enter caregiver details to display their card and live telemetry in Patient Mode.',
+                      style: TextStyle(fontSize: 13, color: Color(0xFF545F73)),
+                    ),
+                    const SizedBox(height: 18),
+
+                    // Full Name
+                    const Text('Caregiver Full Name *',
+                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: nameController,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: InputDecoration(
+                        hintText: 'e.g. Ishara Perera',
+                        filled: true,
+                        fillColor: const Color(0xFFF7F7F7),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Relationship
+                    const Text('Relationship',
+                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<String>(
+                      value: selectedRelationship,
+                      items: const [
+                        DropdownMenuItem(value: 'Daughter', child: Text('Daughter')),
+                        DropdownMenuItem(value: 'Son', child: Text('Son')),
+                        DropdownMenuItem(value: 'Spouse', child: Text('Spouse / Partner')),
+                        DropdownMenuItem(value: 'Family Member', child: Text('Family Member')),
+                        DropdownMenuItem(value: 'Nurse', child: Text('Nurse / Home Care')),
+                        DropdownMenuItem(value: 'Doctor', child: Text('Doctor / Physician')),
+                        DropdownMenuItem(value: 'Caregiver', child: Text('Caregiver / Carer')),
+                        DropdownMenuItem(value: 'Other', child: Text('Other')),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) setSheetState(() => selectedRelationship = val);
+                      },
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: const Color(0xFFF7F7F7),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Location
+                    const Text('Location',
+                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: locationController,
+                      decoration: InputDecoration(
+                        hintText: 'e.g. Colombo Home',
+                        filled: true,
+                        fillColor: const Color(0xFFF7F7F7),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Phone Number
+                    const Text('Phone Number (Optional)',
+                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: phoneController,
+                      keyboardType: TextInputType.phone,
+                      decoration: InputDecoration(
+                        hintText: 'e.g. +94 77 123 4567',
+                        filled: true,
+                        fillColor: const Color(0xFFF7F7F7),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+
+                    // Submit button
+                    ElevatedButton(
+                      onPressed: () async {
+                        final fullName = nameController.text.trim();
+                        if (fullName.isEmpty) {
+                          _showCaregiverToast('Please enter caregiver full name');
+                          return;
+                        }
+
+                        final newCaregiver = AllocatedCaregiver.create(
+                          patientId: AuthService.currentUser?.id ?? 'default_user',
+                          fullName: fullName,
+                          relationship: selectedRelationship,
+                          location: locationController.text.trim().isNotEmpty
+                              ? locationController.text.trim()
+                              : 'Colombo Home',
+                          phoneNumber: phoneController.text.trim().isNotEmpty
+                              ? phoneController.text.trim()
+                              : null,
+                          phoneBattery: 84,
+                          batteryStatus: 'Balanced',
+                          smartHubStatus: 'Synced 2m ago',
+                          lastActive: 'Active 12m ago',
+                        );
+
+                        await ref.read(caregiverRepositoryProvider).addCaregiver(newCaregiver);
+                        ref.invalidate(patientCaregiversListProvider);
+                        if (context.mounted) {
+                          Navigator.of(ctx).pop();
+                        }
+                        _showCaregiverToast('Added caregiver $fullName successfully!');
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFDC143C),
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(double.infinity, 48),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                      ),
+                      child: const Text('Save & Add Caregiver'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildCaregiverAvatarFallback(String fullName) {
+    final initials = fullName
+        .trim()
+        .split(' ')
+        .take(2)
+        .map((w) => w.isNotEmpty ? w[0].toUpperCase() : '')
+        .join();
+    return Center(
+      child: Text(
+        initials,
+        style: const TextStyle(
+            color: Color(0xFF3A5FCD), fontSize: 20, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
 }
+
 

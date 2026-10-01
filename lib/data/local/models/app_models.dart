@@ -3,7 +3,7 @@ import 'dose_status.dart';
 
 const _uuid = Uuid();
 
-// ── Medication ────────────────────────────────────────────────────────────────
+// â”€â”€ Medication â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class Medication {
   const Medication({
@@ -168,7 +168,7 @@ class Medication {
       refillReminderEnabled && refillThresholdQty != null && quantityOnHand <= refillThresholdQty!;
 }
 
-// ── Schedule ──────────────────────────────────────────────────────────────────
+// â”€â”€ Schedule â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class MedicationSchedule {
   const MedicationSchedule({
@@ -254,7 +254,7 @@ class MedicationSchedule {
       );
 }
 
-// ── DoseOccurrence ────────────────────────────────────────────────────────────
+// â”€â”€ DoseOccurrence â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class DoseOccurrence {
   const DoseOccurrence({
@@ -276,7 +276,7 @@ class DoseOccurrence {
   final String userId;
   final DateTime scheduledAt;
   final String localDate; // 'YYYY-MM-DD'
-  final String occurrenceKey; // schedule_id + local_date + time — unique
+  final String occurrenceKey; // schedule_id + local_date + time â€” unique
   final DoseStatus status;
   final DateTime createdAt;
   final DateTime? snoozeUntil;
@@ -323,7 +323,7 @@ class DoseOccurrence {
       );
 }
 
-// ── DoseEvent ─────────────────────────────────────────────────────────────────
+// â”€â”€ DoseEvent â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class DoseEvent {
   const DoseEvent({
@@ -396,7 +396,7 @@ class DoseEvent {
       );
 }
 
-// ── StockEvent ────────────────────────────────────────────────────────────────
+// â”€â”€ StockEvent â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class StockEvent {
   const StockEvent({
@@ -474,7 +474,7 @@ class StockEvent {
       );
 }
 
-// ── UserProfile ───────────────────────────────────────────────────────────────
+// â”€â”€ UserProfile â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class UserProfile {
   const UserProfile({
@@ -546,12 +546,13 @@ class UserProfile {
       );
 }
 
-// ── Allocated Patient ──────────────────────────────────────────────────────────
+// â”€â”€ Allocated Patient â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class AllocatedPatient {
   const AllocatedPatient({
     required this.id,
     required this.caregiverId,
+    this.patientUserId,
     required this.fullName,
     this.relationship = 'Patient',
     this.avatarUrl,
@@ -566,6 +567,8 @@ class AllocatedPatient {
 
   final String id;
   final String caregiverId;
+  /// The real profile user-id of the patient (null when manually entered).
+  final String? patientUserId;
   final String fullName;
   final String relationship;
   final String? avatarUrl;
@@ -579,6 +582,7 @@ class AllocatedPatient {
 
   factory AllocatedPatient.create({
     required String caregiverId,
+    String? patientUserId,
     required String fullName,
     String relationship = 'Patient',
     String? avatarUrl,
@@ -592,6 +596,7 @@ class AllocatedPatient {
     return AllocatedPatient(
       id: _uuid.v4(),
       caregiverId: caregiverId,
+      patientUserId: patientUserId,
       fullName: fullName,
       relationship: relationship,
       avatarUrl: avatarUrl,
@@ -606,6 +611,7 @@ class AllocatedPatient {
   }
 
   AllocatedPatient copyWith({
+    String? patientUserId,
     String? fullName,
     String? relationship,
     String? avatarUrl,
@@ -619,6 +625,7 @@ class AllocatedPatient {
     return AllocatedPatient(
       id: id,
       caregiverId: caregiverId,
+      patientUserId: patientUserId ?? this.patientUserId,
       fullName: fullName ?? this.fullName,
       relationship: relationship ?? this.relationship,
       avatarUrl: avatarUrl ?? this.avatarUrl,
@@ -635,6 +642,7 @@ class AllocatedPatient {
   Map<String, dynamic> toMap() => {
         'id': id,
         'caregiver_id': caregiverId,
+        'patient_user_id': patientUserId,
         'full_name': fullName,
         'relationship': relationship,
         'avatar_url': avatarUrl,
@@ -647,9 +655,12 @@ class AllocatedPatient {
         'created_at': createdAt.toIso8601String(),
       };
 
+
+
   factory AllocatedPatient.fromMap(Map<String, dynamic> map) => AllocatedPatient(
         id: map['id'] as String,
         caregiverId: map['caregiver_id'] as String,
+        patientUserId: map['patient_user_id'] as String?,
         fullName: map['full_name'] as String? ?? 'Patient',
         relationship: map['relationship'] as String? ?? 'Patient',
         avatarUrl: map['avatar_url'] as String?,
@@ -660,5 +671,184 @@ class AllocatedPatient {
         smartHubStatus: map['smart_hub_status'] as String? ?? 'Synced 2m ago',
         phoneNumber: map['phone_number'] as String?,
         createdAt: DateTime.parse(map['created_at'] as String),
+      );
+}
+
+// ── AllocatedCaregiver (Patient Mode Display) ─────────────────────────────────
+
+/// Represents a caregiver linked to a patient user.
+/// Stored in database table 'allocated_caregivers'.
+class AllocatedCaregiver {
+  const AllocatedCaregiver({
+    required this.id,
+    required this.patientId,
+    this.caregiverUserId,
+    required this.fullName,
+    this.relationship = 'Caregiver',
+    this.avatarUrl,
+    this.location = 'Colombo Home',
+    this.lastActive = 'Active now',
+    this.phoneBattery = 84,
+    this.batteryStatus = 'Balanced',
+    this.smartHubStatus = 'Synced 2m ago',
+    this.phoneNumber,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String patientId;
+  final String? caregiverUserId;
+  final String fullName;
+  final String relationship;
+  final String? avatarUrl;
+  final String location;
+  final String lastActive;
+  final int phoneBattery;
+  final String batteryStatus;
+  final String smartHubStatus;
+  final String? phoneNumber;
+  final DateTime createdAt;
+
+  factory AllocatedCaregiver.create({
+    required String patientId,
+    String? caregiverUserId,
+    required String fullName,
+    String relationship = 'Caregiver',
+    String? avatarUrl,
+    String location = 'Colombo Home',
+    String lastActive = 'Active 12m ago',
+    int phoneBattery = 84,
+    String batteryStatus = 'Balanced',
+    String smartHubStatus = 'Synced 2m ago',
+    String? phoneNumber,
+  }) {
+    return AllocatedCaregiver(
+      id: _uuid.v4(),
+      patientId: patientId,
+      caregiverUserId: caregiverUserId,
+      fullName: fullName,
+      relationship: relationship,
+      avatarUrl: avatarUrl,
+      location: location,
+      lastActive: lastActive,
+      phoneBattery: phoneBattery,
+      batteryStatus: batteryStatus,
+      smartHubStatus: smartHubStatus,
+      phoneNumber: phoneNumber,
+      createdAt: DateTime.now().toUtc(),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'patient_id': patientId,
+        'caregiver_user_id': caregiverUserId,
+        'full_name': fullName,
+        'relationship': relationship,
+        'avatar_url': avatarUrl,
+        'location': location,
+        'last_active': lastActive,
+        'phone_battery': phoneBattery,
+        'battery_status': batteryStatus,
+        'smart_hub_status': smartHubStatus,
+        'phone_number': phoneNumber,
+        'created_at': createdAt.toIso8601String(),
+      };
+
+  factory AllocatedCaregiver.fromMap(Map<String, dynamic> map) => AllocatedCaregiver(
+        id: map['id'] as String,
+        patientId: map['patient_id'] as String? ?? 'default_user',
+        caregiverUserId: map['caregiver_user_id'] as String?,
+        fullName: map['full_name'] as String? ?? 'Caregiver',
+        relationship: map['relationship'] as String? ?? 'Caregiver',
+        avatarUrl: map['avatar_url'] as String?,
+        location: map['location'] as String? ?? 'Colombo Home',
+        lastActive: map['last_active'] as String? ?? 'Active now',
+        phoneBattery: (map['phone_battery'] as num?)?.toInt() ?? 84,
+        batteryStatus: map['battery_status'] as String? ?? 'Balanced',
+        smartHubStatus: map['smart_hub_status'] as String? ?? 'Synced 2m ago',
+        phoneNumber: map['phone_number'] as String?,
+        createdAt: DateTime.parse(map['created_at'] as String),
+      );
+}
+
+// -- PatientCaregiverLink (many-to-many junction) --
+
+/// Represents a confirmed many-to-many relationship between a patient user
+/// and a caregiver user. One patient can have many caregivers, and one
+/// caregiver can monitor many patients.
+class PatientCaregiverLink {
+  const PatientCaregiverLink({
+    required this.id,
+    required this.patientUserId,
+    required this.caregiverUserId,
+    this.relationship = 'Caregiver',
+    this.invitationId,
+    this.status = 'active',
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final String patientUserId;
+  final String caregiverUserId;
+  final String relationship;
+  final String? invitationId;
+  final String status;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  factory PatientCaregiverLink.create({
+    required String patientUserId,
+    required String caregiverUserId,
+    String relationship = 'Caregiver',
+    String? invitationId,
+  }) {
+    final now = DateTime.now().toUtc();
+    return PatientCaregiverLink(
+      id: _uuid.v4(),
+      patientUserId: patientUserId,
+      caregiverUserId: caregiverUserId,
+      relationship: relationship,
+      invitationId: invitationId,
+      status: 'active',
+      createdAt: now,
+      updatedAt: now,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'patient_user_id': patientUserId,
+        'caregiver_user_id': caregiverUserId,
+        'relationship': relationship,
+        'invitation_id': invitationId,
+        'status': status,
+        'created_at': createdAt.toIso8601String(),
+        'updated_at': updatedAt.toIso8601String(),
+      };
+
+  factory PatientCaregiverLink.fromMap(Map<String, dynamic> map) =>
+      PatientCaregiverLink(
+        id: map['id'] as String,
+        patientUserId: map['patient_user_id'] as String,
+        caregiverUserId: map['caregiver_user_id'] as String,
+        relationship: map['relationship'] as String? ?? 'Caregiver',
+        invitationId: map['invitation_id'] as String?,
+        status: map['status'] as String? ?? 'active',
+        createdAt: DateTime.parse(map['created_at'] as String),
+        updatedAt: DateTime.parse(map['updated_at'] as String),
+      );
+
+  PatientCaregiverLink copyWith({String? relationship, String? status}) =>
+      PatientCaregiverLink(
+        id: id,
+        patientUserId: patientUserId,
+        caregiverUserId: caregiverUserId,
+        relationship: relationship ?? this.relationship,
+        invitationId: invitationId,
+        status: status ?? this.status,
+        createdAt: createdAt,
+        updatedAt: DateTime.now().toUtc(),
       );
 }
