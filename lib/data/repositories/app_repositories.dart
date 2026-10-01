@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../local/database_provider.dart';
@@ -247,7 +248,90 @@ class DoseRepository {
     final total = countable.length;
     return AdherenceSummary(taken: taken, total: total, countable: countable.length);
   }
+
+  /// 7-day adherence report for caregiver and patient analytics.
+  Future<WeeklyAdherenceReport> getWeeklyAdherenceReport({String? userId}) async {
+    final now = DateTime.now();
+    final pips = <DailyAdherencePip>[];
+    int totalCountable = 0;
+    int totalTaken = 0;
+
+    // Loop from 6 days ago up to today (day 0)
+    for (int i = 6; i >= 0; i--) {
+      final day = now.subtract(Duration(days: i));
+      final summary = await getDayAdherence(day);
+      totalCountable += summary.countable;
+      totalTaken += summary.taken;
+
+      final isToday = (i == 0);
+      final dayLabel = isToday ? 'Today' : DateFormat('E').format(day);
+      pips.add(DailyAdherencePip(
+        dayLabel: dayLabel,
+        percentage: summary.percentage,
+        hasDoses: summary.countable > 0,
+      ));
+    }
+
+    final overall = totalCountable == 0 ? 100.0 : (totalTaken / totalCountable * 100).clamp(0.0, 100.0);
+    final missed = (totalCountable - totalTaken).clamp(0, 9999);
+
+    return WeeklyAdherenceReport(
+      overallPercentage: overall,
+      totalCountable: totalCountable,
+      totalTaken: totalTaken,
+      totalMissed: missed,
+      dailyPips: pips,
+    );
+  }
+
+  /// Records a dose administered in person by caregiver into SQLite.
+  Future<void> recordInPersonDose({
+    required String medicationId,
+    required String userId,
+    double amount = 1.0,
+    String? note,
+  }) async {
+    final db = await _database;
+    final now = DateTime.now();
+    final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
+    final rows = await db.query(
+      'dose_occurrences',
+      where: 'medication_id = ? AND local_date = ? AND status != ?',
+      whereArgs: [medicationId, todayStr, 'taken'],
+      orderBy: 'scheduled_at ASC',
+      limit: 1,
+    );
+
+    String occurrenceId;
+    if (rows.isNotEmpty) {
+      occurrenceId = rows.first['id'] as String;
+      await updateOccurrenceStatus(occurrenceId, DoseStatus.taken);
+    } else {
+      occurrenceId = 'adhoc_${medicationId}_${DateTime.now().millisecondsSinceEpoch}';
+      await db.insert('dose_occurrences', {
+        'id': occurrenceId,
+        'schedule_id': 'manual-caregiver',
+        'medication_id': medicationId,
+        'user_id': userId,
+        'scheduled_at': now.toUtc().toIso8601String(),
+        'local_date': todayStr,
+        'occurrence_key': occurrenceId,
+        'status': 'taken',
+        'created_at': now.toUtc().toIso8601String(),
+      });
+    }
+
+    final event = DoseEvent.create(
+      occurrenceId: occurrenceId,
+      userId: userId,
+      action: 'taken',
+      skipReason: note ?? 'Administered in-person by caregiver',
+    );
+    await insertDoseEvent(event);
+  }
 }
+
 
 class AdherenceSummary {
   const AdherenceSummary({required this.taken, required this.total, required this.countable});
@@ -256,6 +340,41 @@ class AdherenceSummary {
   final int countable;
   double get percentage => countable == 0 ? 0 : (taken / countable * 100).clamp(0, 100);
   String get percentageStr => '${percentage.toStringAsFixed(0)}%';
+}
+
+class DailyAdherencePip {
+  const DailyAdherencePip({
+    required this.dayLabel,
+    required this.percentage,
+    required this.hasDoses,
+  });
+
+  final String dayLabel;
+  final double percentage;
+  final bool hasDoses;
+
+  String get labelText {
+    if (!hasDoses) return '$dayLabel • -';
+    return '$dayLabel • ${percentage.toStringAsFixed(0)}%';
+  }
+}
+
+class WeeklyAdherenceReport {
+  const WeeklyAdherenceReport({
+    required this.overallPercentage,
+    required this.totalCountable,
+    required this.totalTaken,
+    required this.totalMissed,
+    required this.dailyPips,
+  });
+
+  final double overallPercentage;
+  final int totalCountable;
+  final int totalTaken;
+  final int totalMissed;
+  final List<DailyAdherencePip> dailyPips;
+
+  String get percentageStr => '${overallPercentage.toStringAsFixed(0)}%';
 }
 
 // ── Stock / Refill Repository ─────────────────────────────────────────────────
@@ -270,6 +389,15 @@ class RefillRepository {
   Future<List<Medication>> getLowStockMedications() async {
     final meds = await _medRepo.getMedications();
     return meds.where((m) => m.isLowStock).toList();
+  }
+
+  Future<Medication?> getLowestStockMedication() async {
+    final meds = await _medRepo.getMedications(activeOnly: true);
+    if (meds.isEmpty) return null;
+    final tracked = meds.where((m) => m.refillReminderEnabled).toList();
+    final list = tracked.isNotEmpty ? List<Medication>.from(tracked) : List<Medication>.from(meds);
+    list.sort((a, b) => a.quantityOnHand.compareTo(b.quantityOnHand));
+    return list.first;
   }
 
   Future<void> recordRefill({
@@ -349,4 +477,75 @@ final allActiveMedsProvider = FutureProvider<List<Medication>>((ref) async {
 final medicationByIdProvider = FutureProvider.family<Medication?, String>((ref, id) async {
   final repo = ref.watch(medicationRepositoryProvider);
   return repo.getMedicationById(id);
+});
+
+final todayOccurrencesProvider = FutureProvider<List<DoseOccurrence>>((ref) async {
+  final repo = ref.watch(doseRepositoryProvider);
+  return repo.getOccurrencesForDate(DateTime.now());
+});
+
+final todayMedicationsProvider = FutureProvider<List<Medication>>((ref) async {
+  final repo = ref.watch(medicationRepositoryProvider);
+  return repo.getMedications();
+});
+
+final todayAdherenceProvider = FutureProvider<AdherenceSummary>((ref) async {
+  final repo = ref.watch(doseRepositoryProvider);
+  return repo.getDayAdherence(DateTime.now());
+});
+
+final lowStockProvider = FutureProvider<List<Medication>>((ref) async {
+  final repo = ref.watch(refillRepositoryProvider);
+  return repo.getLowStockMedications();
+});
+
+final weeklyAdherenceProvider = FutureProvider<WeeklyAdherenceReport>((ref) async {
+  final repo = ref.watch(doseRepositoryProvider);
+  return repo.getWeeklyAdherenceReport();
+});
+
+final lowestStockMedicationProvider = FutureProvider<Medication?>((ref) async {
+  final repo = ref.watch(refillRepositoryProvider);
+  return repo.getLowestStockMedication();
+});
+
+// ── Patient / Allocation Repository ──────────────────────────────────────────
+
+class PatientRepository {
+  PatientRepository(this._db);
+  final AppDatabase _db;
+
+  Future<Database> get _database => _db.database;
+
+  Future<List<AllocatedPatient>> getAllocatedPatients({String? caregiverId}) async {
+    final cid = caregiverId ?? _activeUserId;
+    final db = await _database;
+    final rows = await db.query(
+      'allocated_patients',
+      where: 'caregiver_id = ?',
+      whereArgs: [cid],
+      orderBy: 'created_at ASC',
+    );
+    return rows.map((r) => AllocatedPatient.fromMap(r)).toList();
+  }
+
+  Future<void> addAllocatedPatient(AllocatedPatient patient) async {
+    final db = await _database;
+    await db.insert('allocated_patients', patient.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<void> removeAllocatedPatient(String patientId) async {
+    final db = await _database;
+    await db.delete('allocated_patients', where: 'id = ?', whereArgs: [patientId]);
+  }
+}
+
+final patientRepositoryProvider = Provider<PatientRepository>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  return PatientRepository(db);
+});
+
+final allocatedPatientsProvider = FutureProvider<List<AllocatedPatient>>((ref) async {
+  final repo = ref.watch(patientRepositoryProvider);
+  return repo.getAllocatedPatients();
 });

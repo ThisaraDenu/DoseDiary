@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/intl.dart';
 import 'package:dose_diary/data/local/models/app_models.dart';
 import 'package:dose_diary/data/local/models/dose_status.dart';
-import 'package:dose_diary/data/repositories/app_repositories.dart';
 import 'package:dose_diary/features/caregivers/caregiver_management_screen.dart';
 import 'package:dose_diary/features/home/home_dashboard_screen.dart';
 
@@ -240,6 +239,265 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.textContaining('Thisara!'), findsOneWidget);
       expect(find.textContaining('Denuwan'), findsNothing);
+    });
+
+    testWidgets('switches to Caregiver Mode and displays all real caregiver records and interactivity', (tester) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final now = DateTime.now();
+      final todayStr = DateFormat('yyyy-MM-dd').format(now);
+
+      final medVitD = Medication(
+        id: 'med-vit-d',
+        userId: 'user-1',
+        name: 'Vitamin D',
+        strength: 1000,
+        strengthUnit: 'IU',
+        amountPerDose: 1,
+        doseUnit: 'Softgel',
+        instructions: 'Take with morning breakfast',
+        isActive: true,
+        quantityOnHand: 45,
+        quantityUnit: 'softgels',
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      final medAmox = Medication(
+        id: 'med-amox',
+        userId: 'user-1',
+        name: 'Amoxicillin',
+        strength: 500,
+        strengthUnit: 'mg',
+        amountPerDose: 1,
+        doseUnit: 'Capsule',
+        instructions: 'with food or lunch',
+        isActive: true,
+        quantityOnHand: 10,
+        quantityUnit: 'capsules',
+        refillReminderEnabled: true,
+        refillThresholdQty: 12,
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      final medAsp = Medication(
+        id: 'med-asp',
+        userId: 'user-1',
+        name: 'Aspirin',
+        strength: 75,
+        strengthUnit: 'mg',
+        amountPerDose: 1,
+        doseUnit: 'Tablet',
+        instructions: 'Cardioprotective low dose at bedtime',
+        isActive: true,
+        quantityOnHand: 60,
+        quantityUnit: 'tablets',
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      final occ1 = DoseOccurrence(
+        id: 'occ-1',
+        scheduleId: 'sched-1',
+        medicationId: medVitD.id,
+        userId: 'user-1',
+        scheduledAt: DateTime(now.year, now.month, now.day, 8, 0),
+        localDate: todayStr,
+        occurrenceKey: 'sched-1-$todayStr-08:00',
+        status: DoseStatus.taken,
+        createdAt: now,
+      );
+
+      final occ2 = DoseOccurrence(
+        id: 'occ-2',
+        scheduleId: 'sched-2',
+        medicationId: medAmox.id,
+        userId: 'user-1',
+        scheduledAt: DateTime(now.year, now.month, now.day, 12, 30),
+        localDate: todayStr,
+        occurrenceKey: 'sched-2-$todayStr-12:30',
+        status: DoseStatus.pending,
+        createdAt: now,
+      );
+
+      final occ3 = DoseOccurrence(
+        id: 'occ-3',
+        scheduleId: 'sched-3',
+        medicationId: medAsp.id,
+        userId: 'user-1',
+        scheduledAt: DateTime(now.year, now.month, now.day, 20, 0),
+        localDate: todayStr,
+        occurrenceKey: 'sched-3-$todayStr-20:00',
+        status: DoseStatus.pending,
+        createdAt: now,
+      );
+
+      const weeklyReport = WeeklyAdherenceReport(
+        overallPercentage: 94.0,
+        totalCountable: 18,
+        totalTaken: 17,
+        totalMissed: 0,
+        dailyPips: [
+          DailyAdherencePip(dayLabel: 'Wed', percentage: 100, hasDoses: true),
+          DailyAdherencePip(dayLabel: 'Thu', percentage: 100, hasDoses: true),
+          DailyAdherencePip(dayLabel: 'Fri', percentage: 100, hasDoses: true),
+          DailyAdherencePip(dayLabel: 'Sat', percentage: 100, hasDoses: true),
+          DailyAdherencePip(dayLabel: 'Sun', percentage: 100, hasDoses: true),
+          DailyAdherencePip(dayLabel: 'Mon', percentage: 88, hasDoses: true),
+          DailyAdherencePip(dayLabel: 'Today', percentage: 100, hasDoses: true),
+        ],
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            userNameProvider.overrideWith((ref) => 'Ishara'),
+            todayOccurrencesProvider.overrideWith((ref) => [occ1, occ2, occ3]),
+            todayMedicationsProvider.overrideWith((ref) => [medVitD, medAmox, medAsp]),
+            todayAdherenceProvider.overrideWith((ref) => const AdherenceSummary(taken: 1, total: 3, countable: 2)),
+            lowStockProvider.overrideWith((ref) => [medAmox]),
+            weeklyAdherenceProvider.overrideWith((ref) => weeklyReport),
+            lowestStockMedicationProvider.overrideWith((ref) => medAmox),
+            caregiversProvider.overrideWith((ref) => []),
+            allocatedPatientsProvider.overrideWith((ref) => [
+              AllocatedPatient(
+                id: 'sample-patient-ishara',
+                caregiverId: 'user-1',
+                fullName: 'Ishara Perera',
+                relationship: 'Mother',
+                location: 'Colombo Home',
+                lastActive: 'Active 12m ago',
+                phoneBattery: 84,
+                batteryStatus: 'Balanced',
+                smartHubStatus: 'Synced 2m ago',
+                createdAt: now,
+              ),
+            ]),
+          ],
+          child: const MaterialApp(
+            home: HomeDashboardScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Tap Caregiver Mode button
+      await tester.tap(find.text('Caregiver Mode'));
+      await tester.pumpAndSettle();
+
+      // Active View pill updates
+      expect(find.text('Ishara (Caregiver)'), findsOneWidget);
+
+      // 1. Patient Quick Telemetry & Status Card (shows real allocated patient details)
+      expect(find.text('Ishara Perera'), findsOneWidget);
+      expect(find.textContaining('Active 12m ago'), findsOneWidget);
+      expect(find.text('Phone Battery'), findsOneWidget);
+      expect(find.text('84% • Balanced'), findsOneWidget);
+      expect(find.text('Smart Hub & Band'), findsOneWidget);
+      expect(find.text('Synced 2m ago'), findsOneWidget);
+
+      // 2. Urgent Reminder Banner Card (Real Next Dose: Amoxicillin 500mg)
+      expect(find.text('NEXT MEDICATION SOON'), findsOneWidget);
+      expect(find.text('Amoxicillin 500 mg'), findsNWidgets(2));
+      expect(find.text('Send Gentle Ping'), findsOneWidget);
+      expect(find.text('Later'), findsOneWidget);
+
+      // 3. Today's Regimen Section
+      expect(find.text("Today's Regimen"), findsOneWidget);
+      expect(find.text('Vitamin D 1000 IU'), findsOneWidget);
+      expect(find.text('Aspirin 75 mg'), findsOneWidget);
+      expect(find.text('Mark as Taken'), findsOneWidget);
+      expect(find.text('Prompt Ishara'), findsOneWidget);
+
+      // 4. Caregiver Adherence Card
+      expect(find.text('Weekly Adherence'), findsOneWidget);
+      expect(find.text('94% On Track'), findsOneWidget);
+      expect(find.text('Amoxicillin (10 Days Left)'), findsOneWidget);
+      expect(find.text('Refill'), findsOneWidget);
+
+      // 5. Care Actions Grid
+      expect(find.text('Care Actions'), findsOneWidget);
+      expect(find.text('Log In-Person'), findsOneWidget);
+      expect(find.text('Dr. Angela Chen'), findsOneWidget);
+      expect(find.text('Share Log'), findsOneWidget);
+      expect(find.text('Permissions'), findsOneWidget);
+
+      // Test Interactivity: Tap 'Send Gentle Ping' triggers toast
+      await tester.ensureVisible(find.text('Send Gentle Ping'));
+      await tester.tap(find.text('Send Gentle Ping'));
+      await tester.pump();
+      expect(find.text("Gentle chime sent to Ishara's phone & smart speaker."), findsOneWidget);
+
+      // Tap 'Prompt Ishara' triggers prompt toast
+      await tester.ensureVisible(find.text('Prompt Ishara'));
+      await tester.tap(find.text('Prompt Ishara'));
+      await tester.pump();
+      expect(find.text('Audio alert sent to Ishara for Amoxicillin 500 mg.'), findsOneWidget);
+
+      // Scroll back up and tap 'Patient Mode' to switch back
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, 800));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Patient Mode'));
+      await tester.pumpAndSettle();
+      expect(find.text('Ishara (Patient)'), findsOneWidget);
+      expect(find.text('Ishara Perera'), findsNothing);
+    });
+
+    testWidgets('in Caregiver Mode, renders clean empty state when database has zero records', (tester) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            userNameProvider.overrideWith((ref) => 'Ishara'),
+            todayOccurrencesProvider.overrideWith((ref) => []),
+            todayMedicationsProvider.overrideWith((ref) => []),
+            todayAdherenceProvider.overrideWith((ref) => const AdherenceSummary(taken: 0, total: 0, countable: 0)),
+            lowStockProvider.overrideWith((ref) => []),
+            caregiversProvider.overrideWith((ref) => []),
+            allocatedPatientsProvider.overrideWith((ref) => []),
+          ],
+          child: const MaterialApp(
+            home: HomeDashboardScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Tap Caregiver Mode button
+      await tester.tap(find.text('Caregiver Mode'));
+      await tester.pumpAndSettle();
+
+      // Top status card shows 'No Patient Allocated' and 'Add Patient' with NO mock telemetry
+      expect(find.text('Phone Battery'), findsNothing);
+      expect(find.text('Smart Hub & Band'), findsNothing);
+      expect(find.text('84% • Balanced'), findsNothing);
+      expect(find.text('Synced 2m ago'), findsNothing);
+      expect(find.text('Ishara Perera'), findsNothing);
+
+      // Urgent reminder is NOT shown because there is no pending medication in database
+      expect(find.text('NEXT MEDICATION SOON'), findsNothing);
+
+      // Regimen shows clean empty state
+      expect(find.text('No Regimen Scheduled for Today'), findsOneWidget);
+      expect(find.text('Add Medication'), findsOneWidget);
+      expect(find.text('Load Sample Regimen'), findsNothing);
+
+      // Refill strip shows all well stocked
+      expect(find.text('All Prescriptions Well Stocked'), findsOneWidget);
     });
   });
 }

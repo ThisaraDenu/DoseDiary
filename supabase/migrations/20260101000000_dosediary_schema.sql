@@ -263,3 +263,26 @@ CREATE POLICY "Caregivers update their alert acknowledgment"
 CREATE POLICY "Users manage own push devices"
     ON public.devices FOR ALL
     USING (auth.uid() = user_id);
+
+-- Allocated Patients: Caregivers allocate/link patients to monitor
+CREATE TABLE IF NOT EXISTS public.allocated_patients (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    caregiver_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    full_name TEXT NOT NULL,
+    relationship TEXT NOT NULL DEFAULT 'Patient',
+    avatar_url TEXT,
+    location TEXT NOT NULL DEFAULT 'Colombo Home',
+    last_active TEXT NOT NULL DEFAULT 'Active now',
+    phone_battery INTEGER NOT NULL DEFAULT 85,
+    battery_status TEXT NOT NULL DEFAULT 'Balanced',
+    smart_hub_status TEXT NOT NULL DEFAULT 'Synced 2m ago',
+    phone_number TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.allocated_patients ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Caregivers manage own allocated patients"
+    ON public.allocated_patients FOR ALL
+    USING (auth.uid() = caregiver_id);
+

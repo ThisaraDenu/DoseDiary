@@ -24,12 +24,14 @@ class AppDatabase {
 
   Future<Database> _openDatabase() async {
     final path = join(await getDatabasesPath(), 'dose_diary.db');
-    return openDatabase(
+    final db = await openDatabase(
       path,
       version: 1,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
+    await db.execute(_createAllocatedPatientsTable);
+    return db;
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -43,6 +45,7 @@ class AppDatabase {
     await db.execute(_createCaregiverPermissionsTable);
     await db.execute(_createCaregiverAlertsTable);
     await db.execute(_createNotificationAttemptsTable);
+    await db.execute(_createAllocatedPatientsTable);
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -213,7 +216,22 @@ class AppDatabase {
     )
   ''';
 
-
+  static const _createAllocatedPatientsTable = '''
+    CREATE TABLE IF NOT EXISTS allocated_patients (
+      id TEXT PRIMARY KEY,
+      caregiver_id TEXT NOT NULL,
+      full_name TEXT NOT NULL,
+      relationship TEXT NOT NULL DEFAULT 'Patient',
+      avatar_url TEXT,
+      location TEXT NOT NULL DEFAULT 'Colombo Home',
+      last_active TEXT NOT NULL DEFAULT 'Active now',
+      phone_battery INTEGER NOT NULL DEFAULT 85,
+      battery_status TEXT NOT NULL DEFAULT 'Balanced',
+      smart_hub_status TEXT NOT NULL DEFAULT 'Synced 2m ago',
+      phone_number TEXT,
+      created_at TEXT NOT NULL
+    )
+  ''';
 
   /// Purges leftover demo-user-001 data from local storage.
   Future<void> purgeDemoData() async {
@@ -224,6 +242,7 @@ class AppDatabase {
     await db.delete('dose_events', where: 'user_id = ?', whereArgs: ['demo-user-001']);
     await db.delete('stock_events', where: 'user_id = ?', whereArgs: ['demo-user-001']);
     await db.delete('profiles', where: 'id = ?', whereArgs: ['demo-user-001']);
+    await db.delete('allocated_patients', where: 'caregiver_id = ?', whereArgs: ['demo-user-001']);
   }
 
   /// Wipes all user-specific local SQLite tables (called on sign out).
@@ -239,6 +258,7 @@ class AppDatabase {
     await db.delete('caregiver_invitations');
     await db.delete('notification_attempts');
     await db.delete('profiles');
+    await db.delete('allocated_patients');
   }
 
   Future<void> close() async => _db?.close();

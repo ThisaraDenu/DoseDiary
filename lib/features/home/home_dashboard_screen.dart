@@ -1,15 +1,18 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/router/route_names.dart';
 import '../../core/widgets/dd_avatar.dart';
+export '../../data/repositories/app_repositories.dart';
 import '../../data/repositories/app_repositories.dart';
 import '../../data/local/models/app_models.dart';
 import '../../data/local/models/dose_status.dart';
 import '../../data/remote/supabase_sync_service.dart';
 import '../../data/remote/auth_service.dart';
 import '../caregivers/caregiver_management_screen.dart';
+import 'caregiver_home_view.dart';
 
 // ── Home Providers ────────────────────────────────────────────────────────────
 
@@ -57,27 +60,8 @@ final userNameProvider = FutureProvider<String>((ref) async {
   return 'Ishara';
 });
 
-final todayOccurrencesProvider =
-    FutureProvider<List<DoseOccurrence>>((ref) async {
-  final repo = ref.watch(doseRepositoryProvider);
-  return repo.getOccurrencesForDate(DateTime.now());
-});
-
-final todayMedicationsProvider =
-    FutureProvider<List<Medication>>((ref) async {
-  final repo = ref.watch(medicationRepositoryProvider);
-  return repo.getMedications();
-});
-
-final todayAdherenceProvider = FutureProvider<AdherenceSummary>((ref) async {
-  final repo = ref.watch(doseRepositoryProvider);
-  return repo.getDayAdherence(DateTime.now());
-});
-
-final lowStockProvider = FutureProvider<List<Medication>>((ref) async {
-  final repo = ref.watch(refillRepositoryProvider);
-  return repo.getLowStockMedications();
-});
+// (Providers todayOccurrencesProvider, todayMedicationsProvider, todayAdherenceProvider,
+// lowStockProvider, weeklyAdherenceProvider are exported from app_repositories.dart)
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
@@ -91,6 +75,87 @@ class HomeDashboardScreen extends ConsumerStatefulWidget {
 
 class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
   bool _isPatientMode = true;
+  String? _toastMessage;
+  Timer? _toastTimer;
+
+  @override
+  void dispose() {
+    _toastTimer?.cancel();
+    super.dispose();
+  }
+
+  void _showCaregiverToast(String message) {
+    _toastTimer?.cancel();
+    setState(() {
+      _toastMessage = message;
+    });
+    _toastTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) {
+        setState(() {
+          _toastMessage = null;
+        });
+      }
+    });
+  }
+
+  Widget _buildFloatingToast() {
+    if (_toastMessage == null) return const SizedBox.shrink();
+    return Positioned(
+      bottom: 20,
+      left: 20,
+      right: 20,
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF303030),
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.25),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.check_circle_rounded,
+                color: Color(0xFF97F5CC),
+                size: 22,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  _toastMessage!,
+                  style: const TextStyle(
+                    color: Color(0xFFF1F1F1),
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              InkWell(
+                onTap: () => setState(() => _toastMessage = null),
+                borderRadius: BorderRadius.circular(16),
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(
+                    Icons.close_rounded,
+                    color: Color(0xFFDADADA),
+                    size: 18,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -116,100 +181,115 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9F9F9),
-      body: RefreshIndicator(
-        color: const Color(0xFFB1002C),
-        onRefresh: () async {
-          await SupabaseSyncService.syncAll();
-          ref.invalidate(userNameProvider);
-          ref.invalidate(userAvatarUrlProvider);
-          ref.invalidate(todayOccurrencesProvider);
-          ref.invalidate(todayMedicationsProvider);
-          ref.invalidate(todayAdherenceProvider);
-          ref.invalidate(lowStockProvider);
-        },
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            // ── Sticky Header / App Bar ────────────────────────────────────
-            SliverAppBar(
-              backgroundColor: const Color(0xFFF9F9F9),
-              pinned: true,
-              elevation: 0,
-              scrolledUnderElevation: 1,
-              shadowColor: Colors.black.withOpacity(0.04),
-              titleSpacing: 20,
-              title: const Row(
-                children: [
-                  Icon(
-                    Icons.medical_services_rounded,
-                    color: Color(0xFFB1002C),
-                    size: 28,
+      body: Stack(
+        children: [
+          RefreshIndicator(
+            color: const Color(0xFFB1002C),
+            onRefresh: () async {
+              await SupabaseSyncService.syncAll();
+              ref.invalidate(userNameProvider);
+              ref.invalidate(userAvatarUrlProvider);
+              ref.invalidate(todayOccurrencesProvider);
+              ref.invalidate(todayMedicationsProvider);
+              ref.invalidate(todayAdherenceProvider);
+              ref.invalidate(lowStockProvider);
+              ref.invalidate(weeklyAdherenceProvider);
+              ref.invalidate(lowestStockMedicationProvider);
+            },
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                // ── Sticky Header / App Bar ────────────────────────────────────
+                SliverAppBar(
+                  backgroundColor: const Color(0xFFF9F9F9),
+                  pinned: true,
+                  elevation: 0,
+                  scrolledUnderElevation: 1,
+                  shadowColor: Colors.black.withOpacity(0.04),
+                  titleSpacing: 20,
+                  title: const Row(
+                    children: [
+                      Icon(
+                        Icons.medical_services_rounded,
+                        color: Color(0xFFB1002C),
+                        size: 28,
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        'Home',
+                        style: TextStyle(
+                          color: Color(0xFF1B1B1B),
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                    ],
                   ),
-                  SizedBox(width: 8),
-                  Text(
-                    'Home',
-                    style: TextStyle(
-                      color: Color(0xFF1B1B1B),
-                      fontSize: 24,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.3,
+                  actions: [
+                    IconButton(
+                      icon: const Icon(
+                        Icons.notifications_none_rounded,
+                        color: Color(0xFF1B1B1B),
+                        size: 26,
+                      ),
+                      onPressed: () =>
+                          context.push(RouteNames.notificationCentre),
+                      tooltip: 'Notifications',
                     ),
-                  ),
-                ],
-              ),
-              actions: [
-                Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: IconButton(
-                    icon: const Icon(
-                      Icons.notifications_none_rounded,
-                      color: Color(0xFF1B1B1B),
-                      size: 26,
+                    const SizedBox(width: 8),
+                  ],
+                ),
+
+                // ── Main Content Body ──────────────────────────────────────────
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 110),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // 1. Greeting & Profile Section
+                        _buildGreetingSection(dateStr, greetingText, avatarUrl),
+                        const SizedBox(height: 20),
+
+                        // 2. Dashboard Mode Switcher (Active View)
+                        _buildModeSwitcher(userName),
+                        const SizedBox(height: 20),
+
+                        if (_isPatientMode) ...[
+                          // 3. Next Medication Card
+                          _buildNextMedicationCard(occsAsync, medsAsync),
+                          const SizedBox(height: 24),
+
+                          // 4. Today's Schedule Section
+                          _buildTodayScheduleSection(occsAsync, medsAsync),
+                          const SizedBox(height: 24),
+
+                          // 5. 2-Column Stats Grid (Adherence & Refills)
+                          _buildStatsGrid(adherenceAsync, lowStockAsync),
+                          const SizedBox(height: 20),
+
+                          // 6. Caregiver Connected Card
+                          _buildCaregiverConnectedCard(),
+                          const SizedBox(height: 24),
+                        ] else ...[
+                          // 3-6. Caregiver Mode View
+                          CaregiverHomeView(
+                            userName: userName,
+                            avatarUrl: avatarUrl,
+                            onShowToast: _showCaregiverToast,
+                          ),
+                          const SizedBox(height: 24),
+                        ],
+                      ],
                     ),
-                    onPressed: () =>
-                        context.push(RouteNames.notificationCentre),
-                    tooltip: 'Notifications',
                   ),
                 ),
               ],
             ),
-
-            // ── Main Content Body ──────────────────────────────────────────
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 110),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // 1. Greeting & Profile Section
-                    _buildGreetingSection(dateStr, greetingText, avatarUrl),
-                    const SizedBox(height: 20),
-
-                    // 2. Dashboard Mode Switcher (Active View)
-                    _buildModeSwitcher(userName),
-                    const SizedBox(height: 20),
-
-                    // 3. Next Medication Card
-                    _buildNextMedicationCard(occsAsync, medsAsync),
-                    const SizedBox(height: 24),
-
-                    // 4. Today's Schedule Section
-                    _buildTodayScheduleSection(occsAsync, medsAsync),
-                    const SizedBox(height: 24),
-
-                    // 5. 2-Column Stats Grid (Adherence & Refills)
-                    _buildStatsGrid(adherenceAsync, lowStockAsync),
-                    const SizedBox(height: 20),
-
-                    // 6. Caregiver Connected Card
-                    _buildCaregiverConnectedCard(),
-                    const SizedBox(height: 24),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+          if (_toastMessage != null) _buildFloatingToast(),
+        ],
       ),
     );
   }
@@ -383,7 +463,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                       ),
                       const SizedBox(width: 5),
                       Text(
-                        _isPatientMode ? '$userName (Patient)' : 'Nimal (Caregiver)',
+                        _isPatientMode ? '$userName (Patient)' : '$userName (Caregiver)',
                         style: const TextStyle(
                           color: Color(0xFF40000A),
                           fontSize: 11.5,
@@ -471,7 +551,6 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                     onTap: () {
                       if (_isPatientMode) {
                         setState(() => _isPatientMode = false);
-                        context.push(RouteNames.caregiverDashboard);
                       }
                     },
                     borderRadius: BorderRadius.circular(6),
@@ -482,7 +561,9 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                         borderRadius: BorderRadius.circular(6),
                         border: !_isPatientMode
                             ? Border.all(
-                                color: const Color(0xFFB1002C).withOpacity(0.2))
+                                color: const Color(0xFFDC143C),
+                                width: 1.2,
+                              )
                             : null,
                         boxShadow: !_isPatientMode
                             ? [

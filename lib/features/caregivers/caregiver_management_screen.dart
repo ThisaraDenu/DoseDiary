@@ -9,6 +9,7 @@ import '../../core/widgets/dd_card.dart';
 import '../../core/widgets/dd_button.dart';
 import '../../core/widgets/dd_loading.dart';
 import '../../core/router/route_names.dart';
+import '../home/caregiver_home_view.dart';
 
 // Caregiver model
 class CaregiverInvitation {
@@ -393,14 +394,55 @@ class _PermissionToggle extends StatelessWidget {
       );
 }
 
-class CaregiverDashboardScreen extends StatelessWidget {
+class CaregiverDashboardScreen extends StatefulWidget {
   const CaregiverDashboardScreen({super.key});
 
   @override
+  State<CaregiverDashboardScreen> createState() => _CaregiverDashboardScreenState();
+}
+
+class _CaregiverDashboardScreenState extends State<CaregiverDashboardScreen> {
+  void _showToast(String message) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded, color: Color(0xFF97F5CC), size: 20),
+            const SizedBox(width: 10),
+            Expanded(child: Text(message, style: const TextStyle(fontSize: 13.5))),
+          ],
+        ),
+        backgroundColor: const Color(0xFF303030),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 4),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Caregiver Dashboard')),
-        backgroundColor: AppColors.scaffoldBackground,
-        body: const Center(child: Text('Caregiver dashboard — view-only mode')),
+        appBar: AppBar(
+          title: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.volunteer_activism_rounded, color: Color(0xFFB1002C), size: 22),
+              SizedBox(width: 8),
+              Text('Caregiver Dashboard'),
+            ],
+          ),
+          backgroundColor: const Color(0xFFF9F9F9),
+          elevation: 0,
+        ),
+        backgroundColor: const Color(0xFFF9F9F9),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 80),
+          child: CaregiverHomeView(
+            userName: 'Ishara',
+            onShowToast: _showToast,
+          ),
+        ),
       );
 }
 

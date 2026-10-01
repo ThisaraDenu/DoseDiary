@@ -545,3 +545,120 @@ class UserProfile {
         privacySafePreviews: (map['privacy_safe_previews'] as int?) != 0,
       );
 }
+
+// ── Allocated Patient ──────────────────────────────────────────────────────────
+
+class AllocatedPatient {
+  const AllocatedPatient({
+    required this.id,
+    required this.caregiverId,
+    required this.fullName,
+    this.relationship = 'Patient',
+    this.avatarUrl,
+    this.location = 'Colombo Home',
+    this.lastActive = 'Active now',
+    this.phoneBattery = 85,
+    this.batteryStatus = 'Balanced',
+    this.smartHubStatus = 'Synced 2m ago',
+    this.phoneNumber,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String caregiverId;
+  final String fullName;
+  final String relationship;
+  final String? avatarUrl;
+  final String location;
+  final String lastActive;
+  final int phoneBattery;
+  final String batteryStatus;
+  final String smartHubStatus;
+  final String? phoneNumber;
+  final DateTime createdAt;
+
+  factory AllocatedPatient.create({
+    required String caregiverId,
+    required String fullName,
+    String relationship = 'Patient',
+    String? avatarUrl,
+    String location = 'Colombo Home',
+    String lastActive = 'Active now',
+    int phoneBattery = 85,
+    String batteryStatus = 'Balanced',
+    String smartHubStatus = 'Synced 2m ago',
+    String? phoneNumber,
+  }) {
+    return AllocatedPatient(
+      id: _uuid.v4(),
+      caregiverId: caregiverId,
+      fullName: fullName,
+      relationship: relationship,
+      avatarUrl: avatarUrl,
+      location: location,
+      lastActive: lastActive,
+      phoneBattery: phoneBattery,
+      batteryStatus: batteryStatus,
+      smartHubStatus: smartHubStatus,
+      phoneNumber: phoneNumber,
+      createdAt: DateTime.now().toUtc(),
+    );
+  }
+
+  AllocatedPatient copyWith({
+    String? fullName,
+    String? relationship,
+    String? avatarUrl,
+    String? location,
+    String? lastActive,
+    int? phoneBattery,
+    String? batteryStatus,
+    String? smartHubStatus,
+    String? phoneNumber,
+  }) {
+    return AllocatedPatient(
+      id: id,
+      caregiverId: caregiverId,
+      fullName: fullName ?? this.fullName,
+      relationship: relationship ?? this.relationship,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
+      location: location ?? this.location,
+      lastActive: lastActive ?? this.lastActive,
+      phoneBattery: phoneBattery ?? this.phoneBattery,
+      batteryStatus: batteryStatus ?? this.batteryStatus,
+      smartHubStatus: smartHubStatus ?? this.smartHubStatus,
+      phoneNumber: phoneNumber ?? this.phoneNumber,
+      createdAt: createdAt,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'caregiver_id': caregiverId,
+        'full_name': fullName,
+        'relationship': relationship,
+        'avatar_url': avatarUrl,
+        'location': location,
+        'last_active': lastActive,
+        'phone_battery': phoneBattery,
+        'battery_status': batteryStatus,
+        'smart_hub_status': smartHubStatus,
+        'phone_number': phoneNumber,
+        'created_at': createdAt.toIso8601String(),
+      };
+
+  factory AllocatedPatient.fromMap(Map<String, dynamic> map) => AllocatedPatient(
+        id: map['id'] as String,
+        caregiverId: map['caregiver_id'] as String,
+        fullName: map['full_name'] as String? ?? 'Patient',
+        relationship: map['relationship'] as String? ?? 'Patient',
+        avatarUrl: map['avatar_url'] as String?,
+        location: map['location'] as String? ?? 'Colombo Home',
+        lastActive: map['last_active'] as String? ?? 'Active now',
+        phoneBattery: (map['phone_battery'] as num?)?.toInt() ?? 85,
+        batteryStatus: map['battery_status'] as String? ?? 'Balanced',
+        smartHubStatus: map['smart_hub_status'] as String? ?? 'Synced 2m ago',
+        phoneNumber: map['phone_number'] as String?,
+        createdAt: DateTime.parse(map['created_at'] as String),
+      );
+}
