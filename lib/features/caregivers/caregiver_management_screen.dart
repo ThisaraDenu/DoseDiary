@@ -9,31 +9,7 @@ import '../../core/widgets/dd_card.dart';
 import '../../core/widgets/dd_button.dart';
 import '../../core/widgets/dd_loading.dart';
 import '../../core/router/route_names.dart';
-
-// Caregiver model
-class CaregiverInvitation {
-  const CaregiverInvitation({
-    required this.id,
-    required this.email,
-    required this.relationship,
-    required this.status,
-    required this.createdAt,
-    this.viewSchedule = true,
-    this.viewHistory = true,
-    this.viewRefills = false,
-    this.viewAdherence = true,
-  });
-
-  final String id;
-  final String email;
-  final String relationship;
-  final String status; // pending | active | revoked
-  final DateTime createdAt;
-  final bool viewSchedule;
-  final bool viewHistory;
-  final bool viewRefills;
-  final bool viewAdherence;
-}
+import '../../data/local/models/app_models.dart';
 
 // Provider (user caregiver invitations)
 final caregiversProvider = StateProvider<List<CaregiverInvitation>>((ref) => []);
@@ -284,12 +260,17 @@ class _InviteCaregiverScreenState extends ConsumerState<InviteCaregiverScreen> {
     setState(() => _isLoading = true);
     await Future.delayed(const Duration(milliseconds: 800));
 
+    final now = DateTime.now().toUtc();
     final newCg = CaregiverInvitation(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      email: _emailCtrl.text.trim(),
+      id: now.millisecondsSinceEpoch.toString(),
+      userId: 'guest-user',
+      caregiverEmail: _emailCtrl.text.trim(),
       relationship: _relationshipCtrl.text.trim().isEmpty ? 'Family member' : _relationshipCtrl.text.trim(),
       status: 'pending',
-      createdAt: DateTime.now(),
+      token: now.millisecondsSinceEpoch.toString(),
+      expiresAt: now.add(const Duration(days: 7)),
+      createdAt: now,
+      updatedAt: now,
       viewSchedule: _viewSchedule,
       viewHistory: _viewHistory,
       viewRefills: _viewRefills,
