@@ -7,7 +7,7 @@ class SupabaseConfig {
   SupabaseConfig._();
 
   static const String url = 'https://cefezlyqxbkqmhhuqmtf.supabase.co';
-  static const String publishableKey =
+  static const String anonKey =
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9'
       '.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNlZmV6bHlxeGJrcW1oaHVxbXRmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwNTgzMDcsImV4cCI6MjEwNTYzNDMwN30'
       '.JqGCeSR7p3dGz9MALNrt4FM06ACyjp33YYRnnRqHED8';

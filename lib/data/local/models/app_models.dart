@@ -181,6 +181,7 @@ class MedicationSchedule {
     required this.startDate,
     this.endDate,
     required this.timezone,
+    this.rrule,
     required this.createdAt,
     this.supersededAt,
   });
@@ -194,6 +195,7 @@ class MedicationSchedule {
   final DateTime startDate;
   final DateTime? endDate;
   final String timezone;
+  final String? rrule;
   final DateTime createdAt;
   final DateTime? supersededAt;
 
@@ -206,6 +208,7 @@ class MedicationSchedule {
     required DateTime startDate,
     DateTime? endDate,
     required String timezone,
+    String? rrule,
   }) {
     return MedicationSchedule(
       id: _uuid.v4(),
@@ -217,6 +220,7 @@ class MedicationSchedule {
       startDate: startDate,
       endDate: endDate,
       timezone: timezone,
+      rrule: rrule,
       createdAt: DateTime.now().toUtc(),
     );
   }
@@ -231,6 +235,7 @@ class MedicationSchedule {
         'start_date': startDate.toIso8601String(),
         'end_date': endDate?.toIso8601String(),
         'timezone': timezone,
+        'rrule': rrule,
         'created_at': createdAt.toIso8601String(),
         'superseded_at': supersededAt?.toIso8601String(),
       };
@@ -247,6 +252,7 @@ class MedicationSchedule {
         startDate: DateTime.parse(map['start_date'] as String),
         endDate: map['end_date'] != null ? DateTime.parse(map['end_date'] as String) : null,
         timezone: map['timezone'] as String,
+        rrule: map['rrule'] as String?,
         createdAt: DateTime.parse(map['created_at'] as String),
         supersededAt: map['superseded_at'] != null
             ? DateTime.parse(map['superseded_at'] as String)
@@ -545,3 +551,326 @@ class UserProfile {
         privacySafePreviews: (map['privacy_safe_previews'] as int?) != 0,
       );
 }
+
+// ── CaregiverInvitation ───────────────────────────────────────────────────────
+
+class CaregiverInvitation {
+  const CaregiverInvitation({
+    required this.id,
+    required this.userId,
+    required this.caregiverEmail,
+    required this.relationship,
+    required this.status,
+    required this.token,
+    required this.expiresAt,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final String userId;
+  final String caregiverEmail;
+  final String relationship;
+  final String status; // 'pending' | 'accepted' | 'declined' | 'expired' | 'revoked'
+  final String token;
+  final DateTime expiresAt;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  factory CaregiverInvitation.create({
+    required String userId,
+    required String caregiverEmail,
+    String relationship = 'Family member',
+    required String token,
+    DateTime? expiresAt,
+  }) {
+    final now = DateTime.now().toUtc();
+    return CaregiverInvitation(
+      id: _uuid.v4(),
+      userId: userId,
+      caregiverEmail: caregiverEmail,
+      relationship: relationship,
+      status: 'pending',
+      token: token,
+      expiresAt: expiresAt ?? now.add(const Duration(days: 7)),
+      createdAt: now,
+      updatedAt: now,
+    );
+  }
+
+  CaregiverInvitation copyWith({
+    String? id,
+    String? userId,
+    String? caregiverEmail,
+    String? relationship,
+    String? status,
+    String? token,
+    DateTime? expiresAt,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return CaregiverInvitation(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      caregiverEmail: caregiverEmail ?? this.caregiverEmail,
+      relationship: relationship ?? this.relationship,
+      status: status ?? this.status,
+      token: token ?? this.token,
+      expiresAt: expiresAt ?? this.expiresAt,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? DateTime.now().toUtc(),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'user_id': userId,
+        'caregiver_email': caregiverEmail,
+        'relationship': relationship,
+        'status': status,
+        'token': token,
+        'expires_at': expiresAt.toIso8601String(),
+        'created_at': createdAt.toIso8601String(),
+        'updated_at': updatedAt.toIso8601String(),
+      };
+
+  factory CaregiverInvitation.fromMap(Map<String, dynamic> map) => CaregiverInvitation(
+        id: map['id'] as String,
+        userId: map['user_id'] as String,
+        caregiverEmail: map['caregiver_email'] as String,
+        relationship: map['relationship'] as String? ?? 'Family member',
+        status: map['status'] as String? ?? 'pending',
+        token: map['token'] as String,
+        expiresAt: DateTime.parse(map['expires_at'] as String),
+        createdAt: DateTime.parse(map['created_at'] as String),
+        updatedAt: DateTime.parse(map['updated_at'] as String),
+      );
+}
+
+// ── CaregiverPermission ───────────────────────────────────────────────────────
+
+class CaregiverPermission {
+  const CaregiverPermission({
+    required this.id,
+    required this.invitationId,
+    required this.userId,
+    this.caregiverId,
+    this.permViewSchedule = false,
+    this.permViewHistory = false,
+    this.permViewRefills = false,
+    this.permViewAdherence = false,
+    this.alertImportantOnly = true,
+    this.retryCount = 2,
+    this.gracePeriodMinutes = 30,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final String invitationId;
+  final String userId;
+  final String? caregiverId;
+  final bool permViewSchedule;
+  final bool permViewHistory;
+  final bool permViewRefills;
+  final bool permViewAdherence;
+  final bool alertImportantOnly;
+  final int retryCount;
+  final int gracePeriodMinutes;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  factory CaregiverPermission.create({
+    required String invitationId,
+    required String userId,
+    String? caregiverId,
+    bool permViewSchedule = true,
+    bool permViewHistory = true,
+    bool permViewRefills = false,
+    bool permViewAdherence = true,
+    bool alertImportantOnly = true,
+    int retryCount = 2,
+    int gracePeriodMinutes = 30,
+  }) {
+    final now = DateTime.now().toUtc();
+    return CaregiverPermission(
+      id: _uuid.v4(),
+      invitationId: invitationId,
+      userId: userId,
+      caregiverId: caregiverId,
+      permViewSchedule: permViewSchedule,
+      permViewHistory: permViewHistory,
+      permViewRefills: permViewRefills,
+      permViewAdherence: permViewAdherence,
+      alertImportantOnly: alertImportantOnly,
+      retryCount: retryCount,
+      gracePeriodMinutes: gracePeriodMinutes,
+      createdAt: now,
+      updatedAt: now,
+    );
+  }
+
+  CaregiverPermission copyWith({
+    String? id,
+    String? invitationId,
+    String? userId,
+    String? caregiverId,
+    bool? permViewSchedule,
+    bool? permViewHistory,
+    bool? permViewRefills,
+    bool? permViewAdherence,
+    bool? alertImportantOnly,
+    int? retryCount,
+    int? gracePeriodMinutes,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return CaregiverPermission(
+      id: id ?? this.id,
+      invitationId: invitationId ?? this.invitationId,
+      userId: userId ?? this.userId,
+      caregiverId: caregiverId ?? this.caregiverId,
+      permViewSchedule: permViewSchedule ?? this.permViewSchedule,
+      permViewHistory: permViewHistory ?? this.permViewHistory,
+      permViewRefills: permViewRefills ?? this.permViewRefills,
+      permViewAdherence: permViewAdherence ?? this.permViewAdherence,
+      alertImportantOnly: alertImportantOnly ?? this.alertImportantOnly,
+      retryCount: retryCount ?? this.retryCount,
+      gracePeriodMinutes: gracePeriodMinutes ?? this.gracePeriodMinutes,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? DateTime.now().toUtc(),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'invitation_id': invitationId,
+        'user_id': userId,
+        'caregiver_id': caregiverId,
+        'perm_view_schedule': permViewSchedule ? 1 : 0,
+        'perm_view_history': permViewHistory ? 1 : 0,
+        'perm_view_refills': permViewRefills ? 1 : 0,
+        'perm_view_adherence': permViewAdherence ? 1 : 0,
+        'alert_important_only': alertImportantOnly ? 1 : 0,
+        'retry_count': retryCount,
+        'grace_period_minutes': gracePeriodMinutes,
+        'created_at': createdAt.toIso8601String(),
+        'updated_at': updatedAt.toIso8601String(),
+      };
+
+  factory CaregiverPermission.fromMap(Map<String, dynamic> map) => CaregiverPermission(
+        id: map['id'] as String,
+        invitationId: map['invitation_id'] as String,
+        userId: map['user_id'] as String,
+        caregiverId: map['caregiver_id'] as String?,
+        permViewSchedule: (map['perm_view_schedule'] as int?) == 1 || map['perm_view_schedule'] == true,
+        permViewHistory: (map['perm_view_history'] as int?) == 1 || map['perm_view_history'] == true,
+        permViewRefills: (map['perm_view_refills'] as int?) == 1 || map['perm_view_refills'] == true,
+        permViewAdherence: (map['perm_view_adherence'] as int?) == 1 || map['perm_view_adherence'] == true,
+        alertImportantOnly: (map['alert_important_only'] as int?) != 0 && map['alert_important_only'] != false,
+        retryCount: (map['retry_count'] as num?)?.toInt() ?? 2,
+        gracePeriodMinutes: (map['grace_period_minutes'] as num?)?.toInt() ?? 30,
+        createdAt: DateTime.parse(map['created_at'] as String),
+        updatedAt: DateTime.parse(map['updated_at'] as String),
+      );
+}
+
+// ── CaregiverAlert ────────────────────────────────────────────────────────────
+
+class CaregiverAlert {
+  const CaregiverAlert({
+    required this.id,
+    required this.occurrenceId,
+    required this.caregiverId,
+    required this.userId,
+    this.status = 'pending',
+    this.sentAt,
+    this.acknowledgedAt,
+    this.fcmMessageId,
+    required this.clientId,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String occurrenceId;
+  final String caregiverId;
+  final String userId;
+  final String status; // 'pending' | 'sent' | 'acknowledged' | 'resolved'
+  final DateTime? sentAt;
+  final DateTime? acknowledgedAt;
+  final String? fcmMessageId;
+  final String clientId;
+  final DateTime createdAt;
+
+  factory CaregiverAlert.create({
+    required String occurrenceId,
+    required String caregiverId,
+    required String userId,
+    String? fcmMessageId,
+  }) {
+    final now = DateTime.now().toUtc();
+    return CaregiverAlert(
+      id: _uuid.v4(),
+      occurrenceId: occurrenceId,
+      caregiverId: caregiverId,
+      userId: userId,
+      status: 'pending',
+      fcmMessageId: fcmMessageId,
+      clientId: _uuid.v4(),
+      createdAt: now,
+    );
+  }
+
+  CaregiverAlert copyWith({
+    String? id,
+    String? occurrenceId,
+    String? caregiverId,
+    String? userId,
+    String? status,
+    DateTime? sentAt,
+    DateTime? acknowledgedAt,
+    String? fcmMessageId,
+    String? clientId,
+    DateTime? createdAt,
+  }) {
+    return CaregiverAlert(
+      id: id ?? this.id,
+      occurrenceId: occurrenceId ?? this.occurrenceId,
+      caregiverId: caregiverId ?? this.caregiverId,
+      userId: userId ?? this.userId,
+      status: status ?? this.status,
+      sentAt: sentAt ?? this.sentAt,
+      acknowledgedAt: acknowledgedAt ?? this.acknowledgedAt,
+      fcmMessageId: fcmMessageId ?? this.fcmMessageId,
+      clientId: clientId ?? this.clientId,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'occurrence_id': occurrenceId,
+        'caregiver_id': caregiverId,
+        'user_id': userId,
+        'status': status,
+        'sent_at': sentAt?.toIso8601String(),
+        'acknowledged_at': acknowledgedAt?.toIso8601String(),
+        'fcm_message_id': fcmMessageId,
+        'client_id': clientId,
+        'created_at': createdAt.toIso8601String(),
+      };
+
+  factory CaregiverAlert.fromMap(Map<String, dynamic> map) => CaregiverAlert(
+        id: map['id'] as String,
+        occurrenceId: map['occurrence_id'] as String,
+        caregiverId: map['caregiver_id'] as String,
+        userId: map['user_id'] as String,
+        status: map['status'] as String? ?? 'pending',
+        sentAt: map['sent_at'] != null ? DateTime.parse(map['sent_at'] as String) : null,
+        acknowledgedAt: map['acknowledged_at'] != null ? DateTime.parse(map['acknowledged_at'] as String) : null,
+        fcmMessageId: map['fcm_message_id'] as String?,
+        clientId: map['client_id'] as String,
+        createdAt: DateTime.parse(map['created_at'] as String),
+      );
+}
+

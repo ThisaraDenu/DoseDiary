@@ -26,7 +26,7 @@ class AppDatabase {
     final path = join(await getDatabasesPath(), 'dose_diary.db');
     return openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -46,7 +46,9 @@ class AppDatabase {
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Future migration logic
+    if (oldVersion < 2) {
+      await db.execute('ALTER TABLE schedules ADD COLUMN rrule TEXT;');
+    }
   }
 
   // ── Table DDL ──────────────────────────────────────────────────────────────
@@ -100,6 +102,7 @@ class AppDatabase {
       start_date TEXT NOT NULL,
       end_date TEXT,
       timezone TEXT NOT NULL DEFAULT 'UTC',
+      rrule TEXT,
       created_at TEXT NOT NULL,
       superseded_at TEXT,
       FOREIGN KEY(medication_id) REFERENCES medications(id)

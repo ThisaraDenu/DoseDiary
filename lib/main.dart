@@ -27,7 +27,7 @@ void main() async {
   // Initialize Supabase
   await Supabase.initialize(
     url: SupabaseConfig.url,
-    publishableKey: SupabaseConfig.publishableKey,
+    anonKey: SupabaseConfig.anonKey,
     debug: false,
   );
   AuthService.init();
