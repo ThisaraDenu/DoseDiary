@@ -10,9 +10,7 @@ import '../../core/widgets/dd_button.dart';
 import '../../core/widgets/dd_loading.dart';
 import '../../core/router/route_names.dart';
 import '../../data/local/models/app_models.dart';
-
-// Provider (user caregiver invitations)
-final caregiversProvider = StateProvider<List<CaregiverInvitation>>((ref) => []);
+import 'caregiver_providers.dart';
 
 // Screen
 class CaregiverManagementScreen extends ConsumerWidget {
@@ -208,9 +206,7 @@ class _CaregiverCard extends ConsumerWidget {
       ),
     );
     if (confirmed == true) {
-      ref.read(caregiversProvider.notifier).update(
-            (list) => list.where((c) => c.id != cg.id).toList(),
-          );
+      await ref.read(caregiverInvitationsProvider.notifier).revokeCaregiver(cg.id);
     }
   }
 }
@@ -258,33 +254,37 @@ class _InviteCaregiverScreenState extends ConsumerState<InviteCaregiverScreen> {
   Future<void> _invite() async {
     if (_emailCtrl.text.trim().isEmpty) return;
     setState(() => _isLoading = true);
-    await Future.delayed(const Duration(milliseconds: 800));
 
-    final now = DateTime.now().toUtc();
-    final newCg = CaregiverInvitation(
-      id: now.millisecondsSinceEpoch.toString(),
-      userId: 'guest-user',
-      caregiverEmail: _emailCtrl.text.trim(),
-      relationship: _relationshipCtrl.text.trim().isEmpty ? 'Family member' : _relationshipCtrl.text.trim(),
-      status: 'pending',
-      token: now.millisecondsSinceEpoch.toString(),
-      expiresAt: now.add(const Duration(days: 7)),
-      createdAt: now,
-      updatedAt: now,
-      viewSchedule: _viewSchedule,
-      viewHistory: _viewHistory,
-      viewRefills: _viewRefills,
-      viewAdherence: _viewAdherence,
-    );
+    final email = _emailCtrl.text.trim();
+    final relationship = _relationshipCtrl.text.trim().isEmpty ? 'Family member' : _relationshipCtrl.text.trim();
 
-    ref.read(caregiversProvider.notifier).update((list) => [...list, newCg]);
+    try {
+      await ref.read(caregiverInvitationsProvider.notifier).createInvitation(
+        caregiverEmail: email,
+        relationship: relationship,
+        permissions: CaregiverPermission.create(
+          invitationId: '',
+          userId: '',
+          permViewSchedule: _viewSchedule,
+          permViewHistory: _viewHistory,
+          permViewRefills: _viewRefills,
+          permViewAdherence: _viewAdherence,
+        ),
+      );
 
-    if (!mounted) return;
-    setState(() => _isLoading = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Invitation sent to ${_emailCtrl.text.trim()}')),
-    );
-    context.pop();
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Invitation sent to $email')),
+      );
+      context.pop();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    }
   }
 
   @override
