@@ -11,6 +11,7 @@ import '../../core/widgets/dd_loading.dart';
 import '../../core/router/route_names.dart';
 import '../../data/local/models/app_models.dart';
 import 'caregiver_providers.dart';
+export 'caregiver_providers.dart';
 
 // Screen
 class CaregiverManagementScreen extends ConsumerWidget {

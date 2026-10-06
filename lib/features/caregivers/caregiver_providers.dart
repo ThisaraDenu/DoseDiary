@@ -25,7 +25,7 @@ class CaregiverInvitationsNotifier extends AsyncNotifier<List<CaregiverInvitatio
   }
 
   Future<void> loadInvitations([String? patientId]) async {
-    final pid = patientId ?? ref.read(activeUserIdProvider);
+    final String pid = patientId ?? ref.read(activeUserIdProvider);
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
       final repo = ref.read(caregiverRepositoryProvider);
@@ -34,7 +34,11 @@ class CaregiverInvitationsNotifier extends AsyncNotifier<List<CaregiverInvitatio
   }
 
   Future<void> refresh([String? patientId]) async {
-    await loadInvitations(patientId);
+    final String pid = patientId ?? ref.read(activeUserIdProvider);
+    state = await AsyncValue.guard(() async {
+      final repo = ref.read(caregiverRepositoryProvider);
+      return repo.getCaregiverInvitationsForPatient(pid);
+    });
   }
 
   Future<CaregiverInvitation> createInvitation({
@@ -45,7 +49,7 @@ class CaregiverInvitationsNotifier extends AsyncNotifier<List<CaregiverInvitatio
     DateTime? expiresAt,
     String? patientId,
   }) async {
-    final pid = patientId ?? ref.read(activeUserIdProvider);
+    final String pid = patientId ?? ref.read(activeUserIdProvider);
     final repo = ref.read(caregiverRepositoryProvider);
     final invitation = await repo.createInvitation(
       userId: pid,
@@ -111,11 +115,10 @@ class CaregiverPermissionNotifier
   Future<void> updatePermissions(CaregiverPermission permission) async {
     final repo = ref.read(caregiverRepositoryProvider);
     await repo.updateCaregiverPermissions(permission);
-    state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
       return repo.getPermissionsForRelationship(invitationId: permission.invitationId);
     });
-    ref.read(caregiverInvitationsProvider.notifier).refresh(permission.userId);
+    ref.invalidate(caregiverInvitationsProvider);
   }
 }
 
@@ -135,7 +138,7 @@ class PendingInvitationsNotifier extends AsyncNotifier<List<CaregiverInvitation>
   }
 
   Future<void> loadPendingInvitations([String? email]) async {
-    final mail = email ?? ref.read(activeUserEmailProvider);
+    final String mail = email ?? ref.read(activeUserEmailProvider);
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
       final repo = ref.read(caregiverRepositoryProvider);
@@ -144,18 +147,22 @@ class PendingInvitationsNotifier extends AsyncNotifier<List<CaregiverInvitation>
   }
 
   Future<void> refresh([String? email]) async {
-    await loadPendingInvitations(email);
+    final String mail = email ?? ref.read(activeUserEmailProvider);
+    state = await AsyncValue.guard(() async {
+      final repo = ref.read(caregiverRepositoryProvider);
+      return repo.getPendingInvitationsForCaregiver(mail);
+    });
   }
 
   Future<void> acceptInvitation({
     required String invitationId,
     String? caregiverId,
   }) async {
-    final cid = caregiverId ?? ref.read(activeUserIdProvider);
+    final String cid = caregiverId ?? ref.read(activeUserIdProvider);
     final repo = ref.read(caregiverRepositoryProvider);
     await repo.acceptInvitation(invitationId: invitationId, caregiverId: cid);
     await refresh();
-    ref.read(connectedPatientsProvider.notifier).refresh(cid);
+    await ref.read(connectedPatientsProvider.notifier).refresh(cid);
   }
 
   Future<void> declineInvitation(String invitationId) async {
@@ -181,7 +188,7 @@ class ConnectedPatientsNotifier extends AsyncNotifier<List<ConnectedPatient>> {
   }
 
   Future<void> loadPatients([String? caregiverId]) async {
-    final cid = caregiverId ?? ref.read(activeUserIdProvider);
+    final String cid = caregiverId ?? ref.read(activeUserIdProvider);
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
       final repo = ref.read(caregiverRepositoryProvider);
@@ -190,14 +197,18 @@ class ConnectedPatientsNotifier extends AsyncNotifier<List<ConnectedPatient>> {
   }
 
   Future<void> refresh([String? caregiverId]) async {
-    await loadPatients(caregiverId);
+    final String cid = caregiverId ?? ref.read(activeUserIdProvider);
+    state = await AsyncValue.guard(() async {
+      final repo = ref.read(caregiverRepositoryProvider);
+      return repo.getConnectedPatientsForCaregiver(cid);
+    });
   }
 
   Future<void> disconnectPatient({
     required String patientId,
     String? caregiverId,
   }) async {
-    final cid = caregiverId ?? ref.read(activeUserIdProvider);
+    final String cid = caregiverId ?? ref.read(activeUserIdProvider);
     final repo = ref.read(caregiverRepositoryProvider);
     await repo.disconnectPatient(patientId: patientId, caregiverId: cid);
     await refresh(cid);

@@ -12,6 +12,8 @@ analyzer:
     - build/**
     - android/**
     - ios/**
+    - windows/**
+    - web/**
   errors:
     deprecated_member_use: ignore
 include: package:flutter_lints/flutter.yaml

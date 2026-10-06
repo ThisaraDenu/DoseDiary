@@ -171,7 +171,7 @@ void main() {
       final pendingNotifier = container.read(pendingInvitationsProvider.notifier);
       await pendingNotifier.acceptInvitation(
         invitationId: invite.id,
-        caregiverId: 'caregiver@example.com',
+        caregiverId: 'caregiver-123',
       );
 
       final pendingList = await container.read(pendingInvitationsProvider.future);
