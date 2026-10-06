@@ -45,5 +45,15 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSContactsUsageDescription</key>
+	<string>DoseDiary needs access to your contacts to let you quickly invite and link trusted caregivers and emergency contacts.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>DoseDiary uses your location to show nearby 24/7 pharmacies and medical clinics for urgent prescription refills.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>DoseDiary accesses your photos to let you upload prescription labels, medicine packages, and profile photos.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>DoseDiary needs camera access to take profile pictures and scan medication barcodes or prescriptions.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>DoseDiary needs calendar access to synchronize your scheduled medication doses with your personal calendar.</string>
 </dict>
 </plist>

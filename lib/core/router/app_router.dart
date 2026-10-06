@@ -17,6 +17,7 @@ import '../../features/refills/refills_screen.dart';
 import '../../features/caregivers/caregiver_management_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../features/settings/accessibility_screen.dart';
+import '../../features/permissions/permissions_screen.dart';
 import '../../core/widgets/dd_bottom_nav.dart';
 import 'route_names.dart';
 
@@ -44,6 +45,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.forgotPassword,
         builder: (ctx, state) => const ForgotPasswordScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.permissions,
+        builder: (ctx, state) => const PermissionsScreen(),
       ),
       GoRoute(
         path: RouteNames.reminder,

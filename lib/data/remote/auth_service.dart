@@ -1,4 +1,8 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sqflite/sqflite.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/supabase_config.dart';
@@ -9,12 +13,33 @@ import 'supabase_sync_service.dart';
 class AuthService {
   AuthService._();
 
+  static SupabaseClient? get _clientSafe {
+    try {
+      return Supabase.instance.client;
+    } catch (_) {
+      return null;
+    }
+  }
+
   static SupabaseClient get _client => Supabase.instance.client;
 
   // ── State ─────────────────────────────────────────────────────────────────
 
-  static User? get currentUser => _client.auth.currentUser;
-  static Session? get currentSession => _client.auth.currentSession;
+  static User? get currentUser {
+    try {
+      return _clientSafe?.auth.currentUser;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Session? get currentSession {
+    try {
+      return _clientSafe?.auth.currentSession;
+    } catch (_) {
+      return null;
+    }
+  }
   static bool get isLoggedIn => currentUser != null;
 
   /// Stream of auth state changes (sign-in, sign-out, token refresh).
@@ -157,23 +182,115 @@ class AuthService {
     final user = currentUser;
     if (user == null) return null;
     try {
-      final data = await _client
-          .from('profiles')
-          .select()
-          .eq('id', user.id)
-          .maybeSingle();
-      return data;
-    } catch (_) {
-      return null;
-    }
+      final client = _clientSafe;
+      if (client != null) {
+        final data = await client
+            .from('profiles')
+            .select()
+            .eq('id', user.id)
+            .maybeSingle();
+        if (data != null) {
+          try {
+            final db = await AppDatabase.instance.database;
+            await db.insert('profiles', {
+              'id': data['id'],
+              'full_name': data['full_name'] ?? '',
+              'avatar_url': data['avatar_url'],
+              'preferred_language': data['preferred_language'] ?? 'en',
+              'text_scale_factor': data['text_scale_factor'] ?? 1.0,
+              'simple_wording': data['simple_wording'] == true ? 1 : 0,
+              'notification_sound': data['notification_sound'] == false ? 0 : 1,
+              'notification_vibration': data['notification_vibration'] == false ? 0 : 1,
+              'privacy_safe_previews': data['privacy_safe_previews'] == false ? 0 : 1,
+              'created_at': data['created_at']?.toString() ?? DateTime.now().toIso8601String(),
+              'updated_at': data['updated_at']?.toString() ?? DateTime.now().toIso8601String(),
+            }, conflictAlgorithm: ConflictAlgorithm.replace);
+          } catch (_) {}
+          return data;
+        }
+      }
+    } catch (_) {}
+
+    try {
+      final db = await AppDatabase.instance.database;
+      final results = await db.query(
+        'profiles',
+        where: 'id = ?',
+        whereArgs: [user.id],
+        limit: 1,
+      );
+      if (results.isNotEmpty) return results.first;
+    } catch (_) {}
+
+    return null;
   }
 
   static Future<void> updateProfile(Map<String, dynamic> updates) async {
     final user = currentUser;
     if (user == null) return;
+    final nowIso = DateTime.now().toIso8601String();
+    final cloudUpdates = Map<String, dynamic>.from(updates);
+    cloudUpdates['updated_at'] = nowIso;
+
     try {
-      await _client.from('profiles').update(updates).eq('id', user.id);
+      final client = _clientSafe;
+      if (client != null) {
+        await client.from('profiles').update(cloudUpdates).eq('id', user.id);
+      }
     } catch (_) {}
+
+    try {
+      final db = await AppDatabase.instance.database;
+      final localUpdates = Map<String, dynamic>.from(updates);
+      localUpdates['updated_at'] = nowIso;
+      await db.update(
+        'profiles',
+        localUpdates,
+        where: 'id = ?',
+        whereArgs: [user.id],
+      );
+    } catch (_) {}
+  }
+
+  /// Uploads user profile photo to Supabase Storage bucket 'avatars'
+  /// and updates the 'avatar_url' column in the 'profiles' table.
+  /// If the Storage bucket is not yet configured, automatically falls back
+  /// to an encoded Data URI so the image is safely saved in Supabase database.
+  static Future<String?> uploadAvatar({
+    required Uint8List bytes,
+    required String fileExtension,
+  }) async {
+    final user = currentUser;
+    if (user == null) return null;
+
+    final ext = fileExtension.replaceAll('.', '').toLowerCase();
+    final fileName = '${user.id}/avatar_${DateTime.now().millisecondsSinceEpoch}.$ext';
+    String? avatarUrl;
+
+    // 1. Try uploading to Supabase Storage 'avatars' bucket
+    try {
+      final client = _clientSafe;
+      if (client != null) {
+        await client.storage.from('avatars').uploadBinary(
+              fileName,
+              bytes,
+              fileOptions: FileOptions(
+                contentType: 'image/$ext',
+                upsert: true,
+              ),
+            );
+        avatarUrl = client.storage.from('avatars').getPublicUrl(fileName);
+      }
+    } catch (_) {
+      // 2. Fallback to data URI if bucket doesn't exist or isn't accessible
+      final base64Str = base64Encode(bytes);
+      avatarUrl = 'data:image/$ext;base64,$base64Str';
+    }
+
+    // 3. Update Supabase 'profiles' table and local SQLite cache
+    await updateProfile({'avatar_url': avatarUrl});
+
+    return avatarUrl;
   }
 
   // ── Private Helpers ───────────────────────────────────────────────────────

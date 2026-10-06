@@ -5,11 +5,10 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/theme/app_dimensions.dart';
 import '../../core/widgets/dd_card.dart';
-import '../../core/widgets/dd_button.dart';
 import '../../core/widgets/dd_empty_state.dart';
-import '../../data/remote/auth_service.dart';
-import '../../data/remote/supabase_sync_service.dart';
 import 'settings_providers.dart';
+
+export 'account_screen.dart' show AccountScreen;
 
 class AccessibilityScreen extends ConsumerWidget {
   const AccessibilityScreen({super.key});
@@ -281,133 +280,6 @@ class PrivacyScreen extends ConsumerWidget {
   }
 }
 
-// ── Account ────────────────────────────────────────────────────────────────────
-
-class AccountScreen extends StatefulWidget {
-  const AccountScreen({super.key});
-
-  @override
-  State<AccountScreen> createState() => _AccountScreenState();
-}
-
-class _AccountScreenState extends State<AccountScreen> {
-  bool _isSyncing = false;
-
-  Future<void> _syncNow() async {
-    setState(() => _isSyncing = true);
-    try {
-      await SupabaseSyncService.syncAll();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✓ All data successfully synced to Supabase!'),
-          backgroundColor: AppColors.takenForeground,
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Sync failed: $e'),
-          backgroundColor: AppColors.error,
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _isSyncing = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final user = AuthService.currentUser;
-    final userName = user?.userMetadata?['full_name'] as String? ??
-        (user?.email?.split('@').first ?? 'Guest User');
-    final userEmail = user?.email ?? 'Not signed in';
-    final userId = user?.id ?? 'Local device only';
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('Account')),
-      backgroundColor: AppColors.scaffoldBackground,
-      body: ListView(
-        padding: const EdgeInsets.all(AppDimensions.screenMargin),
-        children: [
-          DdCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    CircleAvatar(
-                      backgroundColor: AppColors.primaryAction.withOpacity(0.15),
-                      child: const Icon(Icons.person, color: AppColors.primaryAction),
-                    ),
-                    const SizedBox(width: AppDimensions.stackMd),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(userName, style: AppTextStyles.headlineMd()),
-                          const SizedBox(height: 2),
-                          Text(userEmail, style: AppTextStyles.bodyLg(color: AppColors.textSecondary)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppDimensions.stackMd),
-                const Divider(),
-                const SizedBox(height: AppDimensions.stackSm),
-                Text('User ID (Private)', style: AppTextStyles.caption(color: AppColors.textTertiary)),
-                const SizedBox(height: 2),
-                SelectableText(
-                  userId,
-                  style: AppTextStyles.caption(color: AppColors.textSecondary),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppDimensions.stackLg),
-          DdCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      user != null ? Icons.verified_user_outlined : Icons.cloud_off_outlined,
-                      color: user != null ? AppColors.takenForeground : AppColors.textTertiary,
-                    ),
-                    const SizedBox(width: AppDimensions.stackSm),
-                    Text(
-                      user != null ? 'Data Isolation Active' : 'Offline Mode',
-                      style: AppTextStyles.bodyBold(),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppDimensions.stackSm),
-                Text(
-                  user != null
-                      ? 'Your medications and schedules are secured with PostgreSQL Row Level Security (RLS). Only your account can read or write your data.'
-                      : 'You are using local offline storage. Sign in with Google or email to sync your data privately across devices.',
-                  style: AppTextStyles.bodyLg(color: AppColors.textSecondary),
-                ),
-              ],
-            ),
-          ),
-          if (user != null) ...[
-            const SizedBox(height: AppDimensions.stackLg),
-            DdButton(
-              label: 'Sync All Data to Cloud Now',
-              icon: const Icon(Icons.sync_rounded),
-              isLoading: _isSyncing,
-              onPressed: _syncNow,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
 
 // ── Safety Info ────────────────────────────────────────────────────────────────
 

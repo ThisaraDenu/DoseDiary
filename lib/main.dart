@@ -1,4 +1,4 @@
-// DoseDiary App Entry Point
+ // DoseDiary App Entry Point
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,40 +15,38 @@ import 'data/remote/auth_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Lock to portrait
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
+  try {
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
 
-  // Initialize timezones
-  tz.initializeTimeZones();
+    tz.initializeTimeZones();
 
-  // Initialize Supabase
-  await Supabase.initialize(
-    url: SupabaseConfig.url,
-    publishableKey: SupabaseConfig.publishableKey,
-    debug: false,
-  );
-  AuthService.init();
+    await Supabase.initialize(
+      url: SupabaseConfig.url,
+      publishableKey: SupabaseConfig.publishableKey,
+      debug: false,
+    );
+    AuthService.init();
 
-  // Initialize notifications
-  await NotificationService.initialize();
+    await NotificationService.initialize();
 
-  // Initialize local database
-  await DatabaseProvider.initialize();
+    await DatabaseProvider.initialize();
 
-  // Load shared preferences
-  final prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance();
 
-  runApp(
-    ProviderScope(
-      overrides: [
-        sharedPreferencesProvider.overrideWithValue(prefs),
-      ],
-      child: const DoseDiaryApp(),
-    ),
-  );
+    runApp(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+        ],
+        child: const DoseDiaryApp(),
+      ),
+    );
+  } catch (e, st) {
+    debugPrint('DoseDiary startup error: $e\n$st');
+  }
 }
 
 final sharedPreferencesProvider = Provider<SharedPreferences>(

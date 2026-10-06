@@ -62,7 +62,12 @@ class HistoryScreen extends ConsumerWidget {
 
           // History list
           SliverPadding(
-            padding: const EdgeInsets.all(AppDimensions.screenMargin),
+            padding: const EdgeInsets.fromLTRB(
+              AppDimensions.screenMargin,
+              AppDimensions.screenMargin,
+              AppDimensions.screenMargin,
+              110,
+            ),
             sliver: Consumer(
               builder: (ctx, ref, _) {
                 final occsAsync = ref.watch(historyOccurrencesProvider(selectedDate));

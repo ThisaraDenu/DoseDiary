@@ -8,6 +8,7 @@ class RouteNames {
   static const String signup = '/signup';
   static const String forgotPassword = '/forgot-password';
   static const String resetPassword = '/reset-password';
+  static const String permissions = '/permissions';
 
   // Main shell (bottom nav)
   static const String home = '/home';
