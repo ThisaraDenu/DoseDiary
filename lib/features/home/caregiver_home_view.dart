@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
@@ -59,9 +60,7 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
     final activePatient = allocatedPatients.isNotEmpty ? allocatedPatients.first : null;
 
     final patientDisplayName = activePatient?.fullName ??
-        (widget.userName.trim().isNotEmpty
-            ? (widget.userName.contains(' ') ? widget.userName : '${widget.userName} Perera')
-            : 'Patient');
+        (widget.userName.trim().isNotEmpty ? widget.userName : 'Patient');
     final patientFirstName = activePatient != null
         ? activePatient.fullName.split(' ').first
         : (widget.userName.trim().isNotEmpty ? widget.userName : 'Patient');
@@ -1226,7 +1225,7 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
     final doseDetails = med != null ? med.displayDose : '1 Dose';
     final instruction = (med?.instructions != null && med!.instructions!.trim().isNotEmpty)
         ? ' ${med.instructions!.trim()}'
-        : ' with water after meal';
+        : '';
 
     return Container(
       width: double.infinity,
@@ -1522,36 +1521,66 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
     AsyncValue<Medication?> lowestStockAsync,
   ) {
     final report = weeklyAdherenceAsync.valueOrNull;
-    final overallPct = report != null ? report.overallPercentage : 100.0;
-    final adherenceBadge = report != null ? '${report.percentageStr} On Track' : '94% On Track';
-    final progressFactor = (overallPct / 100.0).clamp(0.05, 1.0);
+    final overallPct = report != null ? report.overallPercentage : 0.0;
+    final adherenceBadge =
+        report != null ? '${report.percentageStr} On Track' : 'Loading...';
 
     // Summary note
     String summaryNote = 'Zero missed doses in the past 7 days. Excellent adherence!';
     if (report != null && report.totalMissed > 0) {
-      summaryNote = '${report.totalTaken} of ${report.totalCountable} doses completed this week (${report.totalMissed} missed).';
+      summaryNote =
+          '${report.totalTaken} of ${report.totalCountable} doses completed this week (${report.totalMissed} missed).';
+    } else if (report != null && report.totalCountable == 0) {
+      summaryNote = 'No doses scheduled this week yet. Add a medication to track adherence.';
     }
 
-    // Low stock / refill info
+    // Low stock / refill info — all from real DB
     final lowStockList = lowStockAsync.valueOrNull ?? [];
     final lowestStock = lowestStockAsync.valueOrNull;
+    final isLoadingStock =
+        lowestStockAsync is AsyncLoading || lowStockAsync is AsyncLoading;
 
-    final targetRefillMed = lowStockList.isNotEmpty ? lowStockList.first : lowestStock;
+    final targetRefillMed =
+        lowStockList.isNotEmpty ? lowStockList.first : lowestStock;
+    final bool hasLowStock = lowStockList.isNotEmpty;
 
-    String refillTitle = 'Amoxicillin (5 Days Left)';
-    String refillSubtitle = 'Cabinet count: 10 of 30 remaining';
-    bool hasLowStock = lowStockList.isNotEmpty;
+    String refillTitle;
+    String refillSubtitle;
+    int? onHand;
+    int? threshold;
 
-    if (targetRefillMed != null) {
-      final days = (targetRefillMed.quantityOnHand /
-              (targetRefillMed.amountPerDose > 0 ? targetRefillMed.amountPerDose : 1))
-          .floor();
-      refillTitle = '${targetRefillMed.name} ($days Days Left)';
-      refillSubtitle =
-          'Cabinet count: ${targetRefillMed.quantityOnHand.toInt()} of ${(targetRefillMed.quantityOnHand + 20).toInt()} remaining';
+    if (isLoadingStock) {
+      refillTitle = 'Loading medication data…';
+      refillSubtitle = '';
+    } else if (targetRefillMed != null) {
+      // Days supply remaining
+      final daysLeft = targetRefillMed.amountPerDose > 0
+          ? (targetRefillMed.quantityOnHand / targetRefillMed.amountPerDose)
+              .floor()
+          : 0;
+      refillTitle = '${targetRefillMed.name} ($daysLeft Days Left)';
+
+      // Use refillThresholdQty as the "total/capacity" if set, otherwise
+      // show raw on-hand count with unit.
+      onHand = targetRefillMed.quantityOnHand.toInt();
+      threshold = targetRefillMed.refillThresholdQty?.toInt();
+      if (threshold != null && threshold > 0) {
+        refillSubtitle =
+            'Cabinet count: $onHand of $threshold ${targetRefillMed.quantityUnit} remaining';
+      } else {
+        refillSubtitle =
+            'Cabinet count: $onHand ${targetRefillMed.quantityUnit} remaining';
+      }
     } else {
       refillTitle = 'All Prescriptions Well Stocked';
       refillSubtitle = 'All medication supplies are above minimum thresholds';
+    }
+
+    // Build area chart spots from real daily pips
+    final pips = report?.dailyPips ?? [];
+    final spots = <FlSpot>[];
+    for (int i = 0; i < pips.length; i++) {
+      spots.add(FlSpot(i.toDouble(), pips[i].percentage.clamp(0, 100)));
     }
 
     return Container(
@@ -1571,7 +1600,7 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Row
+          // ── Header Row ─────────────────────────────────────────────────────
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -1594,147 +1623,179 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                   ),
                 ],
               ),
-              Text(
-                adherenceBadge,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF006448),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: overallPct >= 80
+                      ? const Color(0xFFD2FFE8)
+                      : const Color(0xFFFFDAD9),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  adherenceBadge,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: overallPct >= 80
+                        ? const Color(0xFF006448)
+                        : const Color(0xFFDC143C),
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
 
-          // Progress Bar
-          Container(
-            width: double.infinity,
-            height: 10,
-            decoration: BoxDecoration(
-              color: const Color(0xFFEEEEEE),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: FractionallySizedBox(
-              alignment: Alignment.centerLeft,
-              widthFactor: progressFactor,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFF006448),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-
-          // Daily Pips (Real 7 Days)
-          if (report != null && report.dailyPips.isNotEmpty)
+          // ── Area Chart (real DB data) ────────────────────────────────────
+          if (spots.length >= 2)
             SizedBox(
-              width: double.infinity,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: report.dailyPips.map((pip) {
-                    final isToday = pip.dayLabel == 'Today';
-                    final color = isToday
-                        ? const Color(0xFF1B1B1B)
-                        : (pip.percentage >= 80
-                            ? const Color(0xFF006448)
-                            : const Color(0xFFDC143C));
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 5),
-                      child: Text(
-                        pip.labelText,
-                        style: TextStyle(
-                          color: color,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
+              height: 120,
+              child: LineChart(
+                LineChartData(
+                  minY: 0,
+                  maxY: 100,
+                  gridData: FlGridData(
+                    show: true,
+                    drawVerticalLine: false,
+                    horizontalInterval: 25,
+                    getDrawingHorizontalLine: (_) => const FlLine(
+                      color: Color(0xFFEEEEEE),
+                      strokeWidth: 1,
+                    ),
+                  ),
+                  borderData: FlBorderData(show: false),
+                  titlesData: FlTitlesData(
+                    topTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false)),
+                    rightTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false)),
+                    leftTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false)),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 22,
+                        getTitlesWidget: (value, meta) {
+                          final idx = value.toInt();
+                          if (idx < 0 || idx >= pips.length) {
+                            return const SizedBox.shrink();
+                          }
+                          final label = pips[idx].dayLabel;
+                          final isToday = label == 'Today';
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              label.length > 3 ? label.substring(0, 3) : label,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: isToday
+                                    ? FontWeight.w800
+                                    : FontWeight.w500,
+                                color: isToday
+                                    ? const Color(0xFF1B1B1B)
+                                    : const Color(0xFF545F73),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  lineTouchData: LineTouchData(
+                    touchTooltipData: LineTouchTooltipData(
+                      getTooltipColor: (_) => const Color(0xFF1B1B1B),
+                      getTooltipItems: (touchedSpots) {
+                        return touchedSpots.map((ts) {
+                          return LineTooltipItem(
+                            '${ts.y.toStringAsFixed(0)}%',
+                            const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          );
+                        }).toList();
+                      },
+                    ),
+                  ),
+                  lineBarsData: [
+                    LineChartBarData(
+                      spots: spots,
+                      isCurved: true,
+                      curveSmoothness: 0.3,
+                      color: const Color(0xFF006448),
+                      barWidth: 2.5,
+                      isStrokeCapRound: true,
+                      dotData: FlDotData(
+                        show: true,
+                        getDotPainter: (spot, _, __, idx) {
+                          final isToday = idx == spots.length - 1;
+                          return FlDotCirclePainter(
+                            radius: isToday ? 5 : 3,
+                            color: isToday
+                                ? const Color(0xFF1B1B1B)
+                                : const Color(0xFF006448),
+                            strokeWidth: 1.5,
+                            strokeColor: Colors.white,
+                          );
+                        },
+                      ),
+                      belowBarData: BarAreaData(
+                        show: true,
+                        gradient: LinearGradient(
+                          colors: [
+                            const Color(0xFF006448).withOpacity(0.22),
+                            const Color(0xFF006448).withOpacity(0.0),
+                          ],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
                         ),
                       ),
-                    );
-                  }).toList(),
-                ),
-              ),
-            )
-          else
-            const SizedBox(
-              width: double.infinity,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 5),
-                      child: Text('Wed • 100%',
-                          style: TextStyle(
-                              color: Color(0xFF006448),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700)),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 5),
-                      child: Text('Thu • 100%',
-                          style: TextStyle(
-                              color: Color(0xFF006448),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700)),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 5),
-                      child: Text('Fri • 100%',
-                          style: TextStyle(
-                              color: Color(0xFF006448),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700)),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 5),
-                      child: Text('Sat • 100%',
-                          style: TextStyle(
-                              color: Color(0xFF006448),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700)),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 5),
-                      child: Text('Sun • 100%',
-                          style: TextStyle(
-                              color: Color(0xFF006448),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700)),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 5),
-                      child: Text('Mon • 88%',
-                          style: TextStyle(
-                              color: Color(0xFF006448),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700)),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 5),
-                      child: Text('Today',
-                          style: TextStyle(
-                              color: Color(0xFF1B1B1B),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700)),
                     ),
                   ],
                 ),
               ),
+            )
+          else
+            // Loading / no data state
+            Container(
+              height: 80,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7F7F7),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: weeklyAdherenceAsync is AsyncLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFF006448),
+                      ),
+                    )
+                  : const Text(
+                      'No adherence data yet — add a medication and log doses.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: Color(0xFF545F73),
+                      ),
+                    ),
             ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
 
-          // Summary Note
+          // ── Summary Note ─────────────────────────────────────────────────
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(
-                Icons.verified_rounded,
-                color: Color(0xFF006448),
+              Icon(
+                report != null && report.totalMissed > 0
+                    ? Icons.warning_amber_rounded
+                    : Icons.verified_rounded,
+                color: report != null && report.totalMissed > 0
+                    ? const Color(0xFFDC143C)
+                    : const Color(0xFF006448),
                 size: 18,
               ),
               const SizedBox(width: 6),
@@ -1752,88 +1813,190 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
           ),
           const SizedBox(height: 14),
 
-          // Refill Warning Strip
+          // ── Medication Count / Refill Strip ──────────────────────────────
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFFD5E0F8).withOpacity(0.4),
+              color: hasLowStock
+                  ? const Color(0xFFFFDAD9).withOpacity(0.55)
+                  : const Color(0xFFD5E0F8).withOpacity(0.4),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    Icons.medication_rounded,
-                    color: hasLowStock ? const Color(0xFFB1002C) : const Color(0xFF006448),
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        refillTitle,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF1B1B1B),
+                Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.medication_rounded,
+                        color: hasLowStock
+                            ? const Color(0xFFB1002C)
+                            : const Color(0xFF006448),
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            refillTitle,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF1B1B1B),
+                            ),
+                          ),
+                          if (refillSubtitle.isNotEmpty)
+                            Text(
+                              refillSubtitle,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF545F73),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    // Refill button — always visible when there's a tracked med
+                    if (targetRefillMed != null)
+                      ElevatedButton(
+                        onPressed: () async {
+                          await ref.read(refillRepositoryProvider).recordRefill(
+                                medicationId: targetRefillMed.id,
+                                userId: targetRefillMed.userId,
+                                quantityAdded: 30,
+                                note: 'Refill requested by caregiver',
+                              );
+                          ref.invalidate(lowStockProvider);
+                          ref.invalidate(lowestStockMedicationProvider);
+                          ref.invalidate(todayMedicationsProvider);
+                          widget.onShowToast(
+                              'Refill request sent for ${targetRefillMed.name} (+30 ${targetRefillMed.quantityUnit}).');
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFDC143C),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          minimumSize: const Size(68, 38),
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          'Refill',
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
-                      Text(
-                        refillSubtitle,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF545F73),
+                  ],
+                ),
+
+                // ── Medication count bar + "Notify Patient" ──────────────
+                if (targetRefillMed != null) ...[
+                  const SizedBox(height: 10),
+                  // Count progress bar
+                  Builder(builder: (_) {
+                    final total = threshold != null && threshold > 0
+                        ? threshold
+                        : (onHand ?? 0) + 30; // estimated capacity
+                    final current = (onHand ?? 0).clamp(0, total);
+                    final fraction =
+                        total > 0 ? (current / total).clamp(0.0, 1.0) : 0.0;
+                    final pctText =
+                        '$current / $total ${targetRefillMed.quantityUnit}';
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              pctText,
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                                color: hasLowStock
+                                    ? const Color(0xFFB1002C)
+                                    : const Color(0xFF006448),
+                              ),
+                            ),
+                            Text(
+                              hasLowStock ? 'Low Stock' : 'Adequate',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                                color: hasLowStock
+                                    ? const Color(0xFFDC143C)
+                                    : const Color(0xFF006448),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 5),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(999),
+                          child: LinearProgressIndicator(
+                            value: fraction,
+                            minHeight: 7,
+                            backgroundColor: Colors.white,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              hasLowStock
+                                  ? const Color(0xFFDC143C)
+                                  : const Color(0xFF006448),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }),
+
+                  // "Notify Patient to Refill" button — only when low stock
+                  if (hasLowStock) ...[
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => widget.onShowToast(
+                          'Refill reminder sent to patient for ${targetRefillMed.name}. '
+                          'Please restock before supplies run out.',
+                        ),
+                        icon: const Icon(
+                          Icons.notification_important_rounded,
+                          size: 17,
+                        ),
+                        label: const Text('Notify Patient to Refill'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFDC143C),
+                          side: const BorderSide(
+                            color: Color(0xFFDC143C),
+                            width: 1.5,
+                          ),
+                          minimumSize: const Size(double.infinity, 40),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(9),
+                          ),
+                          textStyle: const TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
-                    ],
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: () async {
-                    if (targetRefillMed != null) {
-                      await ref.read(refillRepositoryProvider).recordRefill(
-                            medicationId: targetRefillMed.id,
-                            userId: targetRefillMed.userId,
-                            quantityAdded: 30,
-                            note: 'Refill requested by caregiver',
-                          );
-                      ref.invalidate(lowStockProvider);
-                      ref.invalidate(lowestStockMedicationProvider);
-                      ref.invalidate(todayMedicationsProvider);
-                      widget.onShowToast(
-                          'Refill request sent to Central Pharmacy for ${targetRefillMed.name} (+30 ${targetRefillMed.quantityUnit}).');
-                    } else {
-                      widget.onShowToast(
-                          'Refill request sent to Central Pharmacy (Prescription #4821)');
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFDC143C),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    minimumSize: const Size(68, 38),
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
                     ),
-                  ),
-                  child: const Text(
-                    'Refill',
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
+                  ],
+                ],
               ],
             ),
           ),
@@ -1881,15 +2044,15 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
               },
             ),
 
-            // 2. Doctor Speed Dial
+            // 2. Emergency Contact
             _buildActionCard(
               icon: Icons.health_and_safety_rounded,
               iconBg: const Color(0xFFFFDAD9),
               iconColor: const Color(0xFF920022),
-              title: 'Dr. Angela Chen',
-              subtitle: 'Cardiologist • Fast Contact',
+              title: 'Emergency Contact',
+              subtitle: 'Set up a doctor or emergency contact',
               onTap: () {
-                widget.onShowToast("Dialing Dr. Angela Chen's care clinic...");
+                widget.onShowToast('No emergency contact set. Add one in Settings.');
               },
             ),
 
@@ -1899,10 +2062,10 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
               iconBg: const Color(0xFFEEEEEE),
               iconColor: const Color(0xFF545F73),
               title: 'Share Log',
-              subtitle: 'Export 30-Day Adherence PDF',
+              subtitle: 'Export 30-day adherence report',
               onTap: () {
                 widget.onShowToast(
-                    'Generating official 30-Day adherence PDF report for $patientName...');
+                    'Generating 30-day adherence report for $patientName...');
               },
             ),
 
@@ -1912,9 +2075,8 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
               iconBg: const Color(0xFFEEEEEE),
               iconColor: const Color(0xFF545F73),
               title: 'Permissions',
-              subtitle: 'Manage 2 other family members',
+              subtitle: 'Manage care circle members',
               onTap: () {
-                widget.onShowToast('Care Circle Permissions modal opened.');
                 context.push(RouteNames.caregivers);
               },
             ),
