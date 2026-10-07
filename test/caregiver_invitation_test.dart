@@ -114,7 +114,41 @@ void main() {
       expect(parsed.permViewAdherence, isFalse);
     });
 
-    test('Patient privacy isolation: filtering strictly bounds invitations to the patient user_id', () {
+    test('direct ID invitation preserves both users and sender role', () {
+      final now = DateTime.utc(2026, 10, 8, 8, 30);
+      final invitation = CaregiverInvitation.fromMap({
+        'id': 'direct-invite-1',
+        'user_id': 'patient-user',
+        'caregiver_email': 'caregiver@example.com',
+        'caregiver_user_id': 'caregiver-user',
+        'sender_user_id': 'caregiver-user',
+        'receiver_user_id': 'patient-user',
+        'sender_role': 'caregiver',
+        'sender_name': 'Nimal Caregiver',
+        'receiver_name': 'Kamal Patient',
+        'relationship': 'Son',
+        'status': 'pending',
+        'token': 'direct-token',
+        'created_at': now.toIso8601String(),
+        'updated_at': now.toIso8601String(),
+        'expires_at': now.add(const Duration(days: 7)).toIso8601String(),
+      });
+
+      expect(invitation.isDirectIdInvitation, isTrue);
+      expect(invitation.senderRole, 'caregiver');
+      expect(invitation.senderName, 'Nimal Caregiver');
+      expect(invitation.receiverUserId, 'patient-user');
+      expect(invitation.caregiverUserId, 'caregiver-user');
+
+      final serialized = invitation.toMap();
+      expect(serialized['sender_user_id'], 'caregiver-user');
+      expect(serialized['receiver_user_id'], 'patient-user');
+      expect(serialized['sender_role'], 'caregiver');
+    });
+
+    test(
+        'Patient privacy isolation: filtering strictly bounds invitations to the patient user_id',
+        () {
       final now = DateTime.now();
       final patientAInvite = CaregiverInvitation(
         id: 'inv-a',
@@ -137,8 +171,10 @@ void main() {
       final allInvitations = [patientAInvite, patientBInvite];
 
       // Filter representing SQLite WHERE user_id = ?
-      final patientAView = allInvitations.where((i) => i.userId == 'patient-alice').toList();
-      final patientBView = allInvitations.where((i) => i.userId == 'patient-bob').toList();
+      final patientAView =
+          allInvitations.where((i) => i.userId == 'patient-alice').toList();
+      final patientBView =
+          allInvitations.where((i) => i.userId == 'patient-bob').toList();
 
       expect(patientAView.length, 1);
       expect(patientAView.first.email, 'alice-carer@example.com');
@@ -151,7 +187,27 @@ void main() {
   });
 
   group('Caregiver Management Screen Widget Tests', () {
-    testWidgets('renders empty state when no caregivers or invitations exist', (tester) async {
+    testWidgets('ID invitation form supports patient and caregiver roles',
+        (tester) async {
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(home: InviteCaregiverScreen()),
+        ),
+      );
+
+      expect(find.text('Connect by DoseDiary ID'), findsOneWidget);
+      expect(find.text('Patient'), findsOneWidget);
+      expect(find.text('Caregiver'), findsOneWidget);
+      expect(find.text('Caregiver ID'), findsOneWidget);
+      expect(find.text('#12345'), findsOneWidget);
+
+      await tester.tap(find.text('Caregiver'));
+      await tester.pump();
+      expect(find.text('Patient ID'), findsOneWidget);
+    });
+
+    testWidgets('renders empty state when no caregivers or invitations exist',
+        (tester) async {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
@@ -171,7 +227,9 @@ void main() {
       expect(find.text('Invite a Caregiver'), findsOneWidget);
     });
 
-    testWidgets('renders caregiver cards with Pending, Accepted, and Declined statuses and invitation dates', (tester) async {
+    testWidgets(
+        'renders caregiver cards with Pending, Accepted, and Declined statuses and invitation dates',
+        (tester) async {
       tester.view.physicalSize = const Size(800, 1600);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -222,7 +280,8 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            caregiversProvider.overrideWith((ref) => [pendingInvite, acceptedInvite, declinedInvite]),
+            caregiversProvider.overrideWith(
+                (ref) => [pendingInvite, acceptedInvite, declinedInvite]),
           ],
           child: const MaterialApp(
             home: CaregiverManagementScreen(),
@@ -243,7 +302,8 @@ void main() {
       expect(find.text('Declined'), findsOneWidget);
 
       // Displays invitation dates matching requirement 3
-      final formattedDate = DateFormat('d MMM yyyy').format(inviteDate.toLocal());
+      final formattedDate =
+          DateFormat('d MMM yyyy').format(inviteDate.toLocal());
       expect(find.textContaining('Invited $formattedDate'), findsNWidgets(3));
 
       // Permission chips
@@ -258,7 +318,8 @@ void main() {
       expect(find.text('Remove'), findsOneWidget);
     });
 
-    testWidgets('tapping cancel invitation shows confirmation dialog', (tester) async {
+    testWidgets('tapping cancel invitation shows confirmation dialog',
+        (tester) async {
       final pendingInvite = CaregiverInvitation(
         id: 'cg-1',
         userId: 'patient-1',
@@ -285,13 +346,18 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Cancel Invitation'), findsWidgets);
-      expect(find.textContaining('Cancel the pending invitation to family@example.com?'), findsOneWidget);
+      expect(
+          find.textContaining(
+              'Cancel the pending invitation to family@example.com?'),
+          findsOneWidget);
       expect(find.text('Cancel'), findsOneWidget);
     });
   });
 
   group('Invite Caregiver Screen Widget Tests', () {
-    testWidgets('renders all input fields, permission toggles, and send button', (tester) async {
+    testWidgets(
+        'renders the ID connection fields, role selector, and send button',
+        (tester) async {
       tester.view.physicalSize = const Size(800, 1200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -309,21 +375,19 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      expect(find.text('Invite Caregiver'), findsOneWidget);
-      expect(find.text('Invite by email'), findsOneWidget);
-      expect(find.text('Email address'), findsOneWidget);
+      expect(find.text('Connect with a user'), findsOneWidget);
+      expect(find.text('Connect by DoseDiary ID'), findsOneWidget);
+      expect(find.text('I am connecting as'), findsOneWidget);
+      expect(find.text('Patient'), findsOneWidget);
+      expect(find.text('Caregiver'), findsOneWidget);
+      expect(find.text('Caregiver ID'), findsOneWidget);
+      expect(find.text('#12345'), findsOneWidget);
       expect(find.text('Relationship'), findsOneWidget);
-      expect(find.text('Permissions'), findsOneWidget);
-
-      expect(find.text('Daily schedule'), findsOneWidget);
-      expect(find.text('Dose history'), findsOneWidget);
-      expect(find.text('Adherence reports'), findsOneWidget);
-      expect(find.text('Refill reminders'), findsOneWidget);
-
       expect(find.text('Send Invitation'), findsOneWidget);
     });
 
-    testWidgets('submitting empty email shows error snackbar feedback', (tester) async {
+    testWidgets('submitting an empty ID shows error snackbar feedback',
+        (tester) async {
       tester.view.physicalSize = const Size(800, 1200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -343,15 +407,17 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      // Tap send invitation without entering email
+      // Tap send invitation without entering an ID.
       await tester.ensureVisible(find.text('Send Invitation'));
       await tester.tap(find.text('Send Invitation'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Please enter a caregiver email address.'), findsOneWidget);
+      expect(find.text('Enter a valid DoseDiary ID such as #12345.'),
+          findsOneWidget);
     });
 
-    testWidgets('submitting invalid email format shows error snackbar feedback', (tester) async {
+    testWidgets('submitting an invalid ID shows error snackbar feedback',
+        (tester) async {
       tester.view.physicalSize = const Size(800, 1200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -371,18 +437,21 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      // Enter malformed email
-      await tester.enterText(find.byType(TextFormField).first, 'not-an-email');
+      // Enter a malformed DoseDiary ID.
+      await tester.enterText(find.byType(TextFormField).first, '#12');
       await tester.ensureVisible(find.text('Send Invitation'));
       await tester.tap(find.text('Send Invitation'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Please enter a valid email address.'), findsOneWidget);
+      expect(find.text('Enter a valid DoseDiary ID such as #12345.'),
+          findsOneWidget);
     });
   });
 
   group('Caregiver-Side Incoming Invitations Privacy & Filtering Tests', () {
-    test('Caregiver B sees invitations addressed to B and cannot see invitations addressed to C', () {
+    test(
+        'Caregiver B sees invitations addressed to B and cannot see invitations addressed to C',
+        () {
       final now = DateTime.now();
 
       final inviteForBFromPatient1 = CaregiverInvitation(
@@ -412,33 +481,48 @@ void main() {
         createdAt: now,
       );
 
-      final allInvitations = [inviteForBFromPatient1, inviteForBFromPatient2, inviteForC];
+      final allInvitations = [
+        inviteForBFromPatient1,
+        inviteForBFromPatient2,
+        inviteForC
+      ];
 
       // Simulated SQLite query: WHERE LOWER(caregiver_email) = ?
       const caregiverBEmail = 'caregiverb@example.com';
       final caregiverBView = allInvitations
-          .where((i) => i.caregiverEmail.trim().toLowerCase() == caregiverBEmail)
+          .where(
+              (i) => i.caregiverEmail.trim().toLowerCase() == caregiverBEmail)
           .toList();
 
       const caregiverCEmail = 'caregiverc@example.com';
       final caregiverCView = allInvitations
-          .where((i) => i.caregiverEmail.trim().toLowerCase() == caregiverCEmail)
+          .where(
+              (i) => i.caregiverEmail.trim().toLowerCase() == caregiverCEmail)
           .toList();
 
       // Caregiver B sees only invitations addressed to B
       expect(caregiverBView.length, 2);
-      expect(caregiverBView.map((i) => i.id).toList(), containsAll(['inv-b-1', 'inv-b-2']));
+      expect(caregiverBView.map((i) => i.id).toList(),
+          containsAll(['inv-b-1', 'inv-b-2']));
       // Caregiver B CANNOT see invitations addressed to C
-      expect(caregiverBView.any((i) => i.caregiverEmail.toLowerCase() == caregiverCEmail), isFalse);
+      expect(
+          caregiverBView
+              .any((i) => i.caregiverEmail.toLowerCase() == caregiverCEmail),
+          isFalse);
 
       // Caregiver C sees only invitations addressed to C
       expect(caregiverCView.length, 1);
       expect(caregiverCView.first.id, 'inv-c-1');
       // Caregiver C CANNOT see invitations addressed to B
-      expect(caregiverCView.any((i) => i.caregiverEmail.toLowerCase() == caregiverBEmail), isFalse);
+      expect(
+          caregiverCView
+              .any((i) => i.caregiverEmail.toLowerCase() == caregiverBEmail),
+          isFalse);
     });
 
-    test('Patient owner filtering remains unchanged and is strictly separated from caregiver invitee filtering', () {
+    test(
+        'Patient owner filtering remains unchanged and is strictly separated from caregiver invitee filtering',
+        () {
       final now = DateTime.now();
 
       // Patient 1 created an invitation to Caregiver B
@@ -454,29 +538,37 @@ void main() {
       final allInvitations = [invite];
 
       // 1. Patient-side filtering (WHERE user_id = ?)
-      final patientView = allInvitations.where((i) => i.userId == 'patient-user-123').toList();
+      final patientView =
+          allInvitations.where((i) => i.userId == 'patient-user-123').toList();
       expect(patientView.length, 1);
       expect(patientView.first.userId, 'patient-user-123');
 
       // Another patient cannot see Patient 1's invitations
-      final otherPatientView = allInvitations.where((i) => i.userId == 'patient-user-999').toList();
+      final otherPatientView =
+          allInvitations.where((i) => i.userId == 'patient-user-999').toList();
       expect(otherPatientView, isEmpty);
 
       // Caregiver's user ID is NOT confused with patient's user_id
-      final caregiverAsOwnerView = allInvitations.where((i) => i.userId == 'caregiver-b-user-id').toList();
+      final caregiverAsOwnerView = allInvitations
+          .where((i) => i.userId == 'caregiver-b-user-id')
+          .toList();
       expect(caregiverAsOwnerView, isEmpty);
 
       // 2. Caregiver-side incoming filtering (WHERE LOWER(caregiver_email) = ?)
       final caregiverIncomingView = allInvitations
-          .where((i) => i.caregiverEmail.toLowerCase() == 'caregiverb@example.com')
+          .where(
+              (i) => i.caregiverEmail.toLowerCase() == 'caregiverb@example.com')
           .toList();
       expect(caregiverIncomingView.length, 1);
-      expect(caregiverIncomingView.first.caregiverEmail, 'caregiverB@example.com');
+      expect(
+          caregiverIncomingView.first.caregiverEmail, 'caregiverB@example.com');
     });
   });
 
   group('Incoming Caregiver Invitations Widget Tests', () {
-    testWidgets('renders empty state when caregiver has no incoming invitations', (tester) async {
+    testWidgets(
+        'renders empty state when caregiver has no incoming invitations',
+        (tester) async {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
@@ -494,16 +586,19 @@ void main() {
 
       expect(find.text('No Incoming Invitations'), findsOneWidget);
       expect(
-        find.text('You do not have any pending or past caregiver invitations addressed to your account.'),
+        find.text(
+            'You do not have any pending or past caregiver invitations addressed to your account.'),
         findsOneWidget,
       );
     });
 
-    testWidgets('renders error state with retry button when provider errors', (tester) async {
+    testWidgets('renders error state with retry button when provider errors',
+        (tester) async {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            incomingCaregiverInvitationsProvider.overrideWith((ref) => throw Exception('Sync failed')),
+            incomingCaregiverInvitationsProvider
+                .overrideWith((ref) => throw Exception('Sync failed')),
           ],
           child: const MaterialApp(
             home: Scaffold(
@@ -519,7 +614,9 @@ void main() {
       expect(find.text('Try Again'), findsOneWidget);
     });
 
-    testWidgets('renders incoming invitation with patient details, permissions, and Pending renders Accept and Decline actions', (tester) async {
+    testWidgets(
+        'renders incoming invitation with patient details, permissions, and Pending renders Accept and Decline actions',
+        (tester) async {
       tester.view.physicalSize = const Size(800, 1600);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -546,7 +643,8 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            incomingCaregiverInvitationsProvider.overrideWith((ref) => [pendingInvite]),
+            incomingCaregiverInvitationsProvider
+                .overrideWith((ref) => [pendingInvite]),
           ],
           child: const MaterialApp(
             home: Scaffold(
@@ -568,7 +666,8 @@ void main() {
       expect(find.text('Daughter'), findsOneWidget);
 
       // Displays formatted date
-      final formattedDate = DateFormat('d MMM yyyy').format(inviteDate.toLocal());
+      final formattedDate =
+          DateFormat('d MMM yyyy').format(inviteDate.toLocal());
       expect(find.textContaining('Invited $formattedDate'), findsOneWidget);
 
       // Displays status badge
@@ -586,7 +685,9 @@ void main() {
       expect(find.text('Decline'), findsOneWidget);
     });
 
-    testWidgets('accepted incoming invitation renders status badge without Accept/Decline action buttons', (tester) async {
+    testWidgets(
+        'accepted incoming invitation renders status badge without Accept/Decline action buttons',
+        (tester) async {
       tester.view.physicalSize = const Size(800, 1600);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -612,7 +713,8 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            incomingCaregiverInvitationsProvider.overrideWith((ref) => [acceptedInvite]),
+            incomingCaregiverInvitationsProvider
+                .overrideWith((ref) => [acceptedInvite]),
           ],
           child: const MaterialApp(
             home: Scaffold(
@@ -634,7 +736,9 @@ void main() {
   });
 
   group('Caregiver Invitation Acceptance & Relationship Creation Tests', () {
-    test('successful acceptance transitions invitation status from pending to accepted', () {
+    test(
+        'successful acceptance transitions invitation status from pending to accepted',
+        () {
       final now = DateTime.now().toUtc();
       final invite = CaregiverInvitation.create(
         userId: 'patient-alice',
@@ -657,7 +761,9 @@ void main() {
       expect(acceptedInvite.caregiverEmail, 'caregiverb@example.com');
     });
 
-    test('acceptance creates patient_caregiver_links relationship with valid properties', () {
+    test(
+        'acceptance creates patient_caregiver_links relationship with valid properties',
+        () {
       final link = PatientCaregiverLink.create(
         patientUserId: 'patient-alice',
         caregiverUserId: 'caregiver-bob',
@@ -689,7 +795,9 @@ void main() {
       expect(fromMap.status, link.status);
     });
 
-    test('acceptance creates allocated_patients for caregiver and allocated_caregivers for patient', () {
+    test(
+        'acceptance creates allocated_patients for caregiver and allocated_caregivers for patient',
+        () {
       // Caregiver B receives Patient A in allocated_patients
       final allocPatient = AllocatedPatient.create(
         caregiverId: 'caregiver-bob',
@@ -719,7 +827,9 @@ void main() {
       expect(allocCaregiver.relationship, 'Daughter');
     });
 
-    test('bilateral isolation: Patient C cannot see Caregiver B, and Caregiver D cannot see Patient A', () {
+    test(
+        'bilateral isolation: Patient C cannot see Caregiver B, and Caregiver D cannot see Patient A',
+        () {
       final allocPatient = AllocatedPatient.create(
         caregiverId: 'caregiver-bob',
         patientUserId: 'patient-alice',
@@ -736,25 +846,31 @@ void main() {
       final allCaregivers = [allocCaregiver];
 
       // 1. Caregiver B sees Patient A
-      final bPatients = allPatients.where((p) => p.caregiverId == 'caregiver-bob').toList();
+      final bPatients =
+          allPatients.where((p) => p.caregiverId == 'caregiver-bob').toList();
       expect(bPatients.length, 1);
       expect(bPatients.first.patientUserId, 'patient-alice');
 
       // Caregiver D sees NO patients (cannot see Patient A)
-      final dPatients = allPatients.where((p) => p.caregiverId == 'caregiver-david').toList();
+      final dPatients =
+          allPatients.where((p) => p.caregiverId == 'caregiver-david').toList();
       expect(dPatients, isEmpty);
 
       // 2. Patient A sees Caregiver B
-      final aCaregivers = allCaregivers.where((c) => c.patientId == 'patient-alice').toList();
+      final aCaregivers =
+          allCaregivers.where((c) => c.patientId == 'patient-alice').toList();
       expect(aCaregivers.length, 1);
       expect(aCaregivers.first.caregiverUserId, 'caregiver-bob');
 
       // Patient C sees NO caregivers (cannot see Caregiver B)
-      final cCaregivers = allCaregivers.where((c) => c.patientId == 'patient-charlie').toList();
+      final cCaregivers =
+          allCaregivers.where((c) => c.patientId == 'patient-charlie').toList();
       expect(cCaregivers, isEmpty);
     });
 
-    test('duplicate link prevention: existing patient-caregiver link is not duplicated', () {
+    test(
+        'duplicate link prevention: existing patient-caregiver link is not duplicated',
+        () {
       final existingLink = PatientCaregiverLink.create(
         patientUserId: 'patient-alice',
         caregiverUserId: 'caregiver-bob',
@@ -765,7 +881,9 @@ void main() {
 
       // Verification before inserting duplicate
       final alreadyExists = existingLinks.any(
-        (l) => l.patientUserId == 'patient-alice' && l.caregiverUserId == 'caregiver-bob',
+        (l) =>
+            l.patientUserId == 'patient-alice' &&
+            l.caregiverUserId == 'caregiver-bob',
       );
       expect(alreadyExists, isTrue);
 
@@ -782,7 +900,9 @@ void main() {
       expect(updatedLinks.length, 1);
     });
 
-    test('authorization check: wrong caregiver cannot accept invitation belonging to another caregiver', () {
+    test(
+        'authorization check: wrong caregiver cannot accept invitation belonging to another caregiver',
+        () {
       final invite = CaregiverInvitation.create(
         userId: 'patient-alice',
         email: 'caregiverB@example.com',
@@ -794,8 +914,10 @@ void main() {
       // Logic from CaregiverRepository.acceptIncomingInvitation
       expect(
         () {
-          if (authenticatedCaregiverEmail.toLowerCase() != invite.caregiverEmail.toLowerCase()) {
-            throw StateError('This invitation is not addressed to your account.');
+          if (authenticatedCaregiverEmail.toLowerCase() !=
+              invite.caregiverEmail.toLowerCase()) {
+            throw StateError(
+                'This invitation is not addressed to your account.');
           }
         },
         throwsA(isA<StateError>().having(
@@ -806,12 +928,15 @@ void main() {
       );
     });
 
-    test('status guard: declined, revoked, or already accepted invitation cannot be accepted', () {
+    test(
+        'status guard: declined, revoked, or already accepted invitation cannot be accepted',
+        () {
       for (final nonPendingStatus in ['declined', 'revoked', 'accepted']) {
         expect(
           () {
             if (nonPendingStatus != 'pending') {
-              throw StateError('Cannot accept invitation: status is already "$nonPendingStatus".');
+              throw StateError(
+                  'Cannot accept invitation: status is already "$nonPendingStatus".');
             }
           },
           throwsA(isA<StateError>().having(
@@ -823,7 +948,9 @@ void main() {
       }
     });
 
-    test('permissions requested in invitation are preserved upon relationship creation', () {
+    test(
+        'permissions requested in invitation are preserved upon relationship creation',
+        () {
       final invite = CaregiverInvitation.create(
         userId: 'patient-alice',
         email: 'caregiverB@example.com',
@@ -852,7 +979,9 @@ void main() {
   });
 
   group('Decline Caregiver Invitation Tests', () {
-    test('successful decline transitions invitation status to declined with updated timestamp', () {
+    test(
+        'successful decline transitions invitation status to declined with updated timestamp',
+        () {
       final now = DateTime.now().toUtc();
       final invite = CaregiverInvitation.create(
         userId: 'patient-alice',
@@ -877,7 +1006,9 @@ void main() {
       expect(declinedInvite.id, invite.id);
     });
 
-    test('declining invitation creates NO patient_caregiver_link, allocated_patient, or allocated_caregiver', () {
+    test(
+        'declining invitation creates NO patient_caregiver_link, allocated_patient, or allocated_caregiver',
+        () {
       final existingLinks = <PatientCaregiverLink>[];
       final existingAllocatedPatients = <AllocatedPatient>[];
       final existingAllocatedCaregivers = <AllocatedCaregiver>[];
@@ -899,7 +1030,9 @@ void main() {
       expect(existingAllocatedCaregivers, isEmpty);
     });
 
-    test('authorization check: wrong caregiver cannot decline an invitation belonging to another caregiver', () {
+    test(
+        'authorization check: wrong caregiver cannot decline an invitation belonging to another caregiver',
+        () {
       final invite = CaregiverInvitation.create(
         userId: 'patient-alice',
         email: 'caregiverB@example.com',
@@ -911,8 +1044,10 @@ void main() {
       // Logic from CaregiverRepository.declineIncomingInvitation
       expect(
         () {
-          if (authenticatedCaregiverEmail.toLowerCase() != invite.caregiverEmail.toLowerCase()) {
-            throw StateError('This invitation is not addressed to your account.');
+          if (authenticatedCaregiverEmail.toLowerCase() !=
+              invite.caregiverEmail.toLowerCase()) {
+            throw StateError(
+                'This invitation is not addressed to your account.');
           }
         },
         throwsA(isA<StateError>().having(
@@ -928,7 +1063,8 @@ void main() {
       expect(
         () {
           if (currentStatus != 'pending') {
-            throw StateError('Cannot decline invitation: status is already "$currentStatus".');
+            throw StateError(
+                'Cannot decline invitation: status is already "$currentStatus".');
           }
         },
         throwsA(isA<StateError>().having(
@@ -944,7 +1080,8 @@ void main() {
       expect(
         () {
           if (currentStatus != 'pending') {
-            throw StateError('Cannot decline invitation: status is already "$currentStatus".');
+            throw StateError(
+                'Cannot decline invitation: status is already "$currentStatus".');
           }
         },
         throwsA(isA<StateError>().having(
@@ -955,12 +1092,14 @@ void main() {
       );
     });
 
-    test('status guard: already declined invitation cannot be declined again', () {
+    test('status guard: already declined invitation cannot be declined again',
+        () {
       const currentStatus = 'declined';
       expect(
         () {
           if (currentStatus != 'pending') {
-            throw StateError('Cannot decline invitation: status is already "$currentStatus".');
+            throw StateError(
+                'Cannot decline invitation: status is already "$currentStatus".');
           }
         },
         throwsA(isA<StateError>().having(
@@ -971,7 +1110,9 @@ void main() {
       );
     });
 
-    testWidgets('patient-side list reflects Declined status for declined invitation', (tester) async {
+    testWidgets(
+        'patient-side list reflects Declined status for declined invitation',
+        (tester) async {
       tester.view.physicalSize = const Size(800, 1600);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -1010,7 +1151,9 @@ void main() {
       expect(find.text('Revoke Access'), findsNothing);
     });
 
-    testWidgets('caregiver incoming UI reflects Declined status and removes Accept/Decline action buttons', (tester) async {
+    testWidgets(
+        'caregiver incoming UI reflects Declined status and removes Accept/Decline action buttons',
+        (tester) async {
       tester.view.physicalSize = const Size(800, 1600);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -1032,7 +1175,8 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            incomingCaregiverInvitationsProvider.overrideWith((ref) => [declinedInvite]),
+            incomingCaregiverInvitationsProvider
+                .overrideWith((ref) => [declinedInvite]),
           ],
           child: const MaterialApp(
             home: Scaffold(
@@ -1071,10 +1215,12 @@ void main() {
       final allPatients = [patientA, patientC];
 
       // Query isolated by caregiverId = caregiver-bob
-      final bobPatients = allPatients.where((p) => p.caregiverId == 'caregiver-bob').toList();
+      final bobPatients =
+          allPatients.where((p) => p.caregiverId == 'caregiver-bob').toList();
       expect(bobPatients.length, 1);
       expect(bobPatients.first.fullName, 'Alice Smith');
-      expect(bobPatients.any((p) => p.patientUserId == 'patient-carol'), isFalse);
+      expect(
+          bobPatients.any((p) => p.patientUserId == 'patient-carol'), isFalse);
     });
 
     test('UPDATE: Authorized relationship fields can be edited', () {
@@ -1112,18 +1258,22 @@ void main() {
       expect(
         () {
           if (callerCaregiverId != patientA.caregiverId) {
-            throw StateError('Unauthorized: Patient record does not belong to this caregiver.');
+            throw StateError(
+                'Unauthorized: Patient record does not belong to this caregiver.');
           }
         },
         throwsA(isA<StateError>().having(
           (e) => e.message,
           'message',
-          contains('Unauthorized: Patient record does not belong to this caregiver.'),
+          contains(
+              'Unauthorized: Patient record does not belong to this caregiver.'),
         )),
       );
     });
 
-    test('DELETE / DISCONNECT: Disconnect removes relationship for that caregiver only', () {
+    test(
+        'DELETE / DISCONNECT: Disconnect removes relationship for that caregiver only',
+        () {
       final patientAForBob = AllocatedPatient.create(
         caregiverId: 'caregiver-bob',
         patientUserId: 'patient-alice',
@@ -1139,12 +1289,14 @@ void main() {
 
       // Bob disconnects Patient A
       final remainingAfterBobDisconnect = patientList
-          .where((p) => !(p.caregiverId == 'caregiver-bob' && p.patientUserId == 'patient-alice'))
+          .where((p) => !(p.caregiverId == 'caregiver-bob' &&
+              p.patientUserId == 'patient-alice'))
           .toList();
 
       expect(remainingAfterBobDisconnect.length, 1);
       // Charlie still has Patient A!
-      expect(remainingAfterBobDisconnect.first.caregiverId, 'caregiver-charlie');
+      expect(
+          remainingAfterBobDisconnect.first.caregiverId, 'caregiver-charlie');
       expect(remainingAfterBobDisconnect.first.patientUserId, 'patient-alice');
     });
   });
@@ -1167,13 +1319,15 @@ void main() {
       final allCaregivers = [cgForAlice, cgForCarol];
 
       // Alice queries her own caregivers
-      final aliceView = allCaregivers.where((c) => c.patientId == 'patient-alice').toList();
+      final aliceView =
+          allCaregivers.where((c) => c.patientId == 'patient-alice').toList();
       expect(aliceView.length, 1);
       expect(aliceView.first.relationship, 'Son');
       expect(aliceView.first.caregiverUserId, 'caregiver-bob');
 
       // Unrelated patient David queries his caregivers
-      final davidView = allCaregivers.where((c) => c.patientId == 'patient-david').toList();
+      final davidView =
+          allCaregivers.where((c) => c.patientId == 'patient-david').toList();
       expect(davidView, isEmpty);
     });
 
@@ -1209,7 +1363,8 @@ void main() {
       expect(
         () {
           if (activePatientId != relationshipOwnerId) {
-            throw StateError('Unauthorized: No active relationship with this caregiver.');
+            throw StateError(
+                'Unauthorized: No active relationship with this caregiver.');
           }
         },
         throwsA(isA<StateError>().having(
@@ -1220,7 +1375,8 @@ void main() {
       );
     });
 
-    test('DELETE / REVOKE: Revoke disconnects only that specific caregiver', () {
+    test('DELETE / REVOKE: Revoke disconnects only that specific caregiver',
+        () {
       final linkAB = PatientCaregiverLink.create(
         patientUserId: 'patient-alice',
         caregiverUserId: 'caregiver-bob',
@@ -1234,17 +1390,20 @@ void main() {
 
       // Alice revokes Bob
       final updatedLinks = links.map((l) {
-        if (l.patientUserId == 'patient-alice' && l.caregiverUserId == 'caregiver-bob') {
+        if (l.patientUserId == 'patient-alice' &&
+            l.caregiverUserId == 'caregiver-bob') {
           return l.copyWith(status: 'revoked');
         }
         return l;
       }).toList();
 
-      final activeLinks = updatedLinks.where((l) => l.status == 'active').toList();
+      final activeLinks =
+          updatedLinks.where((l) => l.status == 'active').toList();
       expect(activeLinks.length, 1);
       expect(activeLinks.first.caregiverUserId, 'caregiver-charlie');
 
-      final revokedLinks = updatedLinks.where((l) => l.status == 'revoked').toList();
+      final revokedLinks =
+          updatedLinks.where((l) => l.status == 'revoked').toList();
       expect(revokedLinks.length, 1);
       expect(revokedLinks.first.caregiverUserId, 'caregiver-bob');
     });
@@ -1340,7 +1499,3 @@ void main() {
     });
   });
 }
-
-
-
-

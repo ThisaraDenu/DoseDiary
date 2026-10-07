@@ -32,6 +32,7 @@ class SupabaseSyncService {
       await _pullDoseOccurrences(db, user.id);
       await _pullStockEvents(db, user.id);
       await _pullCaregiverInvitations(db, user.id);
+      await _pullDirectConnectionInvitations(db, user.id);
       await _pullCaregiverPermissions(db, user.id);
       await _pullPatientCaregiverLinks(db, user.id);
       await _pullAllocatedPatients(db, user.id);
@@ -226,7 +227,8 @@ class SupabaseSyncService {
   }
 
   /// Push a patient-caregiver link to Supabase.
-  static Future<void> pushPatientCaregiverLink(Map<String, dynamic> data) async {
+  static Future<void> pushPatientCaregiverLink(
+      Map<String, dynamic> data) async {
     if (!AuthService.isLoggedIn) return;
     await _upsert('patient_caregiver_links', _toCloud(data));
   }
@@ -271,8 +273,7 @@ class SupabaseSyncService {
       final local = _fromCloud(row);
       // times_of_day is a Postgres TEXT[] — join to comma string for SQLite
       if (row['times_of_day'] is List) {
-        local['times_of_day'] =
-            (row['times_of_day'] as List).join(',');
+        local['times_of_day'] = (row['times_of_day'] as List).join(',');
       }
       await database.insert('schedules', local,
           conflictAlgorithm: ConflictAlgorithm.replace);
@@ -352,6 +353,24 @@ class SupabaseSyncService {
     }
   }
 
+  static Future<void> _pullDirectConnectionInvitations(
+      AppDatabase db, String userId) async {
+    final rows = await _client
+        .from('caregiver_invitations')
+        .select()
+        .or('sender_user_id.eq.$userId,receiver_user_id.eq.$userId')
+        .order('created_at', ascending: false);
+
+    final database = await db.database;
+    for (final row in rows) {
+      await database.insert(
+        'caregiver_invitations',
+        _fromCloud(row),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+  }
+
   static Future<void> _pullPatientCaregiverLinks(
       AppDatabase db, String userId) async {
     final rows = await _client
@@ -399,10 +418,23 @@ class SupabaseSyncService {
     final targetEmail = email ?? AuthService.currentUser?.email;
     if (targetEmail == null || targetEmail.isEmpty) return;
     try {
-      await _pullIncomingCaregiverInvitations(AppDatabase.instance, targetEmail);
+      await _pullIncomingCaregiverInvitations(
+          AppDatabase.instance, targetEmail);
     } catch (e) {
       // ignore: avoid_print
       print('SupabaseSyncService.pullIncomingCaregiverInvitations error: $e');
+    }
+  }
+
+  /// Pulls ID-based invitations sent by or addressed to the current user.
+  static Future<void> pullDirectConnectionInvitations() async {
+    final userId = AuthService.currentUser?.id;
+    if (userId == null) return;
+    try {
+      await _pullDirectConnectionInvitations(AppDatabase.instance, userId);
+    } catch (e) {
+      // ignore: avoid_print
+      print('SupabaseSyncService.pullDirectConnectionInvitations error: $e');
     }
   }
 
@@ -420,10 +452,18 @@ class SupabaseSyncService {
   /// Cloud → Local: convert Postgres booleans → SQLite integers (0/1).
   static Map<String, dynamic> _fromCloud(Map<String, dynamic> row) {
     final boolFields = {
-      'is_active', 'is_as_needed', 'refill_reminder_enabled',
-      'simple_wording', 'notification_sound', 'notification_vibration',
-      'privacy_safe_previews', 'perm_view_schedule', 'perm_view_history',
-      'perm_view_refills', 'perm_view_adherence', 'alert_important_only',
+      'is_active',
+      'is_as_needed',
+      'refill_reminder_enabled',
+      'simple_wording',
+      'notification_sound',
+      'notification_vibration',
+      'privacy_safe_previews',
+      'perm_view_schedule',
+      'perm_view_history',
+      'perm_view_refills',
+      'perm_view_adherence',
+      'alert_important_only',
     };
     final result = <String, dynamic>{};
     for (final entry in row.entries) {
@@ -442,10 +482,18 @@ class SupabaseSyncService {
   /// Local → Cloud: convert SQLite 0/1 integers → Postgres booleans.
   static Map<String, dynamic> _toCloud(Map<String, dynamic> data) {
     final boolFields = {
-      'is_active', 'is_as_needed', 'refill_reminder_enabled',
-      'simple_wording', 'notification_sound', 'notification_vibration',
-      'privacy_safe_previews', 'perm_view_schedule', 'perm_view_history',
-      'perm_view_refills', 'perm_view_adherence', 'alert_important_only',
+      'is_active',
+      'is_as_needed',
+      'refill_reminder_enabled',
+      'simple_wording',
+      'notification_sound',
+      'notification_vibration',
+      'privacy_safe_previews',
+      'perm_view_schedule',
+      'perm_view_history',
+      'perm_view_refills',
+      'perm_view_adherence',
+      'alert_important_only',
     };
     final result = Map<String, dynamic>.from(data);
     for (final field in boolFields) {

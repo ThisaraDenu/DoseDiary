@@ -109,7 +109,8 @@ class Medication {
       isAsNeeded: isAsNeeded ?? this.isAsNeeded,
       quantityOnHand: quantityOnHand ?? this.quantityOnHand,
       quantityUnit: quantityUnit ?? this.quantityUnit,
-      refillReminderEnabled: refillReminderEnabled ?? this.refillReminderEnabled,
+      refillReminderEnabled:
+          refillReminderEnabled ?? this.refillReminderEnabled,
       refillThresholdQty: refillThresholdQty ?? this.refillThresholdQty,
       refillReminderDate: refillReminderDate ?? this.refillReminderDate,
       createdAt: createdAt,
@@ -161,11 +162,15 @@ class Medication {
         updatedAt: DateTime.parse(map['updated_at'] as String),
       );
 
-  String get displayStrength => '${strength.toStringAsFixed(strength.truncateToDouble() == strength ? 0 : 1)} $strengthUnit';
-  String get displayDose => '${amountPerDose.toStringAsFixed(amountPerDose.truncateToDouble() == amountPerDose ? 0 : 1)} $doseUnit';
+  String get displayStrength =>
+      '${strength.toStringAsFixed(strength.truncateToDouble() == strength ? 0 : 1)} $strengthUnit';
+  String get displayDose =>
+      '${amountPerDose.toStringAsFixed(amountPerDose.truncateToDouble() == amountPerDose ? 0 : 1)} $doseUnit';
 
   bool get isLowStock =>
-      refillReminderEnabled && refillThresholdQty != null && quantityOnHand <= refillThresholdQty!;
+      refillReminderEnabled &&
+      refillThresholdQty != null &&
+      quantityOnHand <= refillThresholdQty!;
 }
 
 // â”€â”€ Schedule â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -235,7 +240,8 @@ class MedicationSchedule {
         'superseded_at': supersededAt?.toIso8601String(),
       };
 
-  factory MedicationSchedule.fromMap(Map<String, dynamic> map) => MedicationSchedule(
+  factory MedicationSchedule.fromMap(Map<String, dynamic> map) =>
+      MedicationSchedule(
         id: map['id'] as String,
         medicationId: map['medication_id'] as String,
         userId: map['user_id'] as String,
@@ -245,7 +251,9 @@ class MedicationSchedule {
             ? (map['repeat_days'] as String).split(',').map(int.parse).toList()
             : null,
         startDate: DateTime.parse(map['start_date'] as String),
-        endDate: map['end_date'] != null ? DateTime.parse(map['end_date'] as String) : null,
+        endDate: map['end_date'] != null
+            ? DateTime.parse(map['end_date'] as String)
+            : null,
         timezone: map['timezone'] as String,
         createdAt: DateTime.parse(map['created_at'] as String),
         supersededAt: map['superseded_at'] != null
@@ -276,12 +284,13 @@ class DoseOccurrence {
   final String userId;
   final DateTime scheduledAt;
   final String localDate; // 'YYYY-MM-DD'
-  final String occurrenceKey; // schedule_id + local_date + time â€” unique
+  final String occurrenceKey; // schedule_id + local_date + time - unique
   final DoseStatus status;
   final DateTime createdAt;
   final DateTime? snoozeUntil;
 
-  DoseOccurrence copyWith({DoseStatus? status, DateTime? snoozeUntil}) => DoseOccurrence(
+  DoseOccurrence copyWith({DoseStatus? status, DateTime? snoozeUntil}) =>
+      DoseOccurrence(
         id: id,
         scheduleId: scheduleId,
         medicationId: medicationId,
@@ -341,7 +350,8 @@ class DoseEvent {
   final String id;
   final String occurrenceId;
   final String userId;
-  final String action; // 'taken'|'missed'|'skipped'|'snoozed'|'undo'|'correction'
+  final String
+      action; // 'taken'|'missed'|'skipped'|'snoozed'|'undo'|'correction'
   final DateTime recordedAt;
   final DateTime? snoozeUntil;
   final String? skipReason;
@@ -517,7 +527,8 @@ class UserProfile {
         textScaleFactor: textScaleFactor ?? this.textScaleFactor,
         simpleWording: simpleWording ?? this.simpleWording,
         notificationSound: notificationSound ?? this.notificationSound,
-        notificationVibration: notificationVibration ?? this.notificationVibration,
+        notificationVibration:
+            notificationVibration ?? this.notificationVibration,
         privacySafePreviews: privacySafePreviews ?? this.privacySafePreviews,
       );
 
@@ -567,6 +578,7 @@ class AllocatedPatient {
 
   final String id;
   final String caregiverId;
+
   /// The real profile user-id of the patient (null when manually entered).
   final String? patientUserId;
   final String fullName;
@@ -655,9 +667,8 @@ class AllocatedPatient {
         'created_at': createdAt.toIso8601String(),
       };
 
-
-
-  factory AllocatedPatient.fromMap(Map<String, dynamic> map) => AllocatedPatient(
+  factory AllocatedPatient.fromMap(Map<String, dynamic> map) =>
+      AllocatedPatient(
         id: map['id'] as String,
         caregiverId: map['caregiver_id'] as String,
         patientUserId: map['patient_user_id'] as String?,
@@ -755,7 +766,8 @@ class AllocatedCaregiver {
         'created_at': createdAt.toIso8601String(),
       };
 
-  factory AllocatedCaregiver.fromMap(Map<String, dynamic> map) => AllocatedCaregiver(
+  factory AllocatedCaregiver.fromMap(Map<String, dynamic> map) =>
+      AllocatedCaregiver(
         id: map['id'] as String,
         patientId: map['patient_id'] as String? ?? 'default_user',
         caregiverUserId: map['caregiver_user_id'] as String?,
@@ -872,6 +884,12 @@ class CaregiverInvitation {
     this.viewAdherence = true,
     this.patientName,
     this.patientEmail,
+    this.caregiverUserId,
+    this.senderUserId,
+    this.receiverUserId,
+    this.senderRole,
+    this.senderName,
+    this.receiverName,
   });
 
   final String id;
@@ -889,6 +907,15 @@ class CaregiverInvitation {
   final bool viewAdherence;
   final String? patientName;
   final String? patientEmail;
+  final String? caregiverUserId;
+  final String? senderUserId;
+  final String? receiverUserId;
+  final String? senderRole;
+  final String? senderName;
+  final String? receiverName;
+
+  bool get isDirectIdInvitation =>
+      senderUserId != null && receiverUserId != null;
 
   String get caregiverEmail => email;
 
@@ -903,6 +930,12 @@ class CaregiverInvitation {
     bool viewAdherence = true,
     String? patientName,
     String? patientEmail,
+    String? caregiverUserId,
+    String? senderUserId,
+    String? receiverUserId,
+    String? senderRole,
+    String? senderName,
+    String? receiverName,
     Duration validityDuration = const Duration(days: 7),
   }) {
     final now = DateTime.now().toUtc();
@@ -910,7 +943,8 @@ class CaregiverInvitation {
       id: _uuid.v4(),
       userId: userId,
       email: email.trim().toLowerCase(),
-      relationship: relationship.trim().isEmpty ? 'Family member' : relationship.trim(),
+      relationship:
+          relationship.trim().isEmpty ? 'Family member' : relationship.trim(),
       status: status,
       token: _uuid.v4(),
       expiresAt: now.add(validityDuration),
@@ -922,6 +956,12 @@ class CaregiverInvitation {
       viewAdherence: viewAdherence,
       patientName: patientName,
       patientEmail: patientEmail,
+      caregiverUserId: caregiverUserId,
+      senderUserId: senderUserId,
+      receiverUserId: receiverUserId,
+      senderRole: senderRole,
+      senderName: senderName,
+      receiverName: receiverName,
     );
   }
 
@@ -935,6 +975,12 @@ class CaregiverInvitation {
     DateTime? updatedAt,
     String? patientName,
     String? patientEmail,
+    String? caregiverUserId,
+    String? senderUserId,
+    String? receiverUserId,
+    String? senderRole,
+    String? senderName,
+    String? receiverName,
   }) =>
       CaregiverInvitation(
         id: id,
@@ -952,16 +998,29 @@ class CaregiverInvitation {
         viewAdherence: viewAdherence ?? this.viewAdherence,
         patientName: patientName ?? this.patientName,
         patientEmail: patientEmail ?? this.patientEmail,
+        caregiverUserId: caregiverUserId ?? this.caregiverUserId,
+        senderUserId: senderUserId ?? this.senderUserId,
+        receiverUserId: receiverUserId ?? this.receiverUserId,
+        senderRole: senderRole ?? this.senderRole,
+        senderName: senderName ?? this.senderName,
+        receiverName: receiverName ?? this.receiverName,
       );
 
   Map<String, dynamic> toMap() => {
         'id': id,
         'user_id': userId,
         'caregiver_email': email,
+        'caregiver_user_id': caregiverUserId,
+        'sender_user_id': senderUserId,
+        'receiver_user_id': receiverUserId,
+        'sender_role': senderRole,
+        'sender_name': senderName,
+        'receiver_name': receiverName,
         'relationship': relationship,
         'status': status,
         'token': token,
-        'expires_at': (expiresAt ?? createdAt.add(const Duration(days: 7))).toIso8601String(),
+        'expires_at': (expiresAt ?? createdAt.add(const Duration(days: 7)))
+            .toIso8601String(),
         'created_at': createdAt.toIso8601String(),
         'updated_at': (updatedAt ?? createdAt).toIso8601String(),
       };
@@ -980,15 +1039,34 @@ class CaregiverInvitation {
         relationship: map['relationship'] as String? ?? 'Family member',
         status: map['status'] as String? ?? 'pending',
         token: map['token'] as String? ?? '',
-        expiresAt: map['expires_at'] != null ? DateTime.tryParse(map['expires_at'] as String) : null,
-        createdAt: DateTime.tryParse(map['created_at'] as String? ?? '') ?? DateTime.now().toUtc(),
-        updatedAt: map['updated_at'] != null ? DateTime.tryParse(map['updated_at'] as String) : null,
-        viewSchedule: viewSchedule ?? ((map['perm_view_schedule'] as int?) != 0 && (map['view_schedule'] ?? true) != false),
-        viewHistory: viewHistory ?? ((map['perm_view_history'] as int?) != 0 && (map['view_history'] ?? true) != false),
-        viewRefills: viewRefills ?? ((map['perm_view_refills'] as int?) == 1 || (map['view_refills'] == true)),
-        viewAdherence: viewAdherence ?? ((map['perm_view_adherence'] as int?) != 0 && (map['view_adherence'] ?? true) != false),
+        expiresAt: map['expires_at'] != null
+            ? DateTime.tryParse(map['expires_at'] as String)
+            : null,
+        createdAt: DateTime.tryParse(map['created_at'] as String? ?? '') ??
+            DateTime.now().toUtc(),
+        updatedAt: map['updated_at'] != null
+            ? DateTime.tryParse(map['updated_at'] as String)
+            : null,
+        viewSchedule: viewSchedule ??
+            ((map['perm_view_schedule'] as int?) != 0 &&
+                (map['view_schedule'] ?? true) != false),
+        viewHistory: viewHistory ??
+            ((map['perm_view_history'] as int?) != 0 &&
+                (map['view_history'] ?? true) != false),
+        viewRefills: viewRefills ??
+            ((map['perm_view_refills'] as int?) == 1 ||
+                (map['view_refills'] == true)),
+        viewAdherence: viewAdherence ??
+            ((map['perm_view_adherence'] as int?) != 0 &&
+                (map['view_adherence'] ?? true) != false),
         patientName: (map['patient_name'] ?? map['patientName']) as String?,
         patientEmail: (map['patient_email'] ?? map['patientEmail']) as String?,
+        caregiverUserId: map['caregiver_user_id'] as String?,
+        senderUserId: map['sender_user_id'] as String?,
+        receiverUserId: map['receiver_user_id'] as String?,
+        senderRole: map['sender_role'] as String?,
+        senderName: map['sender_name'] as String?,
+        receiverName: map['receiver_name'] as String?,
       );
 }
 
@@ -1096,18 +1174,25 @@ class CaregiverPermission {
         'updated_at': updatedAt.toIso8601String(),
       };
 
-  factory CaregiverPermission.fromMap(Map<String, dynamic> map) => CaregiverPermission(
+  factory CaregiverPermission.fromMap(Map<String, dynamic> map) =>
+      CaregiverPermission(
         id: map['id'] as String,
         invitationId: map['invitation_id'] as String,
         userId: map['user_id'] as String,
         caregiverId: map['caregiver_id'] as String?,
-        permViewSchedule: (map['perm_view_schedule'] as int?) == 1 || map['perm_view_schedule'] == true,
-        permViewHistory: (map['perm_view_history'] as int?) == 1 || map['perm_view_history'] == true,
-        permViewRefills: (map['perm_view_refills'] as int?) == 1 || map['perm_view_refills'] == true,
-        permViewAdherence: (map['perm_view_adherence'] as int?) == 1 || map['perm_view_adherence'] == true,
-        alertImportantOnly: (map['alert_important_only'] as int?) != 0 && map['alert_important_only'] != false,
+        permViewSchedule: (map['perm_view_schedule'] as int?) == 1 ||
+            map['perm_view_schedule'] == true,
+        permViewHistory: (map['perm_view_history'] as int?) == 1 ||
+            map['perm_view_history'] == true,
+        permViewRefills: (map['perm_view_refills'] as int?) == 1 ||
+            map['perm_view_refills'] == true,
+        permViewAdherence: (map['perm_view_adherence'] as int?) == 1 ||
+            map['perm_view_adherence'] == true,
+        alertImportantOnly: (map['alert_important_only'] as int?) != 0 &&
+            map['alert_important_only'] != false,
         retryCount: (map['retry_count'] as num?)?.toInt() ?? 2,
-        gracePeriodMinutes: (map['grace_period_minutes'] as num?)?.toInt() ?? 30,
+        gracePeriodMinutes:
+            (map['grace_period_minutes'] as num?)?.toInt() ?? 30,
         createdAt: DateTime.parse(map['created_at'] as String),
         updatedAt: DateTime.parse(map['updated_at'] as String),
       );

@@ -17,9 +17,12 @@ import '../../data/repositories/app_repositories.dart';
 import '../home/caregiver_home_view.dart';
 
 // Re-export models and providers for backward compatibility
-export '../../data/local/models/app_models.dart' show CaregiverInvitation, CaregiverPermission;
-export '../../data/repositories/app_repositories.dart' show caregiversProvider, incomingCaregiverInvitationsProvider;
-export 'incoming_invitations_widget.dart' show IncomingCaregiverInvitationsWidget;
+export '../../data/local/models/app_models.dart'
+    show CaregiverInvitation, CaregiverPermission;
+export '../../data/repositories/app_repositories.dart'
+    show caregiversProvider, incomingCaregiverInvitationsProvider;
+export 'incoming_invitations_widget.dart'
+    show IncomingCaregiverInvitationsWidget;
 
 // Screen
 class CaregiverManagementScreen extends ConsumerWidget {
@@ -50,11 +53,16 @@ class CaregiverManagementScreen extends ConsumerWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 36),
+                const Icon(Icons.error_outline_rounded,
+                    color: AppColors.error, size: 36),
                 const SizedBox(height: 12),
-                Text('Could not load caregivers', style: AppTextStyles.headlineMd()),
+                Text('Could not load caregivers',
+                    style: AppTextStyles.headlineMd()),
                 const SizedBox(height: 6),
-                Text('$err', style: AppTextStyles.caption(color: AppColors.textSecondary), textAlign: TextAlign.center),
+                Text('$err',
+                    style:
+                        AppTextStyles.caption(color: AppColors.textSecondary),
+                    textAlign: TextAlign.center),
                 const SizedBox(height: 16),
                 DdButton(
                   label: 'Try Again',
@@ -84,17 +92,21 @@ class CaregiverManagementScreen extends ConsumerWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.shield_outlined, size: 20, color: AppColors.info),
+                    const Icon(Icons.shield_outlined,
+                        size: 20, color: AppColors.info),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Your Privacy', style: AppTextStyles.bodyBold(color: AppColors.info)),
+                          Text('Your Privacy',
+                              style: AppTextStyles.bodyBold(
+                                  color: AppColors.info)),
                           const SizedBox(height: 4),
                           Text(
                             'You control exactly what caregivers can see. Medication names are never shared — only the information you permit.',
-                            style: AppTextStyles.bodyLg(color: AppColors.textSecondary),
+                            style: AppTextStyles.bodyLg(
+                                color: AppColors.textSecondary),
                           ),
                         ],
                       ),
@@ -108,14 +120,17 @@ class CaregiverManagementScreen extends ConsumerWidget {
                 DdEmptyState(
                   icon: Icons.people_outline,
                   title: 'No caregivers added',
-                  subtitle: 'Invite a trusted family member or carer to view your schedule.',
+                  subtitle:
+                      'Invite a trusted family member or carer to view your schedule.',
                   actionLabel: 'Invite a Caregiver',
                   onAction: () => context.push(RouteNames.inviteCaregiver),
                 ),
               ] else ...[
                 Row(
                   children: [
-                    Expanded(child: Text('Caregivers (${caregivers.length})', style: AppTextStyles.headlineMd())),
+                    Expanded(
+                        child: Text('Caregivers (${caregivers.length})',
+                            style: AppTextStyles.headlineMd())),
                     TextButton.icon(
                       onPressed: () => context.push(RouteNames.inviteCaregiver),
                       icon: const Icon(Icons.add, size: 18),
@@ -139,7 +154,8 @@ class CaregiverManagementScreen extends ConsumerWidget {
                 onPressed: () => context.push(RouteNames.inviteCaregiver),
                 backgroundColor: AppColors.primaryAction,
                 icon: const Icon(Icons.person_add_rounded, color: Colors.white),
-                label: Text('Invite Caregiver', style: AppTextStyles.labelLg(color: Colors.white)),
+                label: Text('Invite Caregiver',
+                    style: AppTextStyles.labelLg(color: Colors.white)),
               )
             : null,
         orElse: () => null,
@@ -187,7 +203,8 @@ class _CaregiverCard extends ConsumerWidget {
                 backgroundColor: AppColors.primaryAction.withOpacity(0.1),
                 child: Text(
                   cg.email.isNotEmpty ? cg.email[0].toUpperCase() : '?',
-                  style: AppTextStyles.headlineMd(color: AppColors.primaryAction),
+                  style:
+                      AppTextStyles.headlineMd(color: AppColors.primaryAction),
                 ),
               ),
               const SizedBox(width: AppDimensions.stackMd),
@@ -201,11 +218,14 @@ class _CaregiverCard extends ConsumerWidget {
                       children: [
                         if (cg.relationship.isNotEmpty) ...[
                           Text(cg.relationship, style: AppTextStyles.caption()),
-                          Text(' • ', style: AppTextStyles.caption(color: AppColors.textTertiary)),
+                          Text(' • ',
+                              style: AppTextStyles.caption(
+                                  color: AppColors.textTertiary)),
                         ],
                         Text(
                           'Invited ${DateFormat('d MMM yyyy').format(cg.createdAt.toLocal())}',
-                          style: AppTextStyles.caption(color: AppColors.textSecondary),
+                          style: AppTextStyles.caption(
+                              color: AppColors.textSecondary),
                         ),
                       ],
                     ),
@@ -213,12 +233,14 @@ class _CaregiverCard extends ConsumerWidget {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: statusBg,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Text(statusLabel, style: AppTextStyles.statusBadge(color: statusColor)),
+                child: Text(statusLabel,
+                    style: AppTextStyles.statusBadge(color: statusColor)),
               ),
             ],
           ),
@@ -259,13 +281,15 @@ class _CaregiverCard extends ConsumerWidget {
                 child: OutlinedButton(
                   onPressed: () => _handleAction(context, ref),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: statusLower == 'declined' || statusLower == 'revoked'
-                        ? AppColors.textSecondary
-                        : AppColors.error,
+                    foregroundColor:
+                        statusLower == 'declined' || statusLower == 'revoked'
+                            ? AppColors.textSecondary
+                            : AppColors.error,
                     side: BorderSide(
-                      color: statusLower == 'declined' || statusLower == 'revoked'
-                          ? AppColors.borderMedium
-                          : AppColors.error,
+                      color:
+                          statusLower == 'declined' || statusLower == 'revoked'
+                              ? AppColors.borderMedium
+                              : AppColors.error,
                     ),
                     minimumSize: const Size(0, 44),
                   ),
@@ -326,14 +350,17 @@ class _CaregiverCard extends ConsumerWidget {
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    const Icon(Icons.tune_rounded, color: AppColors.primaryAction, size: 22),
+                    const Icon(Icons.tune_rounded,
+                        color: AppColors.primaryAction, size: 22),
                     const SizedBox(width: 8),
-                    Text('Edit Caregiver Access', style: AppTextStyles.headlineMd()),
+                    Text('Edit Caregiver Access',
+                        style: AppTextStyles.headlineMd()),
                   ],
                 ),
                 const SizedBox(height: 4),
                 Text('Manage permissions and relationship for ${cg.email}',
-                    style: AppTextStyles.caption(color: AppColors.textSecondary)),
+                    style:
+                        AppTextStyles.caption(color: AppColors.textSecondary)),
                 const SizedBox(height: 16),
                 Text('Relationship', style: AppTextStyles.bodyBold()),
                 const SizedBox(height: 6),
@@ -341,7 +368,8 @@ class _CaregiverCard extends ConsumerWidget {
                   controller: relCtrl,
                   decoration: const InputDecoration(
                     hintText: 'e.g. Daughter, Nurse, Brother',
-                    contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -391,14 +419,16 @@ class _CaregiverCard extends ConsumerWidget {
     );
 
     if (updated == true) {
-      await ref.read(caregiverRepositoryProvider).updateCaregiverRelationshipAndPermissions(
-        invitationId: cg.id,
-        relationship: relCtrl.text.trim(),
-        viewSchedule: viewSchedule,
-        viewHistory: viewHistory,
-        viewRefills: viewRefills,
-        viewAdherence: viewAdherence,
-      );
+      await ref
+          .read(caregiverRepositoryProvider)
+          .updateCaregiverRelationshipAndPermissions(
+            invitationId: cg.id,
+            relationship: relCtrl.text.trim(),
+            viewSchedule: viewSchedule,
+            viewHistory: viewHistory,
+            viewRefills: viewRefills,
+            viewAdherence: viewAdherence,
+          );
       ref.invalidate(caregiversProvider);
       ref.invalidate(patientCaregiversListProvider);
       if (context.mounted) {
@@ -421,10 +451,13 @@ class _CaregiverCard extends ConsumerWidget {
           title: const Text('Cancel Invitation'),
           content: Text('Cancel the pending invitation to ${cg.email}?'),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel')),
             TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Cancel Invitation', style: TextStyle(color: AppColors.error)),
+              child: const Text('Cancel Invitation',
+                  style: TextStyle(color: AppColors.error)),
             ),
           ],
         ),
@@ -446,12 +479,16 @@ class _CaregiverCard extends ConsumerWidget {
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Revoke Access'),
-          content: Text('Remove ${cg.email}\'s caregiver access? They will no longer receive alerts.'),
+          content: Text(
+              'Remove ${cg.email}\'s caregiver access? They will no longer receive alerts.'),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel')),
             TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Revoke', style: TextStyle(color: AppColors.error)),
+              child: const Text('Revoke',
+                  style: TextStyle(color: AppColors.error)),
             ),
           ],
         ),
@@ -476,10 +513,13 @@ class _CaregiverCard extends ConsumerWidget {
           title: const Text('Remove Record'),
           content: Text('Remove this invitation record for ${cg.email}?'),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel')),
             TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Remove', style: TextStyle(color: AppColors.error)),
+              child: const Text('Remove',
+                  style: TextStyle(color: AppColors.error)),
             ),
           ],
         ),
@@ -511,7 +551,8 @@ class _PermChip extends StatelessWidget {
           color: AppColors.takenBackground,
           borderRadius: BorderRadius.circular(20),
         ),
-        child: Text(label, style: AppTextStyles.caption(color: AppColors.takenForeground)),
+        child: Text(label,
+            style: AppTextStyles.caption(color: AppColors.takenForeground)),
       );
 }
 
@@ -521,56 +562,38 @@ class InviteCaregiverScreen extends ConsumerStatefulWidget {
   const InviteCaregiverScreen({super.key});
 
   @override
-  ConsumerState<InviteCaregiverScreen> createState() => _InviteCaregiverScreenState();
+  ConsumerState<InviteCaregiverScreen> createState() =>
+      _InviteCaregiverScreenState();
 }
 
 class _InviteCaregiverScreenState extends ConsumerState<InviteCaregiverScreen> {
-  final _emailCtrl = TextEditingController();
+  final _publicIdCtrl = TextEditingController();
   final _relationshipCtrl = TextEditingController();
-  bool _viewSchedule = true;
-  bool _viewHistory = true;
-  bool _viewRefills = false;
-  bool _viewAdherence = true;
+  String _senderRole = 'patient';
   bool _isLoading = false;
 
   @override
   void dispose() {
-    _emailCtrl.dispose();
+    _publicIdCtrl.dispose();
     _relationshipCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _invite() async {
-    final email = _emailCtrl.text.trim();
-    final relationship = _relationshipCtrl.text.trim().isEmpty ? 'Family member' : _relationshipCtrl.text.trim();
+    final publicId = _publicIdCtrl.text.trim();
+    final relationship = _relationshipCtrl.text.trim().isEmpty
+        ? 'Family member'
+        : _relationshipCtrl.text.trim();
 
     final repo = ref.read(caregiverRepositoryProvider);
-
-    // Validate inputs
-    final validationError = await repo.validateInvitation(caregiverEmail: email);
-    if (validationError != null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(validationError),
-          backgroundColor: AppColors.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return;
-    }
 
     setState(() => _isLoading = true);
 
     try {
-      await repo.createInvitation(
-        caregiverEmail: email,
+      await repo.createDirectConnectionInvitation(
+        publicId: publicId,
+        senderRole: _senderRole,
         relationship: relationship,
-        viewSchedule: _viewSchedule,
-        viewHistory: _viewHistory,
-        viewRefills: _viewRefills,
-        viewAdherence: _viewAdherence,
       );
 
       // Refresh list in CaregiverManagementScreen
@@ -582,14 +605,16 @@ class _InviteCaregiverScreenState extends ConsumerState<InviteCaregiverScreen> {
         SnackBar(
           content: Row(
             children: [
-              const Icon(Icons.check_circle_rounded, color: Color(0xFF97F5CC), size: 20),
+              const Icon(Icons.check_circle_rounded,
+                  color: Color(0xFF97F5CC), size: 20),
               const SizedBox(width: 10),
-              Expanded(child: Text('Invitation sent to $email')),
+              Expanded(child: Text('Invitation sent to $publicId')),
             ],
           ),
           backgroundColor: const Color(0xFF303030),
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
       context.pop();
@@ -598,7 +623,11 @@ class _InviteCaregiverScreenState extends ConsumerState<InviteCaregiverScreen> {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(e.toString().replaceAll('ArgumentError: ', '').replaceAll('Exception: ', '')),
+          content: Text(e
+              .toString()
+              .replaceAll('ArgumentError: ', '')
+              .replaceAll('Invalid argument(s): ', '')
+              .replaceAll('Exception: ', '')),
           backgroundColor: AppColors.error,
           behavior: SnackBarBehavior.floating,
         ),
@@ -613,31 +642,59 @@ class _InviteCaregiverScreenState extends ConsumerState<InviteCaregiverScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Invite Caregiver')),
+      appBar: AppBar(title: const Text('Connect with a user')),
       backgroundColor: AppColors.scaffoldBackground,
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(AppDimensions.screenMargin),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Invite by email', style: AppTextStyles.headlineLg()),
+            Text('Connect by DoseDiary ID', style: AppTextStyles.headlineLg()),
             const SizedBox(height: AppDimensions.stackSm),
             Text(
-              'Your caregiver will receive an email with a link to create a free DoseDiary account.',
+              'Enter the unique ID shown in the other user’s Settings. They will receive an in-app invitation to accept or decline.',
               style: AppTextStyles.bodyLg(color: AppColors.textSecondary),
             ),
             const SizedBox(height: AppDimensions.stackXl),
 
-            // Email
+            Text('I am connecting as', style: AppTextStyles.bodyBold()),
+            const SizedBox(height: AppDimensions.stackSm),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(
+                  value: 'patient',
+                  label: Text('Patient'),
+                  icon: Icon(Icons.medication_outlined),
+                ),
+                ButtonSegment(
+                  value: 'caregiver',
+                  label: Text('Caregiver'),
+                  icon: Icon(Icons.health_and_safety_outlined),
+                ),
+              ],
+              selected: {_senderRole},
+              onSelectionChanged: (selection) {
+                setState(() => _senderRole = selection.first);
+              },
+            ),
+            const SizedBox(height: AppDimensions.stackLg),
+
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Email address', style: AppTextStyles.bodyBold()),
+                Text(
+                  _senderRole == 'patient' ? 'Caregiver ID' : 'Patient ID',
+                  style: AppTextStyles.bodyBold(),
+                ),
                 const SizedBox(height: AppDimensions.stackSm),
                 TextFormField(
-                  controller: _emailCtrl,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(hintText: 'caregiver@example.com'),
+                  controller: _publicIdCtrl,
+                  keyboardType: TextInputType.number,
+                  maxLength: 6,
+                  decoration: const InputDecoration(
+                    hintText: '#12345',
+                    counterText: '',
+                  ),
                   style: AppTextStyles.bodyXl(),
                 ),
               ],
@@ -652,28 +709,19 @@ class _InviteCaregiverScreenState extends ConsumerState<InviteCaregiverScreen> {
                 const SizedBox(height: AppDimensions.stackSm),
                 TextFormField(
                   controller: _relationshipCtrl,
-                  decoration: const InputDecoration(hintText: 'e.g. Daughter, Son, Nurse'),
+                  decoration: const InputDecoration(
+                      hintText: 'e.g. Daughter, Son, Nurse'),
                   style: AppTextStyles.bodyXl(),
                 ),
               ],
             ),
             const SizedBox(height: AppDimensions.stackXl),
 
-            Text('Permissions', style: AppTextStyles.headlineMd()),
-            const SizedBox(height: AppDimensions.stackSm),
-            Text(
-              'Choose what your caregiver can see.',
-              style: AppTextStyles.bodyLg(color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: AppDimensions.stackMd),
-
-            _PermissionToggle(label: 'Daily schedule', value: _viewSchedule, onChanged: (v) => setState(() => _viewSchedule = v)),
-            _PermissionToggle(label: 'Dose history', value: _viewHistory, onChanged: (v) => setState(() => _viewHistory = v)),
-            _PermissionToggle(label: 'Adherence reports', value: _viewAdherence, onChanged: (v) => setState(() => _viewAdherence = v)),
-            _PermissionToggle(label: 'Refill reminders', value: _viewRefills, onChanged: (v) => setState(() => _viewRefills = v)),
-
-            const SizedBox(height: AppDimensions.stackXl),
-            DdButton(label: 'Send Invitation', onPressed: _invite, isLoading: _isLoading),
+            const SizedBox(height: AppDimensions.stackLg),
+            DdButton(
+                label: 'Send Invitation',
+                onPressed: _invite,
+                isLoading: _isLoading),
           ],
         ),
       ),
@@ -681,27 +729,12 @@ class _InviteCaregiverScreenState extends ConsumerState<InviteCaregiverScreen> {
   }
 }
 
-class _PermissionToggle extends StatelessWidget {
-  const _PermissionToggle({required this.label, required this.value, required this.onChanged});
-  final String label;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) => SwitchListTile(
-        title: Text(label, style: AppTextStyles.bodyXl()),
-        value: value,
-        onChanged: onChanged,
-        activeColor: AppColors.primaryAction,
-        contentPadding: EdgeInsets.zero,
-      );
-}
-
 class CaregiverDashboardScreen extends StatefulWidget {
   const CaregiverDashboardScreen({super.key});
 
   @override
-  State<CaregiverDashboardScreen> createState() => _CaregiverDashboardScreenState();
+  State<CaregiverDashboardScreen> createState() =>
+      _CaregiverDashboardScreenState();
 }
 
 class _CaregiverDashboardScreenState extends State<CaregiverDashboardScreen> {
@@ -711,9 +744,11 @@ class _CaregiverDashboardScreenState extends State<CaregiverDashboardScreen> {
       SnackBar(
         content: Row(
           children: [
-            const Icon(Icons.check_circle_rounded, color: Color(0xFF97F5CC), size: 20),
+            const Icon(Icons.check_circle_rounded,
+                color: Color(0xFF97F5CC), size: 20),
             const SizedBox(width: 10),
-            Expanded(child: Text(message, style: const TextStyle(fontSize: 13.5))),
+            Expanded(
+                child: Text(message, style: const TextStyle(fontSize: 13.5))),
           ],
         ),
         backgroundColor: const Color(0xFF303030),
@@ -730,7 +765,8 @@ class _CaregiverDashboardScreenState extends State<CaregiverDashboardScreen> {
           title: const Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.volunteer_activism_rounded, color: Color(0xFFB1002C), size: 22),
+              Icon(Icons.volunteer_activism_rounded,
+                  color: Color(0xFFB1002C), size: 22),
               SizedBox(width: 8),
               Text('Caregiver Dashboard'),
             ],

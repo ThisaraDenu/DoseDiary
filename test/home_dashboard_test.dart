@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/intl.dart';
 import 'package:dose_diary/data/local/models/app_models.dart';
 import 'package:dose_diary/data/local/models/dose_status.dart';
-import 'package:dose_diary/features/caregivers/caregiver_management_screen.dart';
 import 'package:dose_diary/features/home/home_dashboard_screen.dart';
 
 void main() {
@@ -59,6 +58,7 @@ void main() {
 
       // Stats Grid: Adherence and Refills reflect empty data
       expect(find.text('Adherence'), findsOneWidget);
+      expect(find.text('No data'), findsOneWidget);
       expect(find.text('No doses today'), findsOneWidget);
       expect(find.text('Refills'), findsOneWidget);
       expect(find.text('0 Low'), findsOneWidget);
@@ -451,8 +451,9 @@ void main() {
       expect(find.text('Audio alert sent to Ishara for Amoxicillin 500 mg.'), findsOneWidget);
 
       // Scroll back up and tap 'Patient Mode' to switch back
-      await tester.drag(find.byType(CustomScrollView), const Offset(0, 800));
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, 2500));
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Patient Mode'));
       await tester.tap(find.text('Patient Mode'));
       await tester.pumpAndSettle();
       expect(find.text('Ishara (Patient)'), findsOneWidget);

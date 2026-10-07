@@ -49,16 +49,19 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
 
     // Find real actionable doses for today
     final actionable = occs
-        .where((o) => o.status.isActionable && !_snoozedOccurrenceIds.contains(o.id))
+        .where((o) =>
+            o.status.isActionable && !_snoozedOccurrenceIds.contains(o.id))
         .toList()
       ..sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
 
     final nextOcc = actionable.isNotEmpty ? actionable.first : null;
-    final nextMed = nextOcc != null ? _findMedication(meds, nextOcc.medicationId) : null;
+    final nextMed =
+        nextOcc != null ? _findMedication(meds, nextOcc.medicationId) : null;
 
     final allocatedPatientsAsync = ref.watch(allocatedPatientsProvider);
     final allocatedPatients = allocatedPatientsAsync.valueOrNull ?? [];
-    final activePatient = allocatedPatients.isNotEmpty ? allocatedPatients.first : null;
+    final activePatient =
+        allocatedPatients.isNotEmpty ? allocatedPatients.first : null;
 
     final permsAsync = activePatient?.patientUserId != null
         ? ref.watch(patientPermissionsProvider(activePatient!.patientUserId!))
@@ -97,24 +100,28 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
         else
           _buildPermissionRestrictedCard(
             title: 'Schedule Access Restricted',
-            message: '$patientFirstName has not granted permission to view their daily schedule.',
+            message:
+                '$patientFirstName has not granted permission to view their daily schedule.',
             icon: Icons.calendar_today_outlined,
           ),
         const SizedBox(height: 24),
 
         // 4. Caregiver Insights & Weekly Adherence Hub
         if (canViewAdherence)
-          _buildAdherenceCard(weeklyAdherenceAsync, lowStockAsync, lowestStockAsync)
+          _buildAdherenceCard(
+              weeklyAdherenceAsync, lowStockAsync, lowestStockAsync)
         else
           _buildPermissionRestrictedCard(
             title: 'Adherence Access Restricted',
-            message: '$patientFirstName has not granted permission to view adherence reports.',
+            message:
+                '$patientFirstName has not granted permission to view adherence reports.',
             icon: Icons.insights_outlined,
           ),
         const SizedBox(height: 24),
 
         // 5. Fast Caregiver Utility Grid (Care Actions)
-        _buildCareActionsGrid(context, canViewRefills ? meds : [], patientDisplayName),
+        _buildCareActionsGrid(
+            context, canViewRefills ? meds : [], patientDisplayName),
       ],
     );
   }
@@ -127,7 +134,8 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
   }
 
   // ── 1. Patient Quick Telemetry & Status Card ──────────────────────────────
-  Widget _buildPatientTelemetryCard(BuildContext context, AllocatedPatient? patient) {
+  Widget _buildPatientTelemetryCard(
+      BuildContext context, AllocatedPatient? patient) {
     if (patient == null) {
       return _buildNoPatientAllocatedCard(context);
     }
@@ -202,7 +210,7 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: () => _showAddPatientSheet(context),
+              onPressed: () => context.push(RouteNames.inviteCaregiver),
               icon: const Icon(Icons.person_add_rounded, size: 18),
               label: const Text('Add Patient'),
               style: ElevatedButton.styleFrom(
@@ -226,7 +234,8 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
   }
 
   /// Displays the real details of an allocated patient.
-  Widget _buildAllocatedPatientCard(BuildContext context, AllocatedPatient patient) {
+  Widget _buildAllocatedPatientCard(
+      BuildContext context, AllocatedPatient patient) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -261,7 +270,8 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                           ? Image.network(
                               patient.avatarUrl!,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => _buildAvatarFallback(),
+                              errorBuilder: (_, __, ___) =>
+                                  _buildAvatarFallback(),
                             )
                           : _buildAvatarFallback(),
                     ),
@@ -369,14 +379,16 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                     ),
                   ),
                   PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF545F73), size: 20),
+                    icon: const Icon(Icons.more_vert_rounded,
+                        color: Color(0xFF545F73), size: 20),
                     padding: EdgeInsets.zero,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                     onSelected: (value) async {
                       if (value == 'edit') {
                         _showEditPatientSheet(context, patient);
                       } else if (value == 'add') {
-                        _showAddPatientSheet(context);
+                        context.push(RouteNames.inviteCaregiver);
                       } else if (value == 'disconnect') {
                         final confirmed = await showDialog<bool>(
                           context: context,
@@ -392,16 +404,20 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                               ),
                               TextButton(
                                 onPressed: () => Navigator.pop(ctx, true),
-                                child: const Text('Disconnect', style: TextStyle(color: Color(0xFFDC143C))),
+                                child: const Text('Disconnect',
+                                    style: TextStyle(color: Color(0xFFDC143C))),
                               ),
                             ],
                           ),
                         );
                         if (confirmed == true) {
-                          await ref.read(patientRepositoryProvider).disconnectPatient(patientId: patient.id);
+                          await ref
+                              .read(patientRepositoryProvider)
+                              .disconnectPatient(patientId: patient.id);
                           ref.invalidate(allocatedPatientsProvider);
                           ref.invalidate(caregiverPatientsProvider);
-                          widget.onShowToast('Disconnected from ${patient.fullName}.');
+                          widget.onShowToast(
+                              'Disconnected from ${patient.fullName}.');
                         }
                       }
                     },
@@ -410,7 +426,8 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                         value: 'edit',
                         child: Row(
                           children: [
-                            Icon(Icons.edit_rounded, size: 18, color: Color(0xFF1B1B1B)),
+                            Icon(Icons.edit_rounded,
+                                size: 18, color: Color(0xFF1B1B1B)),
                             SizedBox(width: 8),
                             Text('Edit Patient Details'),
                           ],
@@ -420,7 +437,8 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                         value: 'add',
                         child: Row(
                           children: [
-                            Icon(Icons.person_add_rounded, size: 18, color: Color(0xFF1B1B1B)),
+                            Icon(Icons.person_add_rounded,
+                                size: 18, color: Color(0xFF1B1B1B)),
                             SizedBox(width: 8),
                             Text('Add Another Patient'),
                           ],
@@ -430,9 +448,11 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                         value: 'disconnect',
                         child: Row(
                           children: [
-                            Icon(Icons.link_off_rounded, size: 18, color: Color(0xFFDC143C)),
+                            Icon(Icons.link_off_rounded,
+                                size: 18, color: Color(0xFFDC143C)),
                             SizedBox(width: 8),
-                            Text('Disconnect Patient', style: TextStyle(color: Color(0xFFDC143C))),
+                            Text('Disconnect Patient',
+                                style: TextStyle(color: Color(0xFFDC143C))),
                           ],
                         ),
                       ),
@@ -538,6 +558,8 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
     );
   }
 
+  // Kept for editing legacy manually allocated records.
+  // ignore: unused_element
   void _showAddPatientSheet(BuildContext context) {
     final nameController = TextEditingController();
     final phoneController = TextEditingController();
@@ -546,6 +568,7 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
 
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
@@ -556,7 +579,9 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                 left: 20,
                 right: 20,
                 top: 20,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+                bottom: MediaQuery.of(context).viewInsets.bottom +
+                    24 +
+                    MediaQuery.of(context).padding.bottom,
               ),
               decoration: const BoxDecoration(
                 color: Colors.white,
@@ -580,7 +605,8 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                     const SizedBox(height: 16),
                     const Row(
                       children: [
-                        Icon(Icons.person_add_rounded, color: Color(0xFFDC143C), size: 24),
+                        Icon(Icons.person_add_rounded,
+                            color: Color(0xFFDC143C), size: 24),
                         SizedBox(width: 8),
                         Text(
                           'Allocate Patient',
@@ -600,7 +626,9 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                     const SizedBox(height: 18),
 
                     // Full Name
-                    const Text('Patient Full Name *', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const Text('Patient Full Name *',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 13)),
                     const SizedBox(height: 6),
                     TextField(
                       controller: nameController,
@@ -609,7 +637,8 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                         hintText: 'e.g. Ishara Perera',
                         filled: true,
                         fillColor: const Color(0xFFF7F7F7),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide.none,
@@ -619,26 +648,36 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                     const SizedBox(height: 14),
 
                     // Relationship
-                    const Text('Relationship', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const Text('Relationship',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 13)),
                     const SizedBox(height: 6),
                     DropdownButtonFormField<String>(
                       value: selectedRelationship,
                       items: const [
-                        DropdownMenuItem(value: 'Mother', child: Text('Mother')),
-                        DropdownMenuItem(value: 'Father', child: Text('Father')),
-                        DropdownMenuItem(value: 'Spouse', child: Text('Spouse')),
-                        DropdownMenuItem(value: 'Child', child: Text('Child / Dependent')),
-                        DropdownMenuItem(value: 'Grandparent', child: Text('Grandparent')),
-                        DropdownMenuItem(value: 'Patient', child: Text('Patient / Client')),
+                        DropdownMenuItem(
+                            value: 'Mother', child: Text('Mother')),
+                        DropdownMenuItem(
+                            value: 'Father', child: Text('Father')),
+                        DropdownMenuItem(
+                            value: 'Spouse', child: Text('Spouse')),
+                        DropdownMenuItem(
+                            value: 'Child', child: Text('Child / Dependent')),
+                        DropdownMenuItem(
+                            value: 'Grandparent', child: Text('Grandparent')),
+                        DropdownMenuItem(
+                            value: 'Patient', child: Text('Patient / Client')),
                         DropdownMenuItem(value: 'Other', child: Text('Other')),
                       ],
                       onChanged: (val) {
-                        if (val != null) setSheetState(() => selectedRelationship = val);
+                        if (val != null)
+                          setSheetState(() => selectedRelationship = val);
                       },
                       decoration: InputDecoration(
                         filled: true,
                         fillColor: const Color(0xFFF7F7F7),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide.none,
@@ -648,7 +687,9 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                     const SizedBox(height: 14),
 
                     // Location
-                    const Text('Location', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const Text('Location',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 13)),
                     const SizedBox(height: 6),
                     TextField(
                       controller: locationController,
@@ -656,7 +697,8 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                         hintText: 'e.g. Colombo Home',
                         filled: true,
                         fillColor: const Color(0xFFF7F7F7),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide.none,
@@ -666,7 +708,9 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                     const SizedBox(height: 14),
 
                     // Phone Number
-                    const Text('Phone Number (Optional)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const Text('Phone Number (Optional)',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 13)),
                     const SizedBox(height: 6),
                     TextField(
                       controller: phoneController,
@@ -675,7 +719,8 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                         hintText: 'e.g. +94 77 123 4567',
                         filled: true,
                         fillColor: const Color(0xFFF7F7F7),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide.none,
@@ -694,7 +739,8 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                         }
 
                         final newPatient = AllocatedPatient.create(
-                          caregiverId: AuthService.currentUser?.id ?? 'default_user',
+                          caregiverId:
+                              AuthService.currentUser?.id ?? 'default_user',
                           fullName: fullName,
                           relationship: selectedRelationship,
                           location: locationController.text.trim().isNotEmpty
@@ -708,19 +754,24 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                           smartHubStatus: 'Synced just now',
                         );
 
-                        await ref.read(patientRepositoryProvider).addAllocatedPatient(newPatient);
+                        await ref
+                            .read(patientRepositoryProvider)
+                            .addAllocatedPatient(newPatient);
                         ref.invalidate(allocatedPatientsProvider);
                         if (context.mounted) {
                           Navigator.of(ctx).pop();
                         }
-                        widget.onShowToast('Allocated patient $fullName successfully!');
+                        widget.onShowToast(
+                            'Allocated patient $fullName successfully!');
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFFDC143C),
                         foregroundColor: Colors.white,
                         minimumSize: const Size(double.infinity, 48),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                        textStyle: const TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w700),
                       ),
                       child: const Text('Save & Allocate Patient'),
                     ),
@@ -735,12 +786,14 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
   }
 
   void _showEditPatientSheet(BuildContext context, AllocatedPatient patient) {
-    final phoneController = TextEditingController(text: patient.phoneNumber ?? '');
+    final phoneController =
+        TextEditingController(text: patient.phoneNumber ?? '');
     final locationController = TextEditingController(text: patient.location);
     String selectedRelationship = patient.relationship;
 
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
@@ -751,7 +804,9 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                 left: 20,
                 right: 20,
                 top: 20,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+                bottom: MediaQuery.of(context).viewInsets.bottom +
+                    24 +
+                    MediaQuery.of(context).padding.bottom,
               ),
               decoration: const BoxDecoration(
                 color: Colors.white,
@@ -775,7 +830,8 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                     const SizedBox(height: 16),
                     Row(
                       children: [
-                        const Icon(Icons.edit_rounded, color: Color(0xFFDC143C), size: 24),
+                        const Icon(Icons.edit_rounded,
+                            color: Color(0xFFDC143C), size: 24),
                         const SizedBox(width: 8),
                         Text(
                           'Edit ${patient.fullName}',
@@ -790,12 +846,15 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                     const SizedBox(height: 6),
                     const Text(
                       'Update relationship and contact details. Account credentials and privacy settings are managed by the patient.',
-                      style: TextStyle(fontSize: 12.5, color: Color(0xFF545F73)),
+                      style:
+                          TextStyle(fontSize: 12.5, color: Color(0xFF545F73)),
                     ),
                     const SizedBox(height: 18),
 
                     // Relationship
-                    const Text('Relationship', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const Text('Relationship',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 13)),
                     const SizedBox(height: 6),
                     DropdownButtonFormField<String>(
                       value: [
@@ -810,21 +869,29 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                           ? selectedRelationship
                           : 'Other',
                       items: const [
-                        DropdownMenuItem(value: 'Mother', child: Text('Mother')),
-                        DropdownMenuItem(value: 'Father', child: Text('Father')),
-                        DropdownMenuItem(value: 'Spouse', child: Text('Spouse')),
-                        DropdownMenuItem(value: 'Child', child: Text('Child / Dependent')),
-                        DropdownMenuItem(value: 'Grandparent', child: Text('Grandparent')),
-                        DropdownMenuItem(value: 'Patient', child: Text('Patient / Client')),
+                        DropdownMenuItem(
+                            value: 'Mother', child: Text('Mother')),
+                        DropdownMenuItem(
+                            value: 'Father', child: Text('Father')),
+                        DropdownMenuItem(
+                            value: 'Spouse', child: Text('Spouse')),
+                        DropdownMenuItem(
+                            value: 'Child', child: Text('Child / Dependent')),
+                        DropdownMenuItem(
+                            value: 'Grandparent', child: Text('Grandparent')),
+                        DropdownMenuItem(
+                            value: 'Patient', child: Text('Patient / Client')),
                         DropdownMenuItem(value: 'Other', child: Text('Other')),
                       ],
                       onChanged: (val) {
-                        if (val != null) setSheetState(() => selectedRelationship = val);
+                        if (val != null)
+                          setSheetState(() => selectedRelationship = val);
                       },
                       decoration: InputDecoration(
                         filled: true,
                         fillColor: const Color(0xFFF7F7F7),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide.none,
@@ -834,7 +901,9 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                     const SizedBox(height: 14),
 
                     // Location
-                    const Text('Location', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const Text('Location',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 13)),
                     const SizedBox(height: 6),
                     TextField(
                       controller: locationController,
@@ -842,7 +911,8 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                         hintText: 'e.g. Colombo Home',
                         filled: true,
                         fillColor: const Color(0xFFF7F7F7),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide.none,
@@ -852,7 +922,9 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                     const SizedBox(height: 14),
 
                     // Phone Number
-                    const Text('Phone Number (Optional)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const Text('Phone Number (Optional)',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 13)),
                     const SizedBox(height: 6),
                     TextField(
                       controller: phoneController,
@@ -861,7 +933,8 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                         hintText: 'e.g. +94 77 123 4567',
                         filled: true,
                         fillColor: const Color(0xFFF7F7F7),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide.none,
@@ -873,28 +946,35 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                     // Submit button
                     ElevatedButton(
                       onPressed: () async {
-                        await ref.read(patientRepositoryProvider).updateAllocatedPatient(
+                        await ref
+                            .read(patientRepositoryProvider)
+                            .updateAllocatedPatient(
                               patientId: patient.id,
                               relationship: selectedRelationship,
-                              location: locationController.text.trim().isNotEmpty
-                                  ? locationController.text.trim()
-                                  : patient.location,
-                              phoneNumber: phoneController.text.trim().isNotEmpty
-                                  ? phoneController.text.trim()
-                                  : null,
+                              location:
+                                  locationController.text.trim().isNotEmpty
+                                      ? locationController.text.trim()
+                                      : patient.location,
+                              phoneNumber:
+                                  phoneController.text.trim().isNotEmpty
+                                      ? phoneController.text.trim()
+                                      : null,
                             );
                         ref.invalidate(allocatedPatientsProvider);
                         if (context.mounted) {
                           Navigator.of(ctx).pop();
                         }
-                        widget.onShowToast('Updated details for ${patient.fullName}.');
+                        widget.onShowToast(
+                            'Updated details for ${patient.fullName}.');
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFFDC143C),
                         foregroundColor: Colors.white,
                         minimumSize: const Size(double.infinity, 48),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                        textStyle: const TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w700),
                       ),
                       child: const Text('Save Changes'),
                     ),
@@ -986,7 +1066,8 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
         : '';
     final fullMedTitle = '$medName$strength';
 
-    final scheduledTime = DateFormat('h:mm a').format(nextOcc.scheduledAt.toLocal());
+    final scheduledTime =
+        DateFormat('h:mm a').format(nextOcc.scheduledAt.toLocal());
     final diff = nextOcc.scheduledAt.toLocal().difference(now);
 
     String relativeText = '';
@@ -998,7 +1079,8 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
       relativeText = ' (Overdue by ${-diff.inMinutes}m)';
     }
 
-    final instruction = (nextMed?.instructions != null && nextMed!.instructions!.trim().isNotEmpty)
+    final instruction = (nextMed?.instructions != null &&
+            nextMed!.instructions!.trim().isNotEmpty)
         ? ' • ${nextMed.instructions!.trim()}'
         : ' • Take with meal';
 
@@ -1117,10 +1199,13 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                 onPressed: () async {
                   setState(() => _snoozedOccurrenceIds.add(nextOcc.id));
                   try {
-                    await ref.read(doseRepositoryProvider).updateOccurrenceStatus(
+                    await ref
+                        .read(doseRepositoryProvider)
+                        .updateOccurrenceStatus(
                           nextOcc.id,
                           DoseStatus.snoozed,
-                          snoozeUntil: DateTime.now().add(const Duration(minutes: 15)),
+                          snoozeUntil:
+                              DateTime.now().add(const Duration(minutes: 15)),
                         );
                     ref.invalidate(todayOccurrencesProvider);
                   } catch (_) {}
@@ -1232,10 +1317,15 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
           ...sortedOccs.map((occ) {
             final med = _findMedication(meds, occ.medicationId);
             final isNext = occ.status.isActionable &&
-                sortedOccs.where((o) => o.status.isActionable).firstOrNull?.id == occ.id;
+                sortedOccs
+                        .where((o) => o.status.isActionable)
+                        .firstOrNull
+                        ?.id ==
+                    occ.id;
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: _buildOccurrenceCard(occ, med, now, isNext, patientFirstName),
+              child:
+                  _buildOccurrenceCard(occ, med, now, isNext, patientFirstName),
             );
           }),
       ],
@@ -1334,9 +1424,11 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
   // Dose Card: Completed
   Widget _buildCompletedDoseCard(DoseOccurrence occ, Medication? med) {
     final medName = med?.name ?? 'Medication';
-    final strength = (med != null && med.strength > 0) ? ' ${med.displayStrength}' : '';
+    final strength =
+        (med != null && med.strength > 0) ? ' ${med.displayStrength}' : '';
     final fullMedTitle = '$medName$strength';
-    final scheduledTime = DateFormat('h:mm a').format(occ.scheduledAt.toLocal());
+    final scheduledTime =
+        DateFormat('h:mm a').format(occ.scheduledAt.toLocal());
     final doseDetails = med != null ? med.displayDose : '1 Dose';
 
     return Container(
@@ -1494,10 +1586,12 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
     String patientFirstName,
   ) {
     final medName = med?.name ?? 'Medication';
-    final strength = (med != null && med.strength > 0) ? ' ${med.displayStrength}' : '';
+    final strength =
+        (med != null && med.strength > 0) ? ' ${med.displayStrength}' : '';
     final fullMedTitle = '$medName$strength';
 
-    final scheduledTime = DateFormat('h:mm a').format(occ.scheduledAt.toLocal());
+    final scheduledTime =
+        DateFormat('h:mm a').format(occ.scheduledAt.toLocal());
     final diff = occ.scheduledAt.toLocal().difference(now);
 
     String statusText;
@@ -1510,9 +1604,10 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
     }
 
     final doseDetails = med != null ? med.displayDose : '1 Dose';
-    final instruction = (med?.instructions != null && med!.instructions!.trim().isNotEmpty)
-        ? ' ${med.instructions!.trim()}'
-        : '';
+    final instruction =
+        (med?.instructions != null && med!.instructions!.trim().isNotEmpty)
+            ? ' ${med.instructions!.trim()}'
+            : '';
 
     return Container(
       width: double.infinity,
@@ -1616,7 +1711,9 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: () async {
-                    await ref.read(doseRepositoryProvider).updateOccurrenceStatus(
+                    await ref
+                        .read(doseRepositoryProvider)
+                        .updateOccurrenceStatus(
                           occ.id,
                           DoseStatus.taken,
                         );
@@ -1641,7 +1738,8 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                     ref.invalidate(todayMedicationsProvider);
                     ref.invalidate(lowStockProvider);
                     ref.invalidate(lowestStockMedicationProvider);
-                    widget.onShowToast('$medName dose recorded as taken manually.');
+                    widget.onShowToast(
+                        '$medName dose recorded as taken manually.');
                   },
                   icon: const Icon(
                     Icons.done_all_rounded,
@@ -1701,15 +1799,18 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
   // Dose Card: Upcoming / Evening
   Widget _buildUpcomingDoseCard(DoseOccurrence occ, Medication? med) {
     final medName = med?.name ?? 'Medication';
-    final strength = (med != null && med.strength > 0) ? ' ${med.displayStrength}' : '';
+    final strength =
+        (med != null && med.strength > 0) ? ' ${med.displayStrength}' : '';
     final fullMedTitle = '$medName$strength';
-    final scheduledTime = DateFormat('h:mm a').format(occ.scheduledAt.toLocal());
+    final scheduledTime =
+        DateFormat('h:mm a').format(occ.scheduledAt.toLocal());
     final isEvening = occ.scheduledAt.toLocal().hour >= 18;
     final badgeText = isEvening ? 'Evening' : 'Upcoming';
     final doseDetails = med != null ? med.displayDose : '1 Dose';
-    final instruction = (med?.instructions != null && med!.instructions!.trim().isNotEmpty)
-        ? ' • ${med.instructions!.trim()}'
-        : '';
+    final instruction =
+        (med?.instructions != null && med!.instructions!.trim().isNotEmpty)
+            ? ' • ${med.instructions!.trim()}'
+            : '';
 
     return Container(
       width: double.infinity,
@@ -1813,12 +1914,14 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
         report != null ? '${report.percentageStr} On Track' : 'Loading...';
 
     // Summary note
-    String summaryNote = 'Zero missed doses in the past 7 days. Excellent adherence!';
+    String summaryNote =
+        'Zero missed doses in the past 7 days. Excellent adherence!';
     if (report != null && report.totalMissed > 0) {
       summaryNote =
           '${report.totalTaken} of ${report.totalCountable} doses completed this week (${report.totalMissed} missed).';
     } else if (report != null && report.totalCountable == 0) {
-      summaryNote = 'No doses scheduled this week yet. Add a medication to track adherence.';
+      summaryNote =
+          'No doses scheduled this week yet. Add a medication to track adherence.';
     }
 
     // Low stock / refill info — all from real DB
@@ -1921,7 +2024,8 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: overallPct >= 80
                       ? const Color(0xFFD2FFE8)
@@ -1985,9 +2089,8 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                               label.length > 3 ? label.substring(0, 3) : label,
                               style: TextStyle(
                                 fontSize: 10,
-                                fontWeight: isToday
-                                    ? FontWeight.w800
-                                    : FontWeight.w500,
+                                fontWeight:
+                                    isToday ? FontWeight.w800 : FontWeight.w500,
                                 color: isToday
                                     ? const Color(0xFF1B1B1B)
                                     : const Color(0xFF545F73),
@@ -2184,8 +2287,7 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                           foregroundColor: Colors.white,
                           elevation: 0,
                           minimumSize: const Size(68, 38),
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: 14),
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
@@ -2349,7 +2451,8 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
               title: 'Emergency Contact',
               subtitle: 'Set up a doctor or emergency contact',
               onTap: () {
-                widget.onShowToast('No emergency contact set. Add one in Settings.');
+                widget.onShowToast(
+                    'No emergency contact set. Add one in Settings.');
               },
             ),
 
@@ -2459,21 +2562,26 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            const Icon(Icons.verified_rounded, color: Color(0xFF006448), size: 24),
+            const Icon(Icons.verified_rounded,
+                color: Color(0xFF006448), size: 24),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
                 title,
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
               ),
             ),
           ],
         ),
-        content: Text(details, style: const TextStyle(fontSize: 14, color: Color(0xFF545F73))),
+        content: Text(details,
+            style: const TextStyle(fontSize: 14, color: Color(0xFF545F73))),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Close', style: TextStyle(color: Color(0xFFDC143C), fontWeight: FontWeight.w600)),
+            child: const Text('Close',
+                style: TextStyle(
+                    color: Color(0xFFDC143C), fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -2483,6 +2591,7 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
   void _showLogInPersonDialog(List<Medication> meds, String patientName) {
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -2548,7 +2657,8 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                   separatorBuilder: (_, __) => const Divider(height: 1),
                   itemBuilder: (_, index) {
                     final med = meds[index];
-                    final strength = med.strength > 0 ? ' ${med.displayStrength}' : '';
+                    final strength =
+                        med.strength > 0 ? ' ${med.displayStrength}' : '';
                     return ListTile(
                       contentPadding: EdgeInsets.zero,
                       leading: Container(
@@ -2558,7 +2668,8 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                           color: const Color(0xFFFFDAD9),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Icon(Icons.medication_rounded, color: Color(0xFFB1002C)),
+                        child: const Icon(Icons.medication_rounded,
+                            color: Color(0xFFB1002C)),
                       ),
                       title: Text('${med.name}$strength',
                           style: const TextStyle(fontWeight: FontWeight.w700)),
@@ -2567,11 +2678,15 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                       trailing: ElevatedButton(
                         onPressed: () async {
                           Navigator.of(ctx).pop();
-                          await ref.read(doseRepositoryProvider).recordInPersonDose(
+                          await ref
+                              .read(doseRepositoryProvider)
+                              .recordInPersonDose(
                                 medicationId: med.id,
                                 userId: med.userId,
                               );
-                          await ref.read(refillRepositoryProvider).recordDeduction(
+                          await ref
+                              .read(refillRepositoryProvider)
+                              .recordDeduction(
                                 medicationId: med.id,
                                 userId: med.userId,
                                 amount: med.amountPerDose,
@@ -2582,12 +2697,14 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                           ref.invalidate(todayMedicationsProvider);
                           ref.invalidate(lowStockProvider);
                           ref.invalidate(lowestStockMedicationProvider);
-                          widget.onShowToast('${med.name} marked as administered in person.');
+                          widget.onShowToast(
+                              '${med.name} marked as administered in person.');
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFDC143C),
                           foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
                         ),
                         child: const Text('Confirm'),
                       ),

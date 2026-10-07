@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../local/database_provider.dart';
 import '../local/models/adherence_models.dart';
@@ -22,7 +23,8 @@ class MedicationRepository {
 
   Future<Database> get _database => _db.database;
 
-  Future<List<Medication>> getMedications({bool activeOnly = true, String? userId}) async {
+  Future<List<Medication>> getMedications(
+      {bool activeOnly = true, String? userId}) async {
     final db = await _database;
     final uid = userId ?? _activeUserId;
     final where = activeOnly ? 'user_id = ? AND is_active = 1' : 'user_id = ?';
@@ -32,20 +34,23 @@ class MedicationRepository {
 
   Future<Medication?> getMedicationById(String id) async {
     final db = await _database;
-    final rows = await db.query('medications', where: 'id = ?', whereArgs: [id], limit: 1);
+    final rows = await db.query('medications',
+        where: 'id = ?', whereArgs: [id], limit: 1);
     if (rows.isEmpty) return null;
     return Medication.fromMap(rows.first);
   }
 
   Future<void> insertMedication(Medication med) async {
     final db = await _database;
-    await db.insert('medications', med.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    await db.insert('medications', med.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace);
     SupabaseSyncService.pushMedication(med.toMap()).ignore();
   }
 
   Future<void> updateMedication(Medication med) async {
     final db = await _database;
-    await db.update('medications', med.toMap(), where: 'id = ?', whereArgs: [med.id]);
+    await db.update('medications', med.toMap(),
+        where: 'id = ?', whereArgs: [med.id]);
     SupabaseSyncService.pushMedication(med.toMap()).ignore();
   }
 
@@ -79,7 +84,8 @@ class MedicationRepository {
     }
   }
 
-  Future<MedicationSchedule?> getScheduleForMedication(String medicationId) async {
+  Future<MedicationSchedule?> getScheduleForMedication(
+      String medicationId) async {
     final db = await _database;
     final rows = await db.query(
       'schedules',
@@ -102,11 +108,13 @@ class DoseRepository {
 
   Future<Database> get _database => _db.database;
 
-  Future<List<DoseOccurrence>> getOccurrencesForDate(DateTime date, {String? userId}) async {
+  Future<List<DoseOccurrence>> getOccurrencesForDate(DateTime date,
+      {String? userId}) async {
     final db = await _database;
     final uid = userId ?? _activeUserId;
-    final localDate = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-    
+    final localDate =
+        '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
     await _ensureOccurrencesForDate(db, uid, date, localDate);
 
     final rows = await db.query(
@@ -139,26 +147,38 @@ class DoseRepository {
         final schedId = s['id'] as String;
         final medId = s['medication_id'] as String;
         final timesStr = s['times_of_day'] as String? ?? '';
-        final times = timesStr.split(',').map((t) => t.trim()).where((t) => t.isNotEmpty).toList();
+        final times = timesStr
+            .split(',')
+            .map((t) => t.trim())
+            .where((t) => t.isNotEmpty)
+            .toList();
 
         final startDateStr = s['start_date'] as String?;
         if (startDateStr != null) {
           final sDate = DateTime.tryParse(startDateStr);
-          if (sDate != null && startOfDay.isBefore(DateTime(sDate.year, sDate.month, sDate.day))) {
+          if (sDate != null &&
+              startOfDay
+                  .isBefore(DateTime(sDate.year, sDate.month, sDate.day))) {
             continue;
           }
         }
         final endDateStr = s['end_date'] as String?;
         if (endDateStr != null) {
           final eDate = DateTime.tryParse(endDateStr);
-          if (eDate != null && startOfDay.isAfter(DateTime(eDate.year, eDate.month, eDate.day))) {
+          if (eDate != null &&
+              startOfDay
+                  .isAfter(DateTime(eDate.year, eDate.month, eDate.day))) {
             continue;
           }
         }
 
         final repeatDaysStr = s['repeat_days'] as String?;
         if (repeatDaysStr != null && repeatDaysStr.isNotEmpty) {
-          final days = repeatDaysStr.split(',').map((d) => int.tryParse(d.trim())).whereType<int>().toList();
+          final days = repeatDaysStr
+              .split(',')
+              .map((d) => int.tryParse(d.trim()))
+              .whereType<int>()
+              .toList();
           if (days.isNotEmpty && !days.contains(date.weekday)) {
             continue;
           }
@@ -170,7 +190,8 @@ class DoseRepository {
           if (parts.length < 2) continue;
           final h = int.tryParse(parts[0]) ?? 0;
           final m = int.tryParse(parts[1]) ?? 0;
-          final scheduledAt = DateTime(date.year, date.month, date.day, h, m).toUtc();
+          final scheduledAt =
+              DateTime(date.year, date.month, date.day, h, m).toUtc();
 
           await db.insert(
             'dose_occurrences',
@@ -209,14 +230,16 @@ class DoseRepository {
 
   Future<DoseOccurrence?> getOccurrenceById(String id) async {
     final db = await _database;
-    final rows = await db.query('dose_occurrences', where: 'id = ?', whereArgs: [id], limit: 1);
+    final rows = await db.query('dose_occurrences',
+        where: 'id = ?', whereArgs: [id], limit: 1);
     if (rows.isEmpty) return null;
     return DoseOccurrence.fromMap(rows.first);
   }
 
   Future<void> insertOccurrence(DoseOccurrence occ) async {
     final db = await _database;
-    await db.insert('dose_occurrences', occ.toMap(), conflictAlgorithm: ConflictAlgorithm.ignore);
+    await db.insert('dose_occurrences', occ.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.ignore);
     SupabaseSyncService.pushDoseOccurrence(occ.toMap()).ignore();
   }
 
@@ -229,8 +252,10 @@ class DoseRepository {
     final updates = <String, dynamic>{
       'status': status.toDbString(),
     };
-    if (snoozeUntil != null) updates['snooze_until'] = snoozeUntil.toIso8601String();
-    await db.update('dose_occurrences', updates, where: 'id = ?', whereArgs: [id]);
+    if (snoozeUntil != null)
+      updates['snooze_until'] = snoozeUntil.toIso8601String();
+    await db
+        .update('dose_occurrences', updates, where: 'id = ?', whereArgs: [id]);
     final occ = await getOccurrenceById(id);
     if (occ != null) {
       SupabaseSyncService.pushDoseOccurrence(occ.toMap()).ignore();
@@ -239,7 +264,8 @@ class DoseRepository {
 
   Future<void> insertDoseEvent(DoseEvent event) async {
     final db = await _database;
-    await db.insert('dose_events', event.toMap(), conflictAlgorithm: ConflictAlgorithm.ignore);
+    await db.insert('dose_events', event.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.ignore);
     SupabaseSyncService.pushDoseEvent(event.toMap()).ignore();
   }
 
@@ -255,19 +281,24 @@ class DoseRepository {
   }
 
   /// Adherence summary for a given day.
-  /// Only counts past/current doses (not future doses).
-  Future<AdherenceSummary> getDayAdherence(DateTime date, {String? userId}) async {
+  /// Counts doses taken against total scheduled doses for the day.
+  Future<AdherenceSummary> getDayAdherence(DateTime date,
+      {String? userId}) async {
     final occs = await getOccurrencesForDate(date, userId: userId);
     final now = DateTime.now();
-    // Only count doses that are due or past
-    final countable = occs.where((o) => o.scheduledAt.isBefore(now) || o.status.isTerminal).toList();
-    final taken = countable.where((o) => o.status == DoseStatus.taken).length;
-    final total = countable.length;
-    return AdherenceSummary(taken: taken, total: total, countable: countable.length);
+    // Countable doses: due or past, or terminal status
+    final countable = occs
+        .where((o) => o.scheduledAt.isBefore(now) || o.status.isTerminal)
+        .toList();
+    final taken = occs.where((o) => o.status == DoseStatus.taken).length;
+    final total = occs.length;
+    return AdherenceSummary(
+        taken: taken, total: total, countable: countable.length);
   }
 
   /// 7-day adherence report for caregiver and patient analytics.
-  Future<WeeklyAdherenceReport> getWeeklyAdherenceReport({String? userId}) async {
+  Future<WeeklyAdherenceReport> getWeeklyAdherenceReport(
+      {String? userId}) async {
     final uid = userId ?? _activeUserId;
     final now = DateTime.now();
     final pips = <DailyAdherencePip>[];
@@ -290,7 +321,9 @@ class DoseRepository {
       ));
     }
 
-    final overall = totalCountable == 0 ? 100.0 : (totalTaken / totalCountable * 100).clamp(0.0, 100.0);
+    final overall = totalCountable == 0
+        ? 100.0
+        : (totalTaken / totalCountable * 100).clamp(0.0, 100.0);
     final missed = (totalCountable - totalTaken).clamp(0, 9999);
 
     return WeeklyAdherenceReport(
@@ -443,7 +476,8 @@ class DoseRepository {
         if (occ.status == DoseStatus.taken) {
           final evts = await getEventsForOccurrence(occ.id);
           if (evts.isNotEmpty &&
-              evts.first.recordedAt.difference(occ.scheduledAt).inMinutes > 30) {
+              evts.first.recordedAt.difference(occ.scheduledAt).inMinutes >
+                  30) {
             dayDelayed++;
           }
         }
@@ -484,8 +518,7 @@ class DoseRepository {
 
     for (final med in meds) {
       final schedule = await _medRepo.getScheduleForMedication(med.id);
-      final medOccs =
-          countable.where((o) => o.medicationId == med.id).toList();
+      final medOccs = countable.where((o) => o.medicationId == med.id).toList();
       final medCountable = medOccs.length;
       final medTaken =
           medOccs.where((o) => o.status == DoseStatus.taken).length;
@@ -499,7 +532,8 @@ class DoseRepository {
         if (occ.status == DoseStatus.taken) {
           final evts = await getEventsForOccurrence(occ.id);
           if (evts.isNotEmpty &&
-              evts.first.recordedAt.difference(occ.scheduledAt).inMinutes > 30) {
+              evts.first.recordedAt.difference(occ.scheduledAt).inMinutes >
+                  30) {
             medDelayed++;
           }
         }
@@ -532,8 +566,8 @@ class DoseRepository {
 
       // Last taken dose
       final takenToday = todayOccs
-          .where((o) =>
-              o.medicationId == med.id && o.status == DoseStatus.taken)
+          .where(
+              (o) => o.medicationId == med.id && o.status == DoseStatus.taken)
           .toList();
       String? lastTakenStr;
       if (takenToday.isNotEmpty) {
@@ -597,7 +631,8 @@ class DoseRepository {
   }) async {
     final db = await _database;
     final now = DateTime.now();
-    final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final todayStr =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
     final rows = await db.query(
       'dose_occurrences',
@@ -612,7 +647,8 @@ class DoseRepository {
       occurrenceId = rows.first['id'] as String;
       await updateOccurrenceStatus(occurrenceId, DoseStatus.taken);
     } else {
-      occurrenceId = 'adhoc_${medicationId}_${DateTime.now().millisecondsSinceEpoch}';
+      occurrenceId =
+          'adhoc_${medicationId}_${DateTime.now().millisecondsSinceEpoch}';
       await db.insert('dose_occurrences', {
         'id': occurrenceId,
         'schedule_id': 'manual-caregiver',
@@ -636,14 +672,14 @@ class DoseRepository {
   }
 }
 
-
 class AdherenceSummary {
-  const AdherenceSummary({required this.taken, required this.total, required this.countable});
+  const AdherenceSummary(
+      {required this.taken, required this.total, required this.countable});
   final int taken;
   final int total;
   final int countable;
-  double get percentage => countable == 0 ? 0 : (taken / countable * 100).clamp(0, 100);
-  String get percentageStr => '${percentage.toStringAsFixed(0)}%';
+  double get percentage => total == 0 ? 0 : (taken / total * 100).clamp(0, 100);
+  String get percentageStr => '${percentage.round()}%';
 }
 
 class DailyAdherencePip {
@@ -696,10 +732,13 @@ class RefillRepository {
   }
 
   Future<Medication?> getLowestStockMedication({String? userId}) async {
-    final meds = await _medRepo.getMedications(activeOnly: true, userId: userId);
+    final meds =
+        await _medRepo.getMedications(activeOnly: true, userId: userId);
     if (meds.isEmpty) return null;
     final tracked = meds.where((m) => m.refillReminderEnabled).toList();
-    final list = tracked.isNotEmpty ? List<Medication>.from(tracked) : List<Medication>.from(meds);
+    final list = tracked.isNotEmpty
+        ? List<Medication>.from(tracked)
+        : List<Medication>.from(meds);
     list.sort((a, b) => a.quantityOnHand.compareTo(b.quantityOnHand));
     return list.first;
   }
@@ -738,7 +777,8 @@ class RefillRepository {
     final med = await _medRepo.getMedicationById(medicationId);
     if (med == null) return;
 
-    final newQty = (med.quantityOnHand - amount).clamp(0, double.infinity).toDouble();
+    final newQty =
+        (med.quantityOnHand - amount).clamp(0, double.infinity).toDouble();
     final event = StockEvent.create(
       medicationId: medicationId,
       userId: userId,
@@ -778,12 +818,14 @@ final allActiveMedsProvider = FutureProvider<List<Medication>>((ref) async {
   return repo.getMedications(activeOnly: true);
 });
 
-final medicationByIdProvider = FutureProvider.family<Medication?, String>((ref, id) async {
+final medicationByIdProvider =
+    FutureProvider.family<Medication?, String>((ref, id) async {
   final repo = ref.watch(medicationRepositoryProvider);
   return repo.getMedicationById(id);
 });
 
-final todayOccurrencesProvider = FutureProvider<List<DoseOccurrence>>((ref) async {
+final todayOccurrencesProvider =
+    FutureProvider<List<DoseOccurrence>>((ref) async {
   final repo = ref.watch(doseRepositoryProvider);
   return repo.getOccurrencesForDate(DateTime.now());
 });
@@ -803,7 +845,8 @@ final lowStockProvider = FutureProvider<List<Medication>>((ref) async {
   return repo.getLowStockMedications();
 });
 
-final weeklyAdherenceProvider = FutureProvider<WeeklyAdherenceReport>((ref) async {
+final weeklyAdherenceProvider =
+    FutureProvider<WeeklyAdherenceReport>((ref) async {
   final repo = ref.watch(doseRepositoryProvider);
   return repo.getWeeklyAdherenceReport();
 });
@@ -833,7 +876,8 @@ class PatientRepository {
   Future<Database> get _database => _db.database;
 
   /// Returns only the patients allocated to this caregiver (strictly isolated by caregiverId).
-  Future<List<AllocatedPatient>> getAllocatedPatients({String? caregiverId}) async {
+  Future<List<AllocatedPatient>> getAllocatedPatients(
+      {String? caregiverId}) async {
     final cid = caregiverId ?? _activeUserId;
     final db = await _database;
     final rows = await db.query(
@@ -846,7 +890,8 @@ class PatientRepository {
   }
 
   /// Retrieves a single allocated patient strictly ensuring the caller is the assigned caregiver.
-  Future<AllocatedPatient?> getPatientById(String patientId, {String? caregiverId}) async {
+  Future<AllocatedPatient?> getPatientById(String patientId,
+      {String? caregiverId}) async {
     final cid = caregiverId ?? _activeUserId;
     final db = await _database;
     final rows = await db.query(
@@ -861,7 +906,8 @@ class PatientRepository {
 
   Future<void> addAllocatedPatient(AllocatedPatient patient) async {
     final db = await _database;
-    await db.insert('allocated_patients', patient.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    await db.insert('allocated_patients', patient.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace);
     SupabaseSyncService.pushAllocatedPatient(patient.toMap()).ignore();
   }
 
@@ -881,10 +927,13 @@ class PatientRepository {
 
     final existing = await getPatientById(patientId, caregiverId: cid);
     if (existing == null) {
-      throw StateError('Unauthorized: Patient record does not belong to this caregiver.');
+      throw StateError(
+          'Unauthorized: Patient record does not belong to this caregiver.');
     }
 
-    final trimmedRel = relationship.trim().isEmpty ? existing.relationship : relationship.trim();
+    final trimmedRel = relationship.trim().isEmpty
+        ? existing.relationship
+        : relationship.trim();
     final nowIso = DateTime.now().toUtc().toIso8601String();
 
     await db.transaction((txn) async {
@@ -935,7 +984,8 @@ class PatientRepository {
 
     final existing = await getPatientById(patientId, caregiverId: cid);
     if (existing == null) {
-      throw StateError('Unauthorized: Patient record does not belong to this caregiver.');
+      throw StateError(
+          'Unauthorized: Patient record does not belong to this caregiver.');
     }
 
     final nowIso = DateTime.now().toUtc().toIso8601String();
@@ -999,7 +1049,8 @@ class PatientRepository {
   }
 
   /// Backward-compatible remove method (delegates to disconnectPatient)
-  Future<void> removeAllocatedPatient(String patientId, {String? caregiverId}) async {
+  Future<void> removeAllocatedPatient(String patientId,
+      {String? caregiverId}) async {
     await disconnectPatient(patientId: patientId, caregiverId: caregiverId);
   }
 
@@ -1023,7 +1074,8 @@ class PatientRepository {
       }
     }
 
-    final localDate = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    final localDate =
+        '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
     final rows = await db.query(
       'dose_occurrences',
       where: 'user_id = ? AND local_date = ?',
@@ -1061,7 +1113,8 @@ final patientRepositoryProvider = Provider<PatientRepository>((ref) {
   return PatientRepository(db);
 });
 
-final allocatedPatientsProvider = FutureProvider<List<AllocatedPatient>>((ref) async {
+final allocatedPatientsProvider =
+    FutureProvider<List<AllocatedPatient>>((ref) async {
   final repo = ref.watch(patientRepositoryProvider);
   return repo.getAllocatedPatients();
 });
@@ -1075,7 +1128,8 @@ class PatientCaregiverLinkRepository {
   Future<Database> get _database => _db.database;
 
   // ---- Caregiver side: get all patients this caregiver monitors ----
-  Future<List<PatientCaregiverLink>> getPatientsForCaregiver({String? caregiverUserId}) async {
+  Future<List<PatientCaregiverLink>> getPatientsForCaregiver(
+      {String? caregiverUserId}) async {
     final cid = caregiverUserId ?? _activeUserId;
     final db = await _database;
     final rows = await db.query(
@@ -1088,7 +1142,8 @@ class PatientCaregiverLinkRepository {
   }
 
   // ---- Patient side: get all caregivers watching this patient ----
-  Future<List<PatientCaregiverLink>> getCaregiversForPatient({String? patientUserId}) async {
+  Future<List<PatientCaregiverLink>> getCaregiversForPatient(
+      {String? patientUserId}) async {
     final pid = patientUserId ?? _activeUserId;
     final db = await _database;
     final rows = await db.query(
@@ -1127,7 +1182,10 @@ class PatientCaregiverLinkRepository {
     final db = await _database;
     await db.update(
       'patient_caregiver_links',
-      {'status': status, 'updated_at': DateTime.now().toUtc().toIso8601String()},
+      {
+        'status': status,
+        'updated_at': DateTime.now().toUtc().toIso8601String()
+      },
       where: 'id = ?',
       whereArgs: [linkId],
     );
@@ -1136,7 +1194,8 @@ class PatientCaregiverLinkRepository {
   // ---- Remove a link entirely ----
   Future<void> deleteLink(String linkId) async {
     final db = await _database;
-    await db.delete('patient_caregiver_links', where: 'id = ?', whereArgs: [linkId]);
+    await db.delete('patient_caregiver_links',
+        where: 'id = ?', whereArgs: [linkId]);
   }
 
   // ---- Check if a specific link exists ----
@@ -1155,19 +1214,22 @@ class PatientCaregiverLinkRepository {
   }
 }
 
-final patientCaregiverLinkRepositoryProvider = Provider<PatientCaregiverLinkRepository>((ref) {
+final patientCaregiverLinkRepositoryProvider =
+    Provider<PatientCaregiverLinkRepository>((ref) {
   final db = ref.watch(appDatabaseProvider);
   return PatientCaregiverLinkRepository(db);
 });
 
 /// All active patients that the current caregiver is monitoring.
-final caregiverPatientsProvider = FutureProvider<List<PatientCaregiverLink>>((ref) async {
+final caregiverPatientsProvider =
+    FutureProvider<List<PatientCaregiverLink>>((ref) async {
   final repo = ref.watch(patientCaregiverLinkRepositoryProvider);
   return repo.getPatientsForCaregiver();
 });
 
 /// All active caregivers assigned to the current patient.
-final patientCaregiversProvider = FutureProvider<List<PatientCaregiverLink>>((ref) async {
+final patientCaregiversProvider =
+    FutureProvider<List<PatientCaregiverLink>>((ref) async {
   final repo = ref.watch(patientCaregiverLinkRepositoryProvider);
   return repo.getCaregiversForPatient();
 });
@@ -1183,7 +1245,8 @@ class CaregiverRepository {
   Future<Database> get _database => _db.database;
 
   /// Returns all caregivers assigned to this patient.
-  Future<List<AllocatedCaregiver>> getCaregiversForPatient({String? patientId}) async {
+  Future<List<AllocatedCaregiver>> getCaregiversForPatient(
+      {String? patientId}) async {
     final pid = patientId ?? _activeUserId;
     final db = await _database;
     final rows = await db.query(
@@ -1229,9 +1292,9 @@ class CaregiverRepository {
              p.perm_view_adherence
       FROM caregiver_invitations i
       LEFT JOIN caregiver_permissions p ON p.invitation_id = i.id
-      WHERE i.user_id = ?
+      WHERE i.user_id = ? OR i.sender_user_id = ?
       ORDER BY i.created_at DESC
-    ''', [uid]);
+    ''', [uid, uid]);
 
     return rows.map((r) => CaregiverInvitation.fromMap(r)).toList();
   }
@@ -1255,8 +1318,12 @@ class CaregiverRepository {
     }
 
     // Rule: Prevent linking the patient to themselves
-    final currentEmail = (patientUserEmail ?? AuthService.currentUser?.email)?.trim().toLowerCase();
-    if (currentEmail != null && currentEmail.isNotEmpty && currentEmail == email) {
+    final currentEmail = (patientUserEmail ?? AuthService.currentUser?.email)
+        ?.trim()
+        .toLowerCase();
+    if (currentEmail != null &&
+        currentEmail.isNotEmpty &&
+        currentEmail == email) {
       return 'You cannot invite yourself as a caregiver.';
     }
 
@@ -1277,7 +1344,8 @@ class CaregiverRepository {
     // Rule: Prevent adding the same caregiver twice (already active or accepted)
     final activeRows = await db.query(
       'caregiver_invitations',
-      where: 'user_id = ? AND LOWER(caregiver_email) = ? AND (status = ? OR status = ?)',
+      where:
+          'user_id = ? AND LOWER(caregiver_email) = ? AND (status = ? OR status = ?)',
       whereArgs: [uid, email, 'accepted', 'active'],
       limit: 1,
     );
@@ -1317,7 +1385,8 @@ class CaregiverRepository {
     final invitation = CaregiverInvitation.create(
       userId: uid,
       email: normalizedEmail,
-      relationship: relationship.trim().isEmpty ? 'Family member' : relationship.trim(),
+      relationship:
+          relationship.trim().isEmpty ? 'Family member' : relationship.trim(),
       status: 'pending',
       viewSchedule: viewSchedule,
       viewHistory: viewHistory,
@@ -1409,8 +1478,10 @@ class CaregiverRepository {
   /// Permanently removes an invitation record and its permissions by ID from SQLite.
   Future<void> deleteInvitation(String invitationId) async {
     final db = await _database;
-    await db.delete('caregiver_permissions', where: 'invitation_id = ?', whereArgs: [invitationId]);
-    await db.delete('caregiver_invitations', where: 'id = ?', whereArgs: [invitationId]);
+    await db.delete('caregiver_permissions',
+        where: 'invitation_id = ?', whereArgs: [invitationId]);
+    await db.delete('caregiver_invitations',
+        where: 'id = ?', whereArgs: [invitationId]);
   }
 
   /// Returns the current permissions granted to this caregiver by the patient.
@@ -1502,7 +1573,8 @@ class CaregiverRepository {
           limit: 1,
         );
         if (invCheck.isEmpty) {
-          throw StateError('Unauthorized: No active relationship with this caregiver.');
+          throw StateError(
+              'Unauthorized: No active relationship with this caregiver.');
         }
       } else {
         targetInvitationId ??= linkRows.first['invitation_id'] as String?;
@@ -1518,7 +1590,8 @@ class CaregiverRepository {
         throw StateError('Unauthorized: Invitation not found for this user.');
       }
     } else {
-      throw ArgumentError('Either caregiverUserId or invitationId must be provided.');
+      throw ArgumentError(
+          'Either caregiverUserId or invitationId must be provided.');
     }
 
     final nowIso = DateTime.now().toUtc().toIso8601String();
@@ -1563,7 +1636,8 @@ class CaregiverRepository {
           permViewRefills: viewRefills ?? false,
           permViewAdherence: viewAdherence ?? true,
         );
-        await txn.insert('caregiver_permissions', newPerm.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+        await txn.insert('caregiver_permissions', newPerm.toMap(),
+            conflictAlgorithm: ConflictAlgorithm.replace);
         updatedPermMap = newPerm.toMap();
       }
 
@@ -1629,7 +1703,8 @@ class CaregiverRepository {
       limit: 1,
     );
     if (linkRows.isEmpty) {
-      throw StateError('Unauthorized: No relationship found with this caregiver.');
+      throw StateError(
+          'Unauthorized: No relationship found with this caregiver.');
     }
 
     final invitationId = linkRows.first['invitation_id'] as String?;
@@ -1679,7 +1754,8 @@ class CaregiverRepository {
       SupabaseSyncService.pushPatientCaregiverLink(linkRow.first).ignore();
     }
     if (invitationId != null) {
-      final invRow = await db.query('caregiver_invitations', where: 'id = ?', whereArgs: [invitationId], limit: 1);
+      final invRow = await db.query('caregiver_invitations',
+          where: 'id = ?', whereArgs: [invitationId], limit: 1);
       if (invRow.isNotEmpty) {
         SupabaseSyncService.pushCaregiverInvitation(invRow.first).ignore();
       }
@@ -1688,18 +1764,104 @@ class CaregiverRepository {
 
   // ── Caregiver-Side Incoming Invitations ────────────────────────────────────
 
+  /// Sends an in-app connection invitation using a public DoseDiary ID.
+  Future<CaregiverInvitation> createDirectConnectionInvitation({
+    required String publicId,
+    required String senderRole,
+    String relationship = 'Family member',
+  }) async {
+    final normalizedId = publicId.trim().startsWith('#')
+        ? publicId.trim()
+        : '#${publicId.trim()}';
+    if (!RegExp(r'^#[0-9]{5}$').hasMatch(normalizedId)) {
+      throw ArgumentError('Enter a valid DoseDiary ID such as #12345.');
+    }
+
+    if (!AuthService.isLoggedIn) {
+      throw StateError('Sign in before connecting another user.');
+    }
+
+    final response = await Supabase.instance.client.rpc(
+      'create_connection_invitation',
+      params: {
+        'target_public_id': normalizedId,
+        'sender_role': senderRole.trim().toLowerCase(),
+        'relationship_label': relationship.trim(),
+      },
+    );
+    if (response is! Map) {
+      throw StateError('The invitation could not be created.');
+    }
+
+    final invitation = CaregiverInvitation.fromMap(
+      Map<String, dynamic>.from(response),
+    );
+    final db = await _database;
+    await db.insert(
+      'caregiver_invitations',
+      invitation.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    return invitation;
+  }
+
+  Future<List<CaregiverInvitation>> getDirectIncomingInvitations({
+    String? receiverUserId,
+    bool pendingOnly = true,
+  }) async {
+    final receiverId =
+        receiverUserId ?? AuthService.currentUser?.id ?? _activeUserId;
+    if (receiverId.isEmpty || receiverId == 'guest-user') return [];
+
+    if (AuthService.isLoggedIn) {
+      await SupabaseSyncService.pullDirectConnectionInvitations();
+    }
+
+    final db = await _database;
+    final rows = await db.query(
+      'caregiver_invitations',
+      where: pendingOnly
+          ? 'receiver_user_id = ? AND status = ?'
+          : 'receiver_user_id = ?',
+      whereArgs: pendingOnly ? [receiverId, 'pending'] : [receiverId],
+      orderBy: 'created_at DESC',
+    );
+    return rows.map(CaregiverInvitation.fromMap).toList();
+  }
+
+  Future<void> respondToDirectConnectionInvitation({
+    required String invitationId,
+    required bool accept,
+  }) async {
+    if (!AuthService.isLoggedIn) {
+      throw StateError('Sign in before responding to an invitation.');
+    }
+    await Supabase.instance.client.rpc(
+      'respond_to_connection_invitation',
+      params: {
+        'invitation_uuid': invitationId,
+        'accept_invitation': accept,
+      },
+    );
+    await SupabaseSyncService.pullFromCloud();
+  }
+
   /// Returns all incoming invitations addressed to this caregiver (filtered by caregiver email).
   ///
   /// CRITICAL SECURITY / ISOLATION:
   /// - Does NOT use patient user_id.
   /// - Strictly matches LOWER(caregiver_email) against the authenticated caregiver's email.
   /// - Returns invitations joined with caregiver_permissions and patient profile full name.
-  Future<List<CaregiverInvitation>> getIncomingInvitations({String? caregiverEmail}) async {
-    final email = (caregiverEmail ?? AuthService.currentUser?.email)?.trim().toLowerCase();
+  Future<List<CaregiverInvitation>> getIncomingInvitations(
+      {String? caregiverEmail}) async {
+    final email = (caregiverEmail ?? AuthService.currentUser?.email)
+        ?.trim()
+        .toLowerCase();
     if (email == null || email.isEmpty) {
       return [];
     }
 
+    final currentUserId = AuthService.currentUser?.id ?? _activeUserId;
     final db = await _database;
     final rows = await db.rawQuery('''
       SELECT i.*,
@@ -1711,9 +1873,9 @@ class CaregiverRepository {
       FROM caregiver_invitations i
       LEFT JOIN caregiver_permissions p ON p.invitation_id = i.id
       LEFT JOIN profiles prof ON prof.id = i.user_id
-      WHERE LOWER(i.caregiver_email) = ?
+      WHERE LOWER(i.caregiver_email) = ? OR i.receiver_user_id = ?
       ORDER BY i.created_at DESC
-    ''', [email]);
+    ''', [email, currentUserId]);
 
     return rows.map((r) => CaregiverInvitation.fromMap(r)).toList();
   }
@@ -1752,11 +1914,16 @@ class CaregiverRepository {
     final invRow = invRows.first;
     final currentStatus = (invRow['status'] as String).toLowerCase();
     if (currentStatus != 'pending') {
-      throw StateError('Cannot accept invitation: status is already "$currentStatus".');
+      throw StateError(
+          'Cannot accept invitation: status is already "$currentStatus".');
     }
 
-    final effectiveCaregiverEmail = (caregiverEmail ?? AuthService.currentUser?.email)?.trim().toLowerCase();
-    final targetEmail = (invRow['caregiver_email'] as String).trim().toLowerCase();
+    final effectiveCaregiverEmail =
+        (caregiverEmail ?? AuthService.currentUser?.email)
+            ?.trim()
+            .toLowerCase();
+    final targetEmail =
+        (invRow['caregiver_email'] as String).trim().toLowerCase();
     if (effectiveCaregiverEmail != null && effectiveCaregiverEmail.isNotEmpty) {
       if (effectiveCaregiverEmail != targetEmail) {
         throw StateError('This invitation is not addressed to your account.');
@@ -1764,7 +1931,8 @@ class CaregiverRepository {
     }
 
     final patientUserId = invRow['user_id'] as String;
-    final effectiveCaregiverUserId = caregiverUserId ?? AuthService.currentUser?.id ?? _activeUserId;
+    final effectiveCaregiverUserId =
+        caregiverUserId ?? AuthService.currentUser?.id ?? _activeUserId;
     final rel = (invRow['relationship'] as String?)?.trim() ?? 'Caregiver';
     final relationshipStr = rel.isNotEmpty ? rel : 'Caregiver';
 
@@ -1784,10 +1952,13 @@ class CaregiverRepository {
       whereArgs: [patientUserId],
       limit: 1,
     );
-    final patientFullName = (patientProfRows.isNotEmpty && (patientProfRows.first['full_name'] as String?)?.isNotEmpty == true)
+    final patientFullName = (patientProfRows.isNotEmpty &&
+            (patientProfRows.first['full_name'] as String?)?.isNotEmpty == true)
         ? (patientProfRows.first['full_name'] as String)
         : 'Patient';
-    final patientAvatar = patientProfRows.isNotEmpty ? patientProfRows.first['avatar_url'] as String? : null;
+    final patientAvatar = patientProfRows.isNotEmpty
+        ? patientProfRows.first['avatar_url'] as String?
+        : null;
 
     final caregiverProfRows = await db.query(
       'profiles',
@@ -1795,12 +1966,17 @@ class CaregiverRepository {
       whereArgs: [effectiveCaregiverUserId],
       limit: 1,
     );
-    final caregiverFullName = (caregiverProfRows.isNotEmpty && (caregiverProfRows.first['full_name'] as String?)?.isNotEmpty == true)
+    final caregiverFullName = (caregiverProfRows.isNotEmpty &&
+            (caregiverProfRows.first['full_name'] as String?)?.isNotEmpty ==
+                true)
         ? (caregiverProfRows.first['full_name'] as String)
-        : ((effectiveCaregiverEmail != null && effectiveCaregiverEmail.isNotEmpty)
+        : ((effectiveCaregiverEmail != null &&
+                effectiveCaregiverEmail.isNotEmpty)
             ? effectiveCaregiverEmail
             : 'Caregiver');
-    final caregiverAvatar = caregiverProfRows.isNotEmpty ? caregiverProfRows.first['avatar_url'] as String? : null;
+    final caregiverAvatar = caregiverProfRows.isNotEmpty
+        ? caregiverProfRows.first['avatar_url'] as String?
+        : null;
 
     final permRows = await db.query(
       'caregiver_permissions',
@@ -1967,13 +2143,17 @@ class CaregiverRepository {
       SupabaseSyncService.pushCaregiverInvitation(updatedInv.first).ignore();
     }
     if (createdLink != null) {
-      SupabaseSyncService.pushPatientCaregiverLink(createdLink!.toMap()).ignore();
+      SupabaseSyncService.pushPatientCaregiverLink(createdLink!.toMap())
+          .ignore();
     }
     if (createdAllocatedPatient != null) {
-      SupabaseSyncService.pushAllocatedPatient(createdAllocatedPatient!.toMap()).ignore();
+      SupabaseSyncService.pushAllocatedPatient(createdAllocatedPatient!.toMap())
+          .ignore();
     }
     if (createdAllocatedCaregiver != null) {
-      SupabaseSyncService.pushAllocatedCaregiver(createdAllocatedCaregiver!.toMap()).ignore();
+      SupabaseSyncService.pushAllocatedCaregiver(
+              createdAllocatedCaregiver!.toMap())
+          .ignore();
     }
     if (updatedPermissions != null) {
       SupabaseSyncService.pushCaregiverPermission(updatedPermissions!).ignore();
@@ -2036,12 +2216,17 @@ class CaregiverRepository {
 
     // 2. Status Guard: Only pending invitations can be declined
     if (currentStatus != 'pending') {
-      throw StateError('Cannot decline invitation: status is already "$currentStatus".');
+      throw StateError(
+          'Cannot decline invitation: status is already "$currentStatus".');
     }
 
     // 3. Authorization Check: Only the invited caregiver can decline
-    final effectiveCaregiverEmail = (caregiverEmail ?? AuthService.currentUser?.email)?.trim().toLowerCase();
-    final targetEmail = (invRow['caregiver_email'] as String).trim().toLowerCase();
+    final effectiveCaregiverEmail =
+        (caregiverEmail ?? AuthService.currentUser?.email)
+            ?.trim()
+            .toLowerCase();
+    final targetEmail =
+        (invRow['caregiver_email'] as String).trim().toLowerCase();
     if (effectiveCaregiverEmail != null && effectiveCaregiverEmail.isNotEmpty) {
       if (effectiveCaregiverEmail != targetEmail) {
         throw StateError('This invitation is not addressed to your account.');
@@ -2076,25 +2261,36 @@ final caregiverRepositoryProvider = Provider<CaregiverRepository>((ref) {
 });
 
 /// Patient Mode: all caregivers linked to the current patient.
-final patientCaregiversListProvider = FutureProvider<List<AllocatedCaregiver>>((ref) async {
+final patientCaregiversListProvider =
+    FutureProvider<List<AllocatedCaregiver>>((ref) async {
   final repo = ref.watch(caregiverRepositoryProvider);
   return repo.getCaregiversForPatient();
 });
 
 /// Patient Mode: all caregiver invitations created by the current patient.
-final caregiversProvider = FutureProvider<List<CaregiverInvitation>>((ref) async {
+final caregiversProvider =
+    FutureProvider<List<CaregiverInvitation>>((ref) async {
   final repo = ref.watch(caregiverRepositoryProvider);
   return repo.getInvitations();
 });
 
 /// Caregiver Mode: all incoming invitations addressed to the current caregiver.
-final incomingCaregiverInvitationsProvider = FutureProvider<List<CaregiverInvitation>>((ref) async {
+final incomingCaregiverInvitationsProvider =
+    FutureProvider<List<CaregiverInvitation>>((ref) async {
   final repo = ref.watch(caregiverRepositoryProvider);
   return repo.getIncomingInvitations();
 });
 
+final directIncomingInvitationsProvider =
+    FutureProvider<List<CaregiverInvitation>>((ref) async {
+  final repo = ref.watch(caregiverRepositoryProvider);
+  return repo.getDirectIncomingInvitations();
+});
+
 /// Current caregiver permissions granted for a given patient.
-final patientPermissionsProvider = FutureProvider.family<CaregiverPermission?, String>((ref, patientUserId) async {
+final patientPermissionsProvider =
+    FutureProvider.family<CaregiverPermission?, String>(
+        (ref, patientUserId) async {
   final repo = ref.watch(caregiverRepositoryProvider);
   final caregiverId = AuthService.currentUser?.id ?? 'guest-user';
   return repo.getCaregiverPermissions(
@@ -2102,5 +2298,3 @@ final patientPermissionsProvider = FutureProvider.family<CaregiverPermission?, S
     caregiverUserId: caregiverId,
   );
 });
-
-

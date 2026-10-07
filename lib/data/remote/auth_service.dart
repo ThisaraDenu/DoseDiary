@@ -62,6 +62,7 @@ class AuthService {
         final user = data.session!.user;
         final name = user.userMetadata?['full_name'] as String?;
         await _upsertProfile(user, fullName: name);
+        await ensurePublicId();
       }
     });
   }
@@ -96,6 +97,7 @@ class AuthService {
         gender: gender,
         phoneNumber: phoneNumber,
       );
+      await ensurePublicId();
       try {
         await AppDatabase.instance.clearAllUserData();
         await SupabaseSyncService.pullFromCloud();
@@ -115,6 +117,7 @@ class AuthService {
       password: password,
     );
     if (response.user != null) {
+      await ensurePublicId();
       try {
         await AppDatabase.instance.clearAllUserData();
         await SupabaseSyncService.pullFromCloud();
@@ -162,6 +165,7 @@ class AuthService {
         final name = response.user!.userMetadata?['full_name'] as String? ??
             googleUser.displayName;
         await _upsertProfile(response.user!, fullName: name);
+        await ensurePublicId();
         try {
           await AppDatabase.instance.clearAllUserData();
           await SupabaseSyncService.pullFromCloud();
@@ -255,6 +259,7 @@ class AuthService {
                   'date_of_birth': data['date_of_birth'],
                   'gender': data['gender'],
                   'phone_number': data['phone_number'],
+                  'public_id': data['public_id'],
                   'preferred_language': data['preferred_language'] ?? 'en',
                   'text_scale_factor': data['text_scale_factor'] ?? 1.0,
                   'simple_wording': data['simple_wording'] == true ? 1 : 0,
@@ -299,6 +304,42 @@ class AuthService {
 
     final profile = await getProfile();
     return !_hasRequiredProfileFields(profile);
+  }
+
+  /// Returns the signed-in user's stable public ID (for example #04217).
+  /// Supabase allocates it under a unique database constraint, so two users
+  /// can never receive the same ID.
+  static Future<String?> ensurePublicId() async {
+    final user = currentUser;
+    if (user == null) return null;
+
+    try {
+      final result = await _client.rpc('ensure_public_id');
+      final publicId = result?.toString().trim();
+      if (publicId == null || publicId.isEmpty) return null;
+
+      try {
+        final db = await AppDatabase.instance.database;
+        await db.update(
+          'profiles',
+          {'public_id': publicId},
+          where: 'id = ?',
+          whereArgs: [user.id],
+        );
+      } catch (_) {}
+      return publicId;
+    } catch (_) {
+      try {
+        final data = await _client
+            .from('profiles')
+            .select('public_id')
+            .eq('id', user.id)
+            .maybeSingle();
+        return data?['public_id']?.toString();
+      } catch (_) {
+        return null;
+      }
+    }
   }
 
   static Future<void> updateProfile(Map<String, dynamic> updates) async {
@@ -532,6 +573,7 @@ class AuthService {
         'full_name': name,
         if (existing?['avatar_url'] != null)
           'avatar_url': existing?['avatar_url'],
+        if (existing?['public_id'] != null) 'public_id': existing?['public_id'],
         if (dob != null) 'date_of_birth': dob,
         if (gen != null) 'gender': gen,
         if (phone != null) 'phone_number': phone,
@@ -558,6 +600,7 @@ class AuthService {
               'date_of_birth': dob,
               'gender': gen,
               'phone_number': phone,
+              'public_id': existing?['public_id'],
               'preferred_language': existing?['preferred_language'] ?? 'en',
               'text_scale_factor': existing?['text_scale_factor'] ?? 1.0,
               'simple_wording': existing?['simple_wording'] == true ? 1 : 0,
