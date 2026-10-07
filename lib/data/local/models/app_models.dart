@@ -852,3 +852,263 @@ class PatientCaregiverLink {
         updatedAt: DateTime.now().toUtc(),
       );
 }
+
+// ── Caregiver Invitation & Permissions ────────────────────────────────────────
+
+class CaregiverInvitation {
+  const CaregiverInvitation({
+    required this.id,
+    this.userId = '',
+    required this.email,
+    required this.relationship,
+    required this.status,
+    this.token = '',
+    this.expiresAt,
+    required this.createdAt,
+    this.updatedAt,
+    this.viewSchedule = true,
+    this.viewHistory = true,
+    this.viewRefills = false,
+    this.viewAdherence = true,
+    this.patientName,
+    this.patientEmail,
+  });
+
+  final String id;
+  final String userId;
+  final String email;
+  final String relationship;
+  final String status; // pending | accepted | declined | revoked | expired
+  final String token;
+  final DateTime? expiresAt;
+  final DateTime createdAt;
+  final DateTime? updatedAt;
+  final bool viewSchedule;
+  final bool viewHistory;
+  final bool viewRefills;
+  final bool viewAdherence;
+  final String? patientName;
+  final String? patientEmail;
+
+  String get caregiverEmail => email;
+
+  factory CaregiverInvitation.create({
+    required String userId,
+    required String email,
+    String relationship = 'Family member',
+    String status = 'pending',
+    bool viewSchedule = true,
+    bool viewHistory = true,
+    bool viewRefills = false,
+    bool viewAdherence = true,
+    String? patientName,
+    String? patientEmail,
+    Duration validityDuration = const Duration(days: 7),
+  }) {
+    final now = DateTime.now().toUtc();
+    return CaregiverInvitation(
+      id: _uuid.v4(),
+      userId: userId,
+      email: email.trim().toLowerCase(),
+      relationship: relationship.trim().isEmpty ? 'Family member' : relationship.trim(),
+      status: status,
+      token: _uuid.v4(),
+      expiresAt: now.add(validityDuration),
+      createdAt: now,
+      updatedAt: now,
+      viewSchedule: viewSchedule,
+      viewHistory: viewHistory,
+      viewRefills: viewRefills,
+      viewAdherence: viewAdherence,
+      patientName: patientName,
+      patientEmail: patientEmail,
+    );
+  }
+
+  CaregiverInvitation copyWith({
+    String? status,
+    String? relationship,
+    bool? viewSchedule,
+    bool? viewHistory,
+    bool? viewRefills,
+    bool? viewAdherence,
+    DateTime? updatedAt,
+    String? patientName,
+    String? patientEmail,
+  }) =>
+      CaregiverInvitation(
+        id: id,
+        userId: userId,
+        email: email,
+        relationship: relationship ?? this.relationship,
+        status: status ?? this.status,
+        token: token,
+        expiresAt: expiresAt,
+        createdAt: createdAt,
+        updatedAt: updatedAt ?? DateTime.now().toUtc(),
+        viewSchedule: viewSchedule ?? this.viewSchedule,
+        viewHistory: viewHistory ?? this.viewHistory,
+        viewRefills: viewRefills ?? this.viewRefills,
+        viewAdherence: viewAdherence ?? this.viewAdherence,
+        patientName: patientName ?? this.patientName,
+        patientEmail: patientEmail ?? this.patientEmail,
+      );
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'user_id': userId,
+        'caregiver_email': email,
+        'relationship': relationship,
+        'status': status,
+        'token': token,
+        'expires_at': (expiresAt ?? createdAt.add(const Duration(days: 7))).toIso8601String(),
+        'created_at': createdAt.toIso8601String(),
+        'updated_at': (updatedAt ?? createdAt).toIso8601String(),
+      };
+
+  factory CaregiverInvitation.fromMap(
+    Map<String, dynamic> map, {
+    bool? viewSchedule,
+    bool? viewHistory,
+    bool? viewRefills,
+    bool? viewAdherence,
+  }) =>
+      CaregiverInvitation(
+        id: map['id'] as String,
+        userId: map['user_id'] as String? ?? '',
+        email: (map['caregiver_email'] ?? map['email']) as String? ?? '',
+        relationship: map['relationship'] as String? ?? 'Family member',
+        status: map['status'] as String? ?? 'pending',
+        token: map['token'] as String? ?? '',
+        expiresAt: map['expires_at'] != null ? DateTime.tryParse(map['expires_at'] as String) : null,
+        createdAt: DateTime.tryParse(map['created_at'] as String? ?? '') ?? DateTime.now().toUtc(),
+        updatedAt: map['updated_at'] != null ? DateTime.tryParse(map['updated_at'] as String) : null,
+        viewSchedule: viewSchedule ?? ((map['perm_view_schedule'] as int?) != 0 && (map['view_schedule'] ?? true) != false),
+        viewHistory: viewHistory ?? ((map['perm_view_history'] as int?) != 0 && (map['view_history'] ?? true) != false),
+        viewRefills: viewRefills ?? ((map['perm_view_refills'] as int?) == 1 || (map['view_refills'] == true)),
+        viewAdherence: viewAdherence ?? ((map['perm_view_adherence'] as int?) != 0 && (map['view_adherence'] ?? true) != false),
+        patientName: (map['patient_name'] ?? map['patientName']) as String?,
+        patientEmail: (map['patient_email'] ?? map['patientEmail']) as String?,
+      );
+}
+
+class CaregiverPermission {
+  const CaregiverPermission({
+    required this.id,
+    required this.invitationId,
+    required this.userId,
+    this.caregiverId,
+    this.permViewSchedule = false,
+    this.permViewHistory = false,
+    this.permViewRefills = false,
+    this.permViewAdherence = false,
+    this.alertImportantOnly = true,
+    this.retryCount = 2,
+    this.gracePeriodMinutes = 30,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final String invitationId;
+  final String userId;
+  final String? caregiverId;
+  final bool permViewSchedule;
+  final bool permViewHistory;
+  final bool permViewRefills;
+  final bool permViewAdherence;
+  final bool alertImportantOnly;
+  final int retryCount;
+  final int gracePeriodMinutes;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  factory CaregiverPermission.create({
+    required String invitationId,
+    required String userId,
+    String? caregiverId,
+    bool permViewSchedule = true,
+    bool permViewHistory = true,
+    bool permViewRefills = false,
+    bool permViewAdherence = true,
+    bool alertImportantOnly = true,
+    int retryCount = 2,
+    int gracePeriodMinutes = 30,
+  }) {
+    final now = DateTime.now().toUtc();
+    return CaregiverPermission(
+      id: _uuid.v4(),
+      invitationId: invitationId,
+      userId: userId,
+      caregiverId: caregiverId,
+      permViewSchedule: permViewSchedule,
+      permViewHistory: permViewHistory,
+      permViewRefills: permViewRefills,
+      permViewAdherence: permViewAdherence,
+      alertImportantOnly: alertImportantOnly,
+      retryCount: retryCount,
+      gracePeriodMinutes: gracePeriodMinutes,
+      createdAt: now,
+      updatedAt: now,
+    );
+  }
+
+  CaregiverPermission copyWith({
+    String? caregiverId,
+    bool? permViewSchedule,
+    bool? permViewHistory,
+    bool? permViewRefills,
+    bool? permViewAdherence,
+    bool? alertImportantOnly,
+    int? retryCount,
+    int? gracePeriodMinutes,
+    DateTime? updatedAt,
+  }) =>
+      CaregiverPermission(
+        id: id,
+        invitationId: invitationId,
+        userId: userId,
+        caregiverId: caregiverId ?? this.caregiverId,
+        permViewSchedule: permViewSchedule ?? this.permViewSchedule,
+        permViewHistory: permViewHistory ?? this.permViewHistory,
+        permViewRefills: permViewRefills ?? this.permViewRefills,
+        permViewAdherence: permViewAdherence ?? this.permViewAdherence,
+        alertImportantOnly: alertImportantOnly ?? this.alertImportantOnly,
+        retryCount: retryCount ?? this.retryCount,
+        gracePeriodMinutes: gracePeriodMinutes ?? this.gracePeriodMinutes,
+        createdAt: createdAt,
+        updatedAt: updatedAt ?? DateTime.now().toUtc(),
+      );
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'invitation_id': invitationId,
+        'user_id': userId,
+        'caregiver_id': caregiverId,
+        'perm_view_schedule': permViewSchedule ? 1 : 0,
+        'perm_view_history': permViewHistory ? 1 : 0,
+        'perm_view_refills': permViewRefills ? 1 : 0,
+        'perm_view_adherence': permViewAdherence ? 1 : 0,
+        'alert_important_only': alertImportantOnly ? 1 : 0,
+        'retry_count': retryCount,
+        'grace_period_minutes': gracePeriodMinutes,
+        'created_at': createdAt.toIso8601String(),
+        'updated_at': updatedAt.toIso8601String(),
+      };
+
+  factory CaregiverPermission.fromMap(Map<String, dynamic> map) => CaregiverPermission(
+        id: map['id'] as String,
+        invitationId: map['invitation_id'] as String,
+        userId: map['user_id'] as String,
+        caregiverId: map['caregiver_id'] as String?,
+        permViewSchedule: (map['perm_view_schedule'] as int?) == 1 || map['perm_view_schedule'] == true,
+        permViewHistory: (map['perm_view_history'] as int?) == 1 || map['perm_view_history'] == true,
+        permViewRefills: (map['perm_view_refills'] as int?) == 1 || map['perm_view_refills'] == true,
+        permViewAdherence: (map['perm_view_adherence'] as int?) == 1 || map['perm_view_adherence'] == true,
+        alertImportantOnly: (map['alert_important_only'] as int?) != 0 && map['alert_important_only'] != false,
+        retryCount: (map['retry_count'] as num?)?.toInt() ?? 2,
+        gracePeriodMinutes: (map['grace_period_minutes'] as num?)?.toInt() ?? 30,
+        createdAt: DateTime.parse(map['created_at'] as String),
+        updatedAt: DateTime.parse(map['updated_at'] as String),
+      );
+}

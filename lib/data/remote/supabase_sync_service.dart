@@ -33,6 +33,12 @@ class SupabaseSyncService {
       await _pullStockEvents(db, user.id);
       await _pullCaregiverInvitations(db, user.id);
       await _pullCaregiverPermissions(db, user.id);
+      await _pullPatientCaregiverLinks(db, user.id);
+      await _pullAllocatedPatients(db, user.id);
+      await _pullAllocatedCaregivers(db, user.id);
+      if (user.email != null && user.email!.isNotEmpty) {
+        await _pullIncomingCaregiverInvitations(db, user.email!);
+      }
     } catch (e) {
       // Non-fatal: local data still usable offline
       // ignore: avoid_print
@@ -111,6 +117,56 @@ class SupabaseSyncService {
       for (final row in stocks) {
         await pushStockEvent(row);
       }
+
+      // 6. Caregiver Invitations
+      final invites = await db.query(
+        'caregiver_invitations',
+        where: 'user_id = ?',
+        whereArgs: [user.id],
+      );
+      for (final row in invites) {
+        await pushCaregiverInvitation(row);
+      }
+
+      // 7. Caregiver Permissions
+      final perms = await db.query(
+        'caregiver_permissions',
+        where: 'user_id = ?',
+        whereArgs: [user.id],
+      );
+      for (final row in perms) {
+        await pushCaregiverPermission(row);
+      }
+
+      // 8. Patient-Caregiver Links
+      final links = await db.query(
+        'patient_caregiver_links',
+        where: 'patient_user_id = ? OR caregiver_user_id = ?',
+        whereArgs: [user.id, user.id],
+      );
+      for (final row in links) {
+        await pushPatientCaregiverLink(row);
+      }
+
+      // 9. Allocated Patients
+      final allocPatients = await db.query(
+        'allocated_patients',
+        where: 'caregiver_id = ?',
+        whereArgs: [user.id],
+      );
+      for (final row in allocPatients) {
+        await pushAllocatedPatient(row);
+      }
+
+      // 10. Allocated Caregivers
+      final allocCaregivers = await db.query(
+        'allocated_caregivers',
+        where: 'patient_id = ?',
+        whereArgs: [user.id],
+      );
+      for (final row in allocCaregivers) {
+        await pushAllocatedCaregiver(row);
+      }
     } catch (e) {
       // ignore: avoid_print
       print('SupabaseSyncService.pushAllLocalDataToCloud error: $e');
@@ -155,6 +211,36 @@ class SupabaseSyncService {
   static Future<void> pushStockEvent(Map<String, dynamic> data) async {
     if (!AuthService.isLoggedIn) return;
     await _upsert('stock_events', _toCloud(data));
+  }
+
+  /// Push a caregiver invitation to Supabase.
+  static Future<void> pushCaregiverInvitation(Map<String, dynamic> data) async {
+    if (!AuthService.isLoggedIn) return;
+    await _upsert('caregiver_invitations', _toCloud(data));
+  }
+
+  /// Push caregiver permissions to Supabase.
+  static Future<void> pushCaregiverPermission(Map<String, dynamic> data) async {
+    if (!AuthService.isLoggedIn) return;
+    await _upsert('caregiver_permissions', _toCloud(data));
+  }
+
+  /// Push a patient-caregiver link to Supabase.
+  static Future<void> pushPatientCaregiverLink(Map<String, dynamic> data) async {
+    if (!AuthService.isLoggedIn) return;
+    await _upsert('patient_caregiver_links', _toCloud(data));
+  }
+
+  /// Push an allocated patient to Supabase.
+  static Future<void> pushAllocatedPatient(Map<String, dynamic> data) async {
+    if (!AuthService.isLoggedIn) return;
+    await _upsert('allocated_patients', _toCloud(data));
+  }
+
+  /// Push an allocated caregiver to Supabase.
+  static Future<void> pushAllocatedCaregiver(Map<String, dynamic> data) async {
+    if (!AuthService.isLoggedIn) return;
+    await _upsert('allocated_caregivers', _toCloud(data));
   }
 
   // ── Private pull helpers ──────────────────────────────────────────────────
@@ -249,6 +335,74 @@ class SupabaseSyncService {
     for (final row in rows) {
       await database.insert('caregiver_permissions', _fromCloud(row),
           conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+  }
+
+  static Future<void> _pullIncomingCaregiverInvitations(
+      AppDatabase db, String email) async {
+    final rows = await _client
+        .from('caregiver_invitations')
+        .select()
+        .ilike('caregiver_email', email.trim());
+
+    final database = await db.database;
+    for (final row in rows) {
+      await database.insert('caregiver_invitations', _fromCloud(row),
+          conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+  }
+
+  static Future<void> _pullPatientCaregiverLinks(
+      AppDatabase db, String userId) async {
+    final rows = await _client
+        .from('patient_caregiver_links')
+        .select()
+        .or('patient_user_id.eq.$userId,caregiver_user_id.eq.$userId');
+
+    final database = await db.database;
+    for (final row in rows) {
+      await database.insert('patient_caregiver_links', _fromCloud(row),
+          conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+  }
+
+  static Future<void> _pullAllocatedPatients(
+      AppDatabase db, String userId) async {
+    final rows = await _client
+        .from('allocated_patients')
+        .select()
+        .eq('caregiver_id', userId);
+
+    final database = await db.database;
+    for (final row in rows) {
+      await database.insert('allocated_patients', _fromCloud(row),
+          conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+  }
+
+  static Future<void> _pullAllocatedCaregivers(
+      AppDatabase db, String userId) async {
+    final rows = await _client
+        .from('allocated_caregivers')
+        .select()
+        .eq('patient_id', userId);
+
+    final database = await db.database;
+    for (final row in rows) {
+      await database.insert('allocated_caregivers', _fromCloud(row),
+          conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+  }
+
+  /// Pulls incoming caregiver invitations addressed to the specified email (or current user's email).
+  static Future<void> pullIncomingCaregiverInvitations({String? email}) async {
+    final targetEmail = email ?? AuthService.currentUser?.email;
+    if (targetEmail == null || targetEmail.isEmpty) return;
+    try {
+      await _pullIncomingCaregiverInvitations(AppDatabase.instance, targetEmail);
+    } catch (e) {
+      // ignore: avoid_print
+      print('SupabaseSyncService.pullIncomingCaregiverInvitations error: $e');
     }
   }
 
