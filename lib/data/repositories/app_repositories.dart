@@ -1176,15 +1176,60 @@ class CaregiverRepository {
         caregiverEmail: caregiverEmail,
       );
     } else if (normalizedStatus == 'declined') {
-      return declineIncomingInvitation(invitationId);
+      return declineIncomingInvitation(
+        invitationId,
+        caregiverEmail: caregiverEmail,
+      );
     } else {
       throw ArgumentError("Status must be either 'accepted' or 'declined'.");
     }
   }
 
-  /// Convenience helper to decline an incoming invitation.
-  Future<void> declineIncomingInvitation(String invitationId) async {
+  /// Declines an incoming caregiver invitation.
+  ///
+  /// Requirements & Validations:
+  /// 1. Verifies invitation exists.
+  /// 2. Verifies status is currently 'pending'. Rejects accepted, declined, or revoked invitations.
+  /// 3. Verifies that the authenticated caregiver is the invited recipient (matches caregiver_email).
+  /// 4. Updates status in SQLite: pending → declined (sets updated_at).
+  /// 5. Does NOT create patient_caregiver_links, allocated_patients, or allocated_caregivers.
+  /// 6. Keeps the invitation record for historical tracking.
+  /// 7. Syncs updated invitation to Supabase.
+  Future<void> declineIncomingInvitation(
+    String invitationId, {
+    String? caregiverEmail,
+  }) async {
     final db = await _database;
+
+    // 1. Verification: Invitation exists
+    final invRows = await db.query(
+      'caregiver_invitations',
+      where: 'id = ?',
+      whereArgs: [invitationId],
+      limit: 1,
+    );
+    if (invRows.isEmpty) {
+      throw StateError('Invitation does not exist.');
+    }
+
+    final invRow = invRows.first;
+    final currentStatus = (invRow['status'] as String).toLowerCase();
+
+    // 2. Status Guard: Only pending invitations can be declined
+    if (currentStatus != 'pending') {
+      throw StateError('Cannot decline invitation: status is already "$currentStatus".');
+    }
+
+    // 3. Authorization Check: Only the invited caregiver can decline
+    final effectiveCaregiverEmail = (caregiverEmail ?? AuthService.currentUser?.email)?.trim().toLowerCase();
+    final targetEmail = (invRow['caregiver_email'] as String).trim().toLowerCase();
+    if (effectiveCaregiverEmail != null && effectiveCaregiverEmail.isNotEmpty) {
+      if (effectiveCaregiverEmail != targetEmail) {
+        throw StateError('This invitation is not addressed to your account.');
+      }
+    }
+
+    // 4. Update status in SQLite: pending → declined
     final nowIso = DateTime.now().toUtc().toIso8601String();
     await db.update(
       'caregiver_invitations',
@@ -1193,14 +1238,15 @@ class CaregiverRepository {
       whereArgs: [invitationId],
     );
 
-    final rows = await db.query(
+    // 5. Sync to Supabase
+    final updatedRows = await db.query(
       'caregiver_invitations',
       where: 'id = ?',
       whereArgs: [invitationId],
       limit: 1,
     );
-    if (rows.isNotEmpty) {
-      SupabaseSyncService.pushCaregiverInvitation(rows.first).ignore();
+    if (updatedRows.isNotEmpty) {
+      SupabaseSyncService.pushCaregiverInvitation(updatedRows.first).ignore();
     }
   }
 }

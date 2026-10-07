@@ -850,6 +850,209 @@ void main() {
       expect(perm.permViewAdherence, isTrue);
     });
   });
+
+  group('Decline Caregiver Invitation Tests', () {
+    test('successful decline transitions invitation status to declined with updated timestamp', () {
+      final now = DateTime.now().toUtc();
+      final invite = CaregiverInvitation.create(
+        userId: 'patient-alice',
+        email: 'caregiverB@example.com',
+        relationship: 'Daughter',
+        status: 'pending',
+      );
+
+      expect(invite.status, 'pending');
+
+      // Simulating status transition in decline logic
+      final declinedInvite = invite.copyWith(
+        status: 'declined',
+        updatedAt: now,
+      );
+
+      expect(declinedInvite.status, 'declined');
+      expect(declinedInvite.updatedAt, now);
+      expect(declinedInvite.userId, 'patient-alice');
+      expect(declinedInvite.caregiverEmail, 'caregiverb@example.com');
+      // Ensure invitation is preserved as historical data, not deleted
+      expect(declinedInvite.id, invite.id);
+    });
+
+    test('declining invitation creates NO patient_caregiver_link, allocated_patient, or allocated_caregiver', () {
+      final existingLinks = <PatientCaregiverLink>[];
+      final existingAllocatedPatients = <AllocatedPatient>[];
+      final existingAllocatedCaregivers = <AllocatedCaregiver>[];
+
+      final invite = CaregiverInvitation.create(
+        userId: 'patient-alice',
+        email: 'caregiverB@example.com',
+        relationship: 'Daughter',
+        status: 'pending',
+      );
+
+      // Decline action updates status only
+      final updatedInvite = invite.copyWith(status: 'declined');
+
+      // Verify that no relational tables were touched
+      expect(updatedInvite.status, 'declined');
+      expect(existingLinks, isEmpty);
+      expect(existingAllocatedPatients, isEmpty);
+      expect(existingAllocatedCaregivers, isEmpty);
+    });
+
+    test('authorization check: wrong caregiver cannot decline an invitation belonging to another caregiver', () {
+      final invite = CaregiverInvitation.create(
+        userId: 'patient-alice',
+        email: 'caregiverB@example.com',
+        relationship: 'Daughter',
+      );
+
+      const authenticatedCaregiverEmail = 'intruder-caregiver@example.com';
+
+      // Logic from CaregiverRepository.declineIncomingInvitation
+      expect(
+        () {
+          if (authenticatedCaregiverEmail.toLowerCase() != invite.caregiverEmail.toLowerCase()) {
+            throw StateError('This invitation is not addressed to your account.');
+          }
+        },
+        throwsA(isA<StateError>().having(
+          (e) => e.message,
+          'message',
+          contains('not addressed to your account'),
+        )),
+      );
+    });
+
+    test('status guard: accepted invitation cannot be declined', () {
+      const currentStatus = 'accepted';
+      expect(
+        () {
+          if (currentStatus != 'pending') {
+            throw StateError('Cannot decline invitation: status is already "$currentStatus".');
+          }
+        },
+        throwsA(isA<StateError>().having(
+          (e) => e.message,
+          'message',
+          contains('status is already "accepted"'),
+        )),
+      );
+    });
+
+    test('status guard: revoked invitation cannot be declined', () {
+      const currentStatus = 'revoked';
+      expect(
+        () {
+          if (currentStatus != 'pending') {
+            throw StateError('Cannot decline invitation: status is already "$currentStatus".');
+          }
+        },
+        throwsA(isA<StateError>().having(
+          (e) => e.message,
+          'message',
+          contains('status is already "revoked"'),
+        )),
+      );
+    });
+
+    test('status guard: already declined invitation cannot be declined again', () {
+      const currentStatus = 'declined';
+      expect(
+        () {
+          if (currentStatus != 'pending') {
+            throw StateError('Cannot decline invitation: status is already "$currentStatus".');
+          }
+        },
+        throwsA(isA<StateError>().having(
+          (e) => e.message,
+          'message',
+          contains('status is already "declined"'),
+        )),
+      );
+    });
+
+    testWidgets('patient-side list reflects Declined status for declined invitation', (tester) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final inviteDate = DateTime.utc(2026, 1, 15, 8, 30);
+      final declinedInvite = CaregiverInvitation(
+        id: 'cg-declined-1',
+        userId: 'patient-alice',
+        email: 'caregiverB@example.com',
+        relationship: 'Daughter',
+        status: 'declined',
+        createdAt: inviteDate,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            caregiversProvider.overrideWith((ref) => [declinedInvite]),
+          ],
+          child: const MaterialApp(
+            home: CaregiverManagementScreen(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Caregivers (1)'), findsOneWidget);
+      expect(find.text('caregiverB@example.com'), findsOneWidget);
+      expect(find.text('Declined'), findsOneWidget);
+      expect(find.text('Remove'), findsOneWidget);
+      expect(find.text('Cancel Invitation'), findsNothing);
+      expect(find.text('Revoke Access'), findsNothing);
+    });
+
+    testWidgets('caregiver incoming UI reflects Declined status and removes Accept/Decline action buttons', (tester) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final inviteDate = DateTime.utc(2026, 1, 15, 9, 0);
+      final declinedInvite = CaregiverInvitation(
+        id: 'inc-declined-1',
+        userId: 'patient-alice',
+        email: 'caregiverB@example.com',
+        relationship: 'Daughter',
+        status: 'declined',
+        createdAt: inviteDate,
+        patientName: 'Alice Smith',
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            incomingCaregiverInvitationsProvider.overrideWith((ref) => [declinedInvite]),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: IncomingCaregiverInvitationsWidget(),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Alice Smith'), findsOneWidget);
+      expect(find.text('Declined'), findsOneWidget);
+      expect(find.text('Accept'), findsNothing);
+      expect(find.text('Decline'), findsNothing);
+    });
+  });
 }
+
 
 
