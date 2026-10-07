@@ -132,27 +132,34 @@ class IncomingCaregiverInvitationsWidget extends ConsumerWidget {
   }
 }
 
-class _IncomingInvitationCard extends ConsumerWidget {
+class _IncomingInvitationCard extends ConsumerStatefulWidget {
   const _IncomingInvitationCard({required this.invitation});
 
   final CaregiverInvitation invitation;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final statusLower = invitation.status.toLowerCase();
+  ConsumerState<_IncomingInvitationCard> createState() => _IncomingInvitationCardState();
+}
+
+class _IncomingInvitationCardState extends ConsumerState<_IncomingInvitationCard> {
+  bool _isLoading = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final statusLower = widget.invitation.status.toLowerCase();
 
     final (Color statusColor, Color statusBg, String statusLabel) = switch (statusLower) {
       'pending' => (AppColors.skippedForeground, AppColors.skippedBackground, 'Pending'),
       'accepted' || 'active' => (AppColors.takenForeground, AppColors.takenBackground, 'Accepted'),
       'declined' => (AppColors.error, AppColors.error.withOpacity(0.12), 'Declined'),
       'revoked' => (AppColors.textTertiary, AppColors.textTertiary.withOpacity(0.12), 'Revoked'),
-      _ => (AppColors.textTertiary, AppColors.borderLight, invitation.status),
+      _ => (AppColors.textTertiary, AppColors.borderLight, widget.invitation.status),
     };
 
-    final patientName = (invitation.patientName != null && invitation.patientName!.trim().isNotEmpty)
-        ? invitation.patientName!.trim()
-        : (invitation.userId.isNotEmpty
-            ? 'Patient ${invitation.userId.length > 6 ? invitation.userId.substring(0, 6) : invitation.userId}'
+    final patientName = (widget.invitation.patientName != null && widget.invitation.patientName!.trim().isNotEmpty)
+        ? widget.invitation.patientName!.trim()
+        : (widget.invitation.userId.isNotEmpty
+            ? 'Patient ${widget.invitation.userId.length > 6 ? widget.invitation.userId.substring(0, 6) : widget.invitation.userId}'
             : 'Patient');
 
     return DdCard(
@@ -176,22 +183,22 @@ class _IncomingInvitationCard extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(patientName, style: AppTextStyles.bodyBold()),
-                    if (invitation.patientEmail != null && invitation.patientEmail!.isNotEmpty) ...[
+                    if (widget.invitation.patientEmail != null && widget.invitation.patientEmail!.isNotEmpty) ...[
                       const SizedBox(height: 2),
                       Text(
-                        invitation.patientEmail!,
+                        widget.invitation.patientEmail!,
                         style: AppTextStyles.caption(color: AppColors.textSecondary),
                       ),
                     ],
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        if (invitation.relationship.isNotEmpty) ...[
-                          Text(invitation.relationship, style: AppTextStyles.caption()),
+                        if (widget.invitation.relationship.isNotEmpty) ...[
+                          Text(widget.invitation.relationship, style: AppTextStyles.caption()),
                           Text(' • ', style: AppTextStyles.caption(color: AppColors.textTertiary)),
                         ],
                         Text(
-                          'Invited ${DateFormat('d MMM yyyy').format(invitation.createdAt.toLocal())}',
+                          'Invited ${DateFormat('d MMM yyyy').format(widget.invitation.createdAt.toLocal())}',
                           style: AppTextStyles.caption(color: AppColors.textSecondary),
                         ),
                       ],
@@ -218,10 +225,10 @@ class _IncomingInvitationCard extends ConsumerWidget {
             spacing: 8,
             runSpacing: 6,
             children: [
-              if (invitation.viewSchedule) const _PermChip(label: 'Schedule'),
-              if (invitation.viewHistory) const _PermChip(label: 'History'),
-              if (invitation.viewRefills) const _PermChip(label: 'Refills'),
-              if (invitation.viewAdherence) const _PermChip(label: 'Adherence'),
+              if (widget.invitation.viewSchedule) const _PermChip(label: 'Schedule'),
+              if (widget.invitation.viewHistory) const _PermChip(label: 'History'),
+              if (widget.invitation.viewRefills) const _PermChip(label: 'Refills'),
+              if (widget.invitation.viewAdherence) const _PermChip(label: 'Adherence'),
             ],
           ),
           if (statusLower == 'pending') ...[
@@ -230,7 +237,7 @@ class _IncomingInvitationCard extends ConsumerWidget {
               children: [
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () => _handleAccept(context, ref, patientName),
+                    onPressed: _isLoading ? null : () => _handleAccept(context, patientName),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primaryAction,
                       foregroundColor: Colors.white,
@@ -238,13 +245,19 @@ class _IncomingInvitationCard extends ConsumerWidget {
                       minimumSize: const Size(0, 44),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                    child: const Text('Accept'),
+                    child: _isLoading
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          )
+                        : const Text('Accept'),
                   ),
                 ),
                 const SizedBox(width: AppDimensions.stackMd),
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => _handleDecline(context, ref, patientName),
+                    onPressed: _isLoading ? null : () => _handleDecline(context, patientName),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.error,
                       side: const BorderSide(color: AppColors.error),
@@ -262,15 +275,21 @@ class _IncomingInvitationCard extends ConsumerWidget {
     );
   }
 
-  Future<void> _handleAccept(BuildContext context, WidgetRef ref, String patientName) async {
+  Future<void> _handleAccept(BuildContext context, String patientName) async {
+    setState(() => _isLoading = true);
     try {
-      await ref.read(caregiverRepositoryProvider).acceptIncomingInvitation(invitation.id);
+      await ref.read(caregiverRepositoryProvider).acceptIncomingInvitation(widget.invitation.id);
       ref.invalidate(incomingCaregiverInvitationsProvider);
+      ref.invalidate(allocatedPatientsProvider);
+      ref.invalidate(patientCaregiversListProvider);
+      ref.invalidate(patientCaregiversProvider);
+      ref.invalidate(caregiverPatientsProvider);
+      ref.invalidate(caregiversProvider);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Accepted invitation from $patientName'),
-            backgroundColor: AppColors.success,
+            content: Text('Accepted invitation from $patientName. Connected as caregiver.'),
+            backgroundColor: AppColors.takenForeground,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -285,10 +304,14 @@ class _IncomingInvitationCard extends ConsumerWidget {
           ),
         );
       }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
-  Future<void> _handleDecline(BuildContext context, WidgetRef ref, String patientName) async {
+  Future<void> _handleDecline(BuildContext context, String patientName) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -308,9 +331,11 @@ class _IncomingInvitationCard extends ConsumerWidget {
     );
 
     if (confirmed == true) {
+      setState(() => _isLoading = true);
       try {
-        await ref.read(caregiverRepositoryProvider).declineIncomingInvitation(invitation.id);
+        await ref.read(caregiverRepositoryProvider).declineIncomingInvitation(widget.invitation.id);
         ref.invalidate(incomingCaregiverInvitationsProvider);
+        ref.invalidate(caregiversProvider);
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -328,6 +353,10 @@ class _IncomingInvitationCard extends ConsumerWidget {
               behavior: SnackBarBehavior.floating,
             ),
           );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isLoading = false);
         }
       }
     }

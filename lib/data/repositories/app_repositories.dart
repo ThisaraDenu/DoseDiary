@@ -899,22 +899,296 @@ class CaregiverRepository {
     return rows.map((r) => CaregiverInvitation.fromMap(r)).toList();
   }
 
-  /// Updates status of an incoming invitation ('accepted' or 'declined') in SQLite
-  /// and syncs to Supabase. Does not prematurely create patient-caregiver links.
+  /// Accepts an incoming caregiver invitation and creates the bilateral
+  /// Patient ↔ Caregiver relationship within an atomic SQLite transaction.
+  ///
+  /// Transaction Steps:
+  /// 1. Verifies invitation exists, status is pending, and current caregiver is invitee.
+  /// 2. Updates caregiver_invitations: pending → accepted.
+  /// 3. Creates patient_caregiver_links (prevents duplicate links).
+  /// 4. Creates/updates allocated_patients (Caregiver B receives Patient A).
+  /// 5. Creates/updates allocated_caregivers (Patient A receives Caregiver B).
+  /// 6. Updates/assigns caregiver_id in caregiver_permissions according to invitation.
+  ///
+  /// If any write fails, transaction rolls back cleanly.
+  /// Synchronizes all affected entities to Supabase.
+  Future<void> acceptIncomingInvitation(
+    String invitationId, {
+    String? caregiverUserId,
+    String? caregiverEmail,
+  }) async {
+    final db = await _database;
+
+    // 1. Verification
+    final invRows = await db.query(
+      'caregiver_invitations',
+      where: 'id = ?',
+      whereArgs: [invitationId],
+      limit: 1,
+    );
+    if (invRows.isEmpty) {
+      throw StateError('Invitation does not exist.');
+    }
+
+    final invRow = invRows.first;
+    final currentStatus = (invRow['status'] as String).toLowerCase();
+    if (currentStatus != 'pending') {
+      throw StateError('Cannot accept invitation: status is already "$currentStatus".');
+    }
+
+    final effectiveCaregiverEmail = (caregiverEmail ?? AuthService.currentUser?.email)?.trim().toLowerCase();
+    final targetEmail = (invRow['caregiver_email'] as String).trim().toLowerCase();
+    if (effectiveCaregiverEmail != null && effectiveCaregiverEmail.isNotEmpty) {
+      if (effectiveCaregiverEmail != targetEmail) {
+        throw StateError('This invitation is not addressed to your account.');
+      }
+    }
+
+    final patientUserId = invRow['user_id'] as String;
+    final effectiveCaregiverUserId = caregiverUserId ?? AuthService.currentUser?.id ?? _activeUserId;
+    final rel = (invRow['relationship'] as String?)?.trim() ?? 'Caregiver';
+    final relationshipStr = rel.isNotEmpty ? rel : 'Caregiver';
+
+    // Check duplicate link
+    final existingLinks = await db.query(
+      'patient_caregiver_links',
+      where: 'patient_user_id = ? AND caregiver_user_id = ?',
+      whereArgs: [patientUserId, effectiveCaregiverUserId],
+      limit: 1,
+    );
+    final bool alreadyLinked = existingLinks.isNotEmpty;
+
+    // Retrieve profiles
+    final patientProfRows = await db.query(
+      'profiles',
+      where: 'id = ?',
+      whereArgs: [patientUserId],
+      limit: 1,
+    );
+    final patientFullName = (patientProfRows.isNotEmpty && (patientProfRows.first['full_name'] as String?)?.isNotEmpty == true)
+        ? (patientProfRows.first['full_name'] as String)
+        : 'Patient';
+    final patientAvatar = patientProfRows.isNotEmpty ? patientProfRows.first['avatar_url'] as String? : null;
+
+    final caregiverProfRows = await db.query(
+      'profiles',
+      where: 'id = ?',
+      whereArgs: [effectiveCaregiverUserId],
+      limit: 1,
+    );
+    final caregiverFullName = (caregiverProfRows.isNotEmpty && (caregiverProfRows.first['full_name'] as String?)?.isNotEmpty == true)
+        ? (caregiverProfRows.first['full_name'] as String)
+        : ((effectiveCaregiverEmail != null && effectiveCaregiverEmail.isNotEmpty)
+            ? effectiveCaregiverEmail
+            : 'Caregiver');
+    final caregiverAvatar = caregiverProfRows.isNotEmpty ? caregiverProfRows.first['avatar_url'] as String? : null;
+
+    final permRows = await db.query(
+      'caregiver_permissions',
+      where: 'invitation_id = ?',
+      whereArgs: [invitationId],
+      limit: 1,
+    );
+
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+    PatientCaregiverLink? createdLink;
+    AllocatedPatient? createdAllocatedPatient;
+    AllocatedCaregiver? createdAllocatedCaregiver;
+    Map<String, dynamic>? updatedPermissions;
+
+    // 2. Atomic SQLite Transaction
+    await db.transaction((txn) async {
+      // Step A: Update caregiver_invitations status to accepted
+      await txn.update(
+        'caregiver_invitations',
+        {'status': 'accepted', 'updated_at': nowIso},
+        where: 'id = ?',
+        whereArgs: [invitationId],
+      );
+
+      // Step B: Create patient_caregiver_links
+      if (!alreadyLinked) {
+        final link = PatientCaregiverLink.create(
+          patientUserId: patientUserId,
+          caregiverUserId: effectiveCaregiverUserId,
+          relationship: relationshipStr,
+          invitationId: invitationId,
+        );
+        createdLink = link;
+        await txn.insert(
+          'patient_caregiver_links',
+          link.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      } else {
+        await txn.update(
+          'patient_caregiver_links',
+          {
+            'status': 'active',
+            'invitation_id': invitationId,
+            'updated_at': nowIso,
+          },
+          where: 'patient_user_id = ? AND caregiver_user_id = ?',
+          whereArgs: [patientUserId, effectiveCaregiverUserId],
+        );
+      }
+
+      // Step C: Create or update allocated_patients (Caregiver B sees Patient A)
+      final existingAllocPatients = await txn.query(
+        'allocated_patients',
+        where: 'caregiver_id = ? AND patient_user_id = ?',
+        whereArgs: [effectiveCaregiverUserId, patientUserId],
+      );
+      if (existingAllocPatients.isEmpty) {
+        final allocPatient = AllocatedPatient.create(
+          caregiverId: effectiveCaregiverUserId,
+          patientUserId: patientUserId,
+          fullName: patientFullName,
+          relationship: relationshipStr,
+          avatarUrl: patientAvatar,
+        );
+        createdAllocatedPatient = allocPatient;
+        await txn.insert(
+          'allocated_patients',
+          allocPatient.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      } else {
+        await txn.update(
+          'allocated_patients',
+          {
+            'full_name': patientFullName,
+            'relationship': relationshipStr,
+            if (patientAvatar != null) 'avatar_url': patientAvatar,
+          },
+          where: 'caregiver_id = ? AND patient_user_id = ?',
+          whereArgs: [effectiveCaregiverUserId, patientUserId],
+        );
+      }
+
+      // Step D: Create or update allocated_caregivers (Patient A sees Caregiver B)
+      final existingAllocCaregivers = await txn.query(
+        'allocated_caregivers',
+        where: 'patient_id = ? AND caregiver_user_id = ?',
+        whereArgs: [patientUserId, effectiveCaregiverUserId],
+      );
+      if (existingAllocCaregivers.isEmpty) {
+        final allocCaregiver = AllocatedCaregiver.create(
+          patientId: patientUserId,
+          caregiverUserId: effectiveCaregiverUserId,
+          fullName: caregiverFullName,
+          relationship: relationshipStr,
+          avatarUrl: caregiverAvatar,
+        );
+        createdAllocatedCaregiver = allocCaregiver;
+        await txn.insert(
+          'allocated_caregivers',
+          allocCaregiver.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      } else {
+        await txn.update(
+          'allocated_caregivers',
+          {
+            'full_name': caregiverFullName,
+            'relationship': relationshipStr,
+            if (caregiverAvatar != null) 'avatar_url': caregiverAvatar,
+          },
+          where: 'patient_id = ? AND caregiver_user_id = ?',
+          whereArgs: [patientUserId, effectiveCaregiverUserId],
+        );
+      }
+
+      // Step E: Update or insert caregiver_permissions
+      if (permRows.isNotEmpty) {
+        await txn.update(
+          'caregiver_permissions',
+          {
+            'caregiver_id': effectiveCaregiverUserId,
+            'updated_at': nowIso,
+          },
+          where: 'invitation_id = ?',
+          whereArgs: [invitationId],
+        );
+        final updatedPermRows = await txn.query(
+          'caregiver_permissions',
+          where: 'invitation_id = ?',
+          whereArgs: [invitationId],
+        );
+        if (updatedPermRows.isNotEmpty) {
+          updatedPermissions = updatedPermRows.first;
+        }
+      } else {
+        final newPerm = CaregiverPermission.create(
+          invitationId: invitationId,
+          userId: patientUserId,
+          caregiverId: effectiveCaregiverUserId,
+          permViewSchedule: true,
+          permViewHistory: true,
+          permViewRefills: false,
+          permViewAdherence: true,
+        );
+        await txn.insert(
+          'caregiver_permissions',
+          newPerm.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+        updatedPermissions = newPerm.toMap();
+      }
+    });
+
+    // 3. Supabase Cloud Synchronization
+    final updatedInv = await db.query(
+      'caregiver_invitations',
+      where: 'id = ?',
+      whereArgs: [invitationId],
+      limit: 1,
+    );
+    if (updatedInv.isNotEmpty) {
+      SupabaseSyncService.pushCaregiverInvitation(updatedInv.first).ignore();
+    }
+    if (createdLink != null) {
+      SupabaseSyncService.pushPatientCaregiverLink(createdLink!.toMap()).ignore();
+    }
+    if (createdAllocatedPatient != null) {
+      SupabaseSyncService.pushAllocatedPatient(createdAllocatedPatient!.toMap()).ignore();
+    }
+    if (createdAllocatedCaregiver != null) {
+      SupabaseSyncService.pushAllocatedCaregiver(createdAllocatedCaregiver!.toMap()).ignore();
+    }
+    if (updatedPermissions != null) {
+      SupabaseSyncService.pushCaregiverPermission(updatedPermissions!).ignore();
+    }
+  }
+
+  /// Updates status of an incoming invitation ('accepted' or 'declined').
   Future<void> respondToIncomingInvitation({
     required String invitationId,
     required String status,
+    String? caregiverUserId,
+    String? caregiverEmail,
   }) async {
     final normalizedStatus = status.trim().toLowerCase();
-    if (normalizedStatus != 'accepted' && normalizedStatus != 'declined') {
+    if (normalizedStatus == 'accepted') {
+      return acceptIncomingInvitation(
+        invitationId,
+        caregiverUserId: caregiverUserId,
+        caregiverEmail: caregiverEmail,
+      );
+    } else if (normalizedStatus == 'declined') {
+      return declineIncomingInvitation(invitationId);
+    } else {
       throw ArgumentError("Status must be either 'accepted' or 'declined'.");
     }
+  }
 
+  /// Convenience helper to decline an incoming invitation.
+  Future<void> declineIncomingInvitation(String invitationId) async {
     final db = await _database;
     final nowIso = DateTime.now().toUtc().toIso8601String();
     await db.update(
       'caregiver_invitations',
-      {'status': normalizedStatus, 'updated_at': nowIso},
+      {'status': 'declined', 'updated_at': nowIso},
       where: 'id = ?',
       whereArgs: [invitationId],
     );
@@ -929,14 +1203,6 @@ class CaregiverRepository {
       SupabaseSyncService.pushCaregiverInvitation(rows.first).ignore();
     }
   }
-
-  /// Convenience helper to accept an incoming invitation.
-  Future<void> acceptIncomingInvitation(String invitationId) =>
-      respondToIncomingInvitation(invitationId: invitationId, status: 'accepted');
-
-  /// Convenience helper to decline an incoming invitation.
-  Future<void> declineIncomingInvitation(String invitationId) =>
-      respondToIncomingInvitation(invitationId: invitationId, status: 'declined');
 }
 
 final caregiverRepositoryProvider = Provider<CaregiverRepository>((ref) {

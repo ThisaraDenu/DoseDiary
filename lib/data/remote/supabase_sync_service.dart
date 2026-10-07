@@ -192,6 +192,24 @@ class SupabaseSyncService {
     await _upsert('caregiver_permissions', _toCloud(data));
   }
 
+  /// Push a patient-caregiver link to Supabase.
+  static Future<void> pushPatientCaregiverLink(Map<String, dynamic> data) async {
+    if (!AuthService.isLoggedIn) return;
+    await _upsert('patient_caregiver_links', _toCloud(data));
+  }
+
+  /// Push an allocated patient to Supabase.
+  static Future<void> pushAllocatedPatient(Map<String, dynamic> data) async {
+    if (!AuthService.isLoggedIn) return;
+    await _upsert('allocated_patients', _toCloud(data));
+  }
+
+  /// Push an allocated caregiver to Supabase.
+  static Future<void> pushAllocatedCaregiver(Map<String, dynamic> data) async {
+    if (!AuthService.isLoggedIn) return;
+    await _upsert('allocated_caregivers', _toCloud(data));
+  }
+
   // ── Private pull helpers ──────────────────────────────────────────────────
 
   static Future<void> _pullMedications(AppDatabase db, String userId) async {

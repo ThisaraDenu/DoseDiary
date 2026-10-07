@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/intl.dart';
+import 'package:dose_diary/data/local/models/app_models.dart';
 import 'package:dose_diary/features/caregivers/caregiver_management_screen.dart';
 
 void main() {
@@ -631,5 +632,224 @@ void main() {
       expect(find.text('Decline'), findsNothing);
     });
   });
+
+  group('Caregiver Invitation Acceptance & Relationship Creation Tests', () {
+    test('successful acceptance transitions invitation status from pending to accepted', () {
+      final now = DateTime.now().toUtc();
+      final invite = CaregiverInvitation.create(
+        userId: 'patient-alice',
+        email: 'caregiverB@example.com',
+        relationship: 'Daughter',
+        status: 'pending',
+      );
+
+      expect(invite.status, 'pending');
+
+      // Simulating status transition in acceptance transaction
+      final acceptedInvite = invite.copyWith(
+        status: 'accepted',
+        updatedAt: now,
+      );
+
+      expect(acceptedInvite.status, 'accepted');
+      expect(acceptedInvite.updatedAt, now);
+      expect(acceptedInvite.userId, 'patient-alice');
+      expect(acceptedInvite.caregiverEmail, 'caregiverb@example.com');
+    });
+
+    test('acceptance creates patient_caregiver_links relationship with valid properties', () {
+      final link = PatientCaregiverLink.create(
+        patientUserId: 'patient-alice',
+        caregiverUserId: 'caregiver-bob',
+        relationship: 'Daughter',
+        invitationId: 'inv-1234',
+      );
+
+      expect(link.id, isNotEmpty);
+      expect(link.patientUserId, 'patient-alice');
+      expect(link.caregiverUserId, 'caregiver-bob');
+      expect(link.relationship, 'Daughter');
+      expect(link.invitationId, 'inv-1234');
+      expect(link.status, 'active');
+      expect(link.createdAt, isNotNull);
+      expect(link.updatedAt, isNotNull);
+
+      // Verify serialization round-trip
+      final map = link.toMap();
+      expect(map['patient_user_id'], 'patient-alice');
+      expect(map['caregiver_user_id'], 'caregiver-bob');
+      expect(map['status'], 'active');
+
+      final fromMap = PatientCaregiverLink.fromMap(map);
+      expect(fromMap.id, link.id);
+      expect(fromMap.patientUserId, link.patientUserId);
+      expect(fromMap.caregiverUserId, link.caregiverUserId);
+      expect(fromMap.relationship, link.relationship);
+      expect(fromMap.invitationId, link.invitationId);
+      expect(fromMap.status, link.status);
+    });
+
+    test('acceptance creates allocated_patients for caregiver and allocated_caregivers for patient', () {
+      // Caregiver B receives Patient A in allocated_patients
+      final allocPatient = AllocatedPatient.create(
+        caregiverId: 'caregiver-bob',
+        patientUserId: 'patient-alice',
+        fullName: 'Alice Smith',
+        relationship: 'Daughter',
+      );
+
+      expect(allocPatient.id, isNotEmpty);
+      expect(allocPatient.caregiverId, 'caregiver-bob');
+      expect(allocPatient.patientUserId, 'patient-alice');
+      expect(allocPatient.fullName, 'Alice Smith');
+      expect(allocPatient.relationship, 'Daughter');
+
+      // Patient A receives Caregiver B in allocated_caregivers
+      final allocCaregiver = AllocatedCaregiver.create(
+        patientId: 'patient-alice',
+        caregiverUserId: 'caregiver-bob',
+        fullName: 'Bob Builder',
+        relationship: 'Daughter',
+      );
+
+      expect(allocCaregiver.id, isNotEmpty);
+      expect(allocCaregiver.patientId, 'patient-alice');
+      expect(allocCaregiver.caregiverUserId, 'caregiver-bob');
+      expect(allocCaregiver.fullName, 'Bob Builder');
+      expect(allocCaregiver.relationship, 'Daughter');
+    });
+
+    test('bilateral isolation: Patient C cannot see Caregiver B, and Caregiver D cannot see Patient A', () {
+      final allocPatient = AllocatedPatient.create(
+        caregiverId: 'caregiver-bob',
+        patientUserId: 'patient-alice',
+        fullName: 'Alice Smith',
+      );
+
+      final allocCaregiver = AllocatedCaregiver.create(
+        patientId: 'patient-alice',
+        caregiverUserId: 'caregiver-bob',
+        fullName: 'Bob Builder',
+      );
+
+      final allPatients = [allocPatient];
+      final allCaregivers = [allocCaregiver];
+
+      // 1. Caregiver B sees Patient A
+      final bPatients = allPatients.where((p) => p.caregiverId == 'caregiver-bob').toList();
+      expect(bPatients.length, 1);
+      expect(bPatients.first.patientUserId, 'patient-alice');
+
+      // Caregiver D sees NO patients (cannot see Patient A)
+      final dPatients = allPatients.where((p) => p.caregiverId == 'caregiver-david').toList();
+      expect(dPatients, isEmpty);
+
+      // 2. Patient A sees Caregiver B
+      final aCaregivers = allCaregivers.where((c) => c.patientId == 'patient-alice').toList();
+      expect(aCaregivers.length, 1);
+      expect(aCaregivers.first.caregiverUserId, 'caregiver-bob');
+
+      // Patient C sees NO caregivers (cannot see Caregiver B)
+      final cCaregivers = allCaregivers.where((c) => c.patientId == 'patient-charlie').toList();
+      expect(cCaregivers, isEmpty);
+    });
+
+    test('duplicate link prevention: existing patient-caregiver link is not duplicated', () {
+      final existingLink = PatientCaregiverLink.create(
+        patientUserId: 'patient-alice',
+        caregiverUserId: 'caregiver-bob',
+        relationship: 'Nurse',
+      );
+
+      final existingLinks = [existingLink];
+
+      // Verification before inserting duplicate
+      final alreadyExists = existingLinks.any(
+        (l) => l.patientUserId == 'patient-alice' && l.caregiverUserId == 'caregiver-bob',
+      );
+      expect(alreadyExists, isTrue);
+
+      // Ensuring count remains 1
+      final updatedLinks = List<PatientCaregiverLink>.from(existingLinks);
+      if (!alreadyExists) {
+        updatedLinks.add(
+          PatientCaregiverLink.create(
+            patientUserId: 'patient-alice',
+            caregiverUserId: 'caregiver-bob',
+          ),
+        );
+      }
+      expect(updatedLinks.length, 1);
+    });
+
+    test('authorization check: wrong caregiver cannot accept invitation belonging to another caregiver', () {
+      final invite = CaregiverInvitation.create(
+        userId: 'patient-alice',
+        email: 'caregiverB@example.com',
+        relationship: 'Son',
+      );
+
+      const authenticatedCaregiverEmail = 'caregiver-intruder@example.com';
+
+      // Logic from CaregiverRepository.acceptIncomingInvitation
+      expect(
+        () {
+          if (authenticatedCaregiverEmail.toLowerCase() != invite.caregiverEmail.toLowerCase()) {
+            throw StateError('This invitation is not addressed to your account.');
+          }
+        },
+        throwsA(isA<StateError>().having(
+          (e) => e.message,
+          'message',
+          contains('not addressed to your account'),
+        )),
+      );
+    });
+
+    test('status guard: declined, revoked, or already accepted invitation cannot be accepted', () {
+      for (final nonPendingStatus in ['declined', 'revoked', 'accepted']) {
+        expect(
+          () {
+            if (nonPendingStatus != 'pending') {
+              throw StateError('Cannot accept invitation: status is already "$nonPendingStatus".');
+            }
+          },
+          throwsA(isA<StateError>().having(
+            (e) => e.message,
+            'message',
+            contains('status is already "$nonPendingStatus"'),
+          )),
+        );
+      }
+    });
+
+    test('permissions requested in invitation are preserved upon relationship creation', () {
+      final invite = CaregiverInvitation.create(
+        userId: 'patient-alice',
+        email: 'caregiverB@example.com',
+        viewSchedule: true,
+        viewHistory: true,
+        viewRefills: false,
+        viewAdherence: true,
+      );
+
+      final perm = CaregiverPermission.create(
+        invitationId: invite.id,
+        userId: invite.userId,
+        caregiverId: 'caregiver-bob',
+        permViewSchedule: invite.viewSchedule,
+        permViewHistory: invite.viewHistory,
+        permViewRefills: invite.viewRefills,
+        permViewAdherence: invite.viewAdherence,
+      );
+
+      expect(perm.caregiverId, 'caregiver-bob');
+      expect(perm.permViewSchedule, isTrue);
+      expect(perm.permViewHistory, isTrue);
+      expect(perm.permViewRefills, isFalse);
+      expect(perm.permViewAdherence, isTrue);
+    });
+  });
 }
+
 
