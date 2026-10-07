@@ -43,6 +43,14 @@ class AuthService {
 
   static bool get isLoggedIn => currentUser != null;
 
+  static bool get isGoogleUser {
+    final metadata = currentUser?.appMetadata;
+    if (metadata == null) return false;
+    if (metadata['provider'] == 'google') return true;
+    final providers = metadata['providers'];
+    return providers is List && providers.contains('google');
+  }
+
   /// Stream of auth state changes (sign-in, sign-out, token refresh).
   static Stream<AuthState> get authStateChanges =>
       _client.auth.onAuthStateChange;
@@ -69,7 +77,7 @@ class AuthService {
     String? phoneNumber,
   }) async {
     final response = await _client.auth.signUp(
-      email: email,
+      email: email.trim().toLowerCase(),
       password: password,
       data: {
         if (fullName != null) 'full_name': fullName,
@@ -103,7 +111,7 @@ class AuthService {
     required String password,
   }) async {
     final response = await _client.auth.signInWithPassword(
-      email: email,
+      email: email.trim().toLowerCase(),
       password: password,
     );
     if (response.user != null) {
@@ -263,7 +271,7 @@ class AuthService {
                 },
                 conflictAlgorithm: ConflictAlgorithm.replace);
           } catch (_) {}
-          return data;
+          return _withAuthMetadataFallback(user, data);
         }
       }
     } catch (_) {}
@@ -276,10 +284,21 @@ class AuthService {
         whereArgs: [user.id],
         limit: 1,
       );
-      if (results.isNotEmpty) return results.first;
+      if (results.isNotEmpty) {
+        return _withAuthMetadataFallback(user, results.first);
+      }
     } catch (_) {}
 
-    return null;
+    final metadataProfile = _withAuthMetadataFallback(user, const {});
+    return metadataProfile.length > 2 ? metadataProfile : null;
+  }
+
+  static Future<bool> needsProfileCompletion() async {
+    final metadata = currentUser?.userMetadata;
+    if (metadata?['profile_completed'] == true) return false;
+
+    final profile = await getProfile();
+    return !_hasRequiredProfileFields(profile);
   }
 
   static Future<void> updateProfile(Map<String, dynamic> updates) async {
@@ -306,6 +325,65 @@ class AuthService {
         where: 'id = ?',
         whereArgs: [user.id],
       );
+    } catch (_) {}
+  }
+
+  /// Saves the required onboarding fields to Supabase and verifies that the
+  /// profile row was updated before allowing profile completion to continue.
+  static Future<void> saveCompletedProfile(
+    Map<String, dynamic> updates,
+  ) async {
+    final user = currentUser;
+    if (user == null) {
+      throw const AuthException('No signed-in user.');
+    }
+
+    final nowIso = DateTime.now().toIso8601String();
+
+    // Persist completion on the Supabase user as well as the profile row. The
+    // marker remains available when a legacy project lacks newer columns.
+    await _client.auth.updateUser(
+      UserAttributes(
+        data: {
+          ...updates,
+          'profile_completed': true,
+          'profile_completed_at': nowIso,
+        },
+      ),
+    );
+
+    // Upsert so a missing profile row cannot block the first Google login.
+    try {
+      await _client.from('profiles').upsert({
+        'id': user.id,
+        ...updates,
+        'updated_at': nowIso,
+      }, onConflict: 'id');
+    } catch (_) {}
+
+    // Keep the completed details available to offline/local profile reads.
+    try {
+      final db = await AppDatabase.instance.database;
+      final changed = await db.update(
+        'profiles',
+        {...updates, 'updated_at': nowIso},
+        where: 'id = ?',
+        whereArgs: [user.id],
+      );
+      if (changed == 0) {
+        await db.insert('profiles', {
+          'id': user.id,
+          ...updates,
+          'preferred_language': 'en',
+          'text_scale_factor': 1.0,
+          'simple_wording': 0,
+          'notification_sound': 1,
+          'notification_vibration': 1,
+          'privacy_safe_previews': 1,
+          'created_at': nowIso,
+          'updated_at': nowIso,
+        });
+      }
     } catch (_) {}
   }
 
@@ -353,6 +431,47 @@ class AuthService {
 
   // ── Private Helpers ───────────────────────────────────────────────────────
 
+  static bool _hasRequiredProfileFields(Map<String, dynamic>? profile) {
+    if (profile == null) return false;
+
+    bool isPresent(String key) {
+      final value = profile[key];
+      return value != null && value.toString().trim().isNotEmpty;
+    }
+
+    return isPresent('full_name') &&
+        isPresent('date_of_birth') &&
+        isPresent('gender') &&
+        isPresent('phone_number');
+  }
+
+  static Map<String, dynamic> _withAuthMetadataFallback(
+    User user,
+    Map<String, dynamic> profile,
+  ) {
+    final merged = Map<String, dynamic>.from(profile);
+    final metadata = user.userMetadata ?? const <String, dynamic>{};
+
+    for (final key in const [
+      'full_name',
+      'date_of_birth',
+      'gender',
+      'phone_number',
+    ]) {
+      final current = merged[key]?.toString().trim();
+      if (current == null || current.isEmpty) {
+        final fallback = metadata[key];
+        if (fallback != null && fallback.toString().trim().isNotEmpty) {
+          merged[key] = fallback;
+        }
+      }
+    }
+
+    merged['id'] ??= user.id;
+    merged['email'] ??= user.email;
+    return merged;
+  }
+
   /// Computes integer age given an ISO date string (YYYY-MM-DD). Returns null if invalid.
   static int? calculateAge(String? dateOfBirthStr) {
     if (dateOfBirthStr == null || dateOfBirthStr.trim().isEmpty) return null;
@@ -379,26 +498,51 @@ class AuthService {
   }) async {
     try {
       final meta = user.userMetadata ?? {};
-      final name = fullName ??
-          meta['full_name'] as String? ??
+      final existing = await _client
+          .from('profiles')
+          .select()
+          .eq('id', user.id)
+          .maybeSingle();
+
+      String? nonEmpty(dynamic value) {
+        final text = value?.toString().trim();
+        return text == null || text.isEmpty ? null : text;
+      }
+
+      // Existing profile details always win during sign-in. This prevents a
+      // Google auth refresh from replacing user-entered fields with nulls.
+      final name = nonEmpty(existing?['full_name']) ??
+          nonEmpty(fullName) ??
+          nonEmpty(meta['full_name']) ??
           user.email?.split('@').first ??
           '';
-      final dob = dateOfBirth ?? meta['date_of_birth'] as String?;
-      final gen = gender ?? meta['gender'] as String?;
-      final phone = phoneNumber ?? meta['phone_number'] as String?;
+      final dob = nonEmpty(existing?['date_of_birth']) ??
+          nonEmpty(dateOfBirth) ??
+          nonEmpty(meta['date_of_birth']);
+      final gen = nonEmpty(existing?['gender']) ??
+          nonEmpty(gender) ??
+          nonEmpty(meta['gender']);
+      final phone = nonEmpty(existing?['phone_number']) ??
+          nonEmpty(phoneNumber) ??
+          nonEmpty(meta['phone_number']);
+      final now = DateTime.now().toIso8601String();
 
       final profileMap = <String, dynamic>{
         'id': user.id,
         'full_name': name,
+        if (existing?['avatar_url'] != null)
+          'avatar_url': existing?['avatar_url'],
         if (dob != null) 'date_of_birth': dob,
         if (gen != null) 'gender': gen,
         if (phone != null) 'phone_number': phone,
-        'preferred_language': 'en',
-        'text_scale_factor': 1.0,
-        'simple_wording': false,
-        'notification_sound': true,
-        'notification_vibration': true,
-        'privacy_safe_previews': true,
+        'preferred_language': existing?['preferred_language'] ?? 'en',
+        'text_scale_factor': existing?['text_scale_factor'] ?? 1.0,
+        'simple_wording': existing?['simple_wording'] ?? false,
+        'notification_sound': existing?['notification_sound'] ?? true,
+        'notification_vibration': existing?['notification_vibration'] ?? true,
+        'privacy_safe_previews': existing?['privacy_safe_previews'] ?? true,
+        'created_at': existing?['created_at'] ?? now,
+        'updated_at': now,
       };
 
       await _client.from('profiles').upsert(profileMap, onConflict: 'id');
@@ -410,17 +554,21 @@ class AuthService {
             {
               'id': user.id,
               'full_name': name,
+              'avatar_url': existing?['avatar_url'],
               'date_of_birth': dob,
               'gender': gen,
               'phone_number': phone,
-              'preferred_language': 'en',
-              'text_scale_factor': 1.0,
-              'simple_wording': 0,
-              'notification_sound': 1,
-              'notification_vibration': 1,
-              'privacy_safe_previews': 1,
-              'created_at': DateTime.now().toIso8601String(),
-              'updated_at': DateTime.now().toIso8601String(),
+              'preferred_language': existing?['preferred_language'] ?? 'en',
+              'text_scale_factor': existing?['text_scale_factor'] ?? 1.0,
+              'simple_wording': existing?['simple_wording'] == true ? 1 : 0,
+              'notification_sound':
+                  existing?['notification_sound'] == false ? 0 : 1,
+              'notification_vibration':
+                  existing?['notification_vibration'] == false ? 0 : 1,
+              'privacy_safe_previews':
+                  existing?['privacy_safe_previews'] == false ? 0 : 1,
+              'created_at': existing?['created_at']?.toString() ?? now,
+              'updated_at': now,
             },
             conflictAlgorithm: ConflictAlgorithm.replace);
       } catch (_) {}

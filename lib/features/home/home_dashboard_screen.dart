@@ -1361,91 +1361,95 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
       children: [
         // Adherence Card
         Expanded(
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 6,
-                  offset: const Offset(0, 1),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Top row: Label + Icon
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Adherence',
-                      style: TextStyle(
-                        color: Color(0xFF545F73),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+          child: InkWell(
+            onTap: () => context.push(RouteNames.adherence),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.03),
+                    blurRadius: 6,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Top row: Label + Icon
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Adherence',
+                        style: TextStyle(
+                          color: Color(0xFF545F73),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFD5E0F8),
-                        borderRadius: BorderRadius.circular(8),
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFD5E0F8),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.bar_chart_rounded,
+                          color: Color(0xFF586377),
+                          size: 18,
+                        ),
                       ),
-                      child: const Icon(
-                        Icons.bar_chart_rounded,
-                        color: Color(0xFF586377),
-                        size: 18,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
 
-                // Percentage & Count
-                Text(
-                  adherencePercent,
-                  style: const TextStyle(
-                    color: Color(0xFF1B1B1B),
-                    fontSize: 30,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.5,
+                  // Percentage & Count
+                  Text(
+                    adherencePercent,
+                    style: const TextStyle(
+                      color: Color(0xFF1B1B1B),
+                      fontSize: 30,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.5,
+                    ),
                   ),
-                ),
-                Text(
-                  adherenceTakenDesc,
-                  style: const TextStyle(
-                    color: Color(0xFF545F73),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
+                  Text(
+                    adherenceTakenDesc,
+                    style: const TextStyle(
+                      color: Color(0xFF545F73),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 10),
+                  const SizedBox(height: 10),
 
-                // Progress Bar
-                Container(
-                  width: double.infinity,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEEEEEE),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: FractionallySizedBox(
-                    alignment: Alignment.centerLeft,
-                    widthFactor: adherenceFactor,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF157F5D),
-                        borderRadius: BorderRadius.circular(999),
+                  // Progress Bar
+                  Container(
+                    width: double.infinity,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEEEEEE),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: FractionallySizedBox(
+                      alignment: Alignment.centerLeft,
+                      widthFactor: adherenceFactor,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF157F5D),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
