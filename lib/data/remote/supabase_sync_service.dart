@@ -111,6 +111,26 @@ class SupabaseSyncService {
       for (final row in stocks) {
         await pushStockEvent(row);
       }
+
+      // 6. Caregiver Invitations
+      final invites = await db.query(
+        'caregiver_invitations',
+        where: 'user_id = ?',
+        whereArgs: [user.id],
+      );
+      for (final row in invites) {
+        await pushCaregiverInvitation(row);
+      }
+
+      // 7. Caregiver Permissions
+      final perms = await db.query(
+        'caregiver_permissions',
+        where: 'user_id = ?',
+        whereArgs: [user.id],
+      );
+      for (final row in perms) {
+        await pushCaregiverPermission(row);
+      }
     } catch (e) {
       // ignore: avoid_print
       print('SupabaseSyncService.pushAllLocalDataToCloud error: $e');
@@ -155,6 +175,18 @@ class SupabaseSyncService {
   static Future<void> pushStockEvent(Map<String, dynamic> data) async {
     if (!AuthService.isLoggedIn) return;
     await _upsert('stock_events', _toCloud(data));
+  }
+
+  /// Push a caregiver invitation to Supabase.
+  static Future<void> pushCaregiverInvitation(Map<String, dynamic> data) async {
+    if (!AuthService.isLoggedIn) return;
+    await _upsert('caregiver_invitations', _toCloud(data));
+  }
+
+  /// Push caregiver permissions to Supabase.
+  static Future<void> pushCaregiverPermission(Map<String, dynamic> data) async {
+    if (!AuthService.isLoggedIn) return;
+    await _upsert('caregiver_permissions', _toCloud(data));
   }
 
   // ── Private pull helpers ──────────────────────────────────────────────────

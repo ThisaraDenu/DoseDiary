@@ -698,6 +698,167 @@ class CaregiverRepository {
       whereArgs: [caregiverId],
     );
   }
+
+  // ── Caregiver Invitations (Patient ↔ Caregiver Onboarding) ───────────────────
+
+  /// Returns all caregiver invitations created by this patient from SQLite.
+  Future<List<CaregiverInvitation>> getInvitations({String? userId}) async {
+    final uid = userId ?? _activeUserId;
+    final db = await _database;
+    final rows = await db.rawQuery('''
+      SELECT i.*,
+             p.perm_view_schedule,
+             p.perm_view_history,
+             p.perm_view_refills,
+             p.perm_view_adherence
+      FROM caregiver_invitations i
+      LEFT JOIN caregiver_permissions p ON p.invitation_id = i.id
+      WHERE i.user_id = ?
+      ORDER BY i.created_at DESC
+    ''', [uid]);
+
+    return rows.map((r) => CaregiverInvitation.fromMap(r)).toList();
+  }
+
+  /// Validates the invitation inputs against all business rules.
+  /// Returns null if valid, or a descriptive error message if invalid.
+  Future<String?> validateInvitation({
+    required String caregiverEmail,
+    String? patientUserId,
+    String? patientUserEmail,
+  }) async {
+    final email = caregiverEmail.trim().toLowerCase();
+
+    if (email.isEmpty) {
+      return 'Please enter a caregiver email address.';
+    }
+
+    final emailRegex = RegExp(r'^[\w\.\+\-]+@([\w\-]+\.)+[a-zA-Z]{2,}$');
+    if (!emailRegex.hasMatch(email)) {
+      return 'Please enter a valid email address.';
+    }
+
+    // Rule: Prevent linking the patient to themselves
+    final currentEmail = (patientUserEmail ?? AuthService.currentUser?.email)?.trim().toLowerCase();
+    if (currentEmail != null && currentEmail.isNotEmpty && currentEmail == email) {
+      return 'You cannot invite yourself as a caregiver.';
+    }
+
+    final uid = patientUserId ?? _activeUserId;
+    final db = await _database;
+
+    // Rule: Prevent duplicate pending caregiver invitations
+    final pendingRows = await db.query(
+      'caregiver_invitations',
+      where: 'user_id = ? AND LOWER(caregiver_email) = ? AND status = ?',
+      whereArgs: [uid, email, 'pending'],
+      limit: 1,
+    );
+    if (pendingRows.isNotEmpty) {
+      return 'An invitation to this caregiver is already pending.';
+    }
+
+    // Rule: Prevent adding the same caregiver twice (already active or accepted)
+    final activeRows = await db.query(
+      'caregiver_invitations',
+      where: 'user_id = ? AND LOWER(caregiver_email) = ? AND (status = ? OR status = ?)',
+      whereArgs: [uid, email, 'accepted', 'active'],
+      limit: 1,
+    );
+    if (activeRows.isNotEmpty) {
+      return 'This caregiver is already connected to your account.';
+    }
+
+    return null;
+  }
+
+  /// Creates an invitation record and associated permissions in local SQLite,
+  /// then pushes to Supabase asynchronously. Caregiver access is not granted
+  /// immediately (status remains 'pending').
+  Future<CaregiverInvitation> createInvitation({
+    required String caregiverEmail,
+    String relationship = 'Family member',
+    bool viewSchedule = true,
+    bool viewHistory = true,
+    bool viewRefills = false,
+    bool viewAdherence = true,
+    String? patientUserId,
+    String? patientUserEmail,
+  }) async {
+    final validationError = await validateInvitation(
+      caregiverEmail: caregiverEmail,
+      patientUserId: patientUserId,
+      patientUserEmail: patientUserEmail,
+    );
+    if (validationError != null) {
+      throw ArgumentError(validationError);
+    }
+
+    final uid = patientUserId ?? _activeUserId;
+    final db = await _database;
+    final normalizedEmail = caregiverEmail.trim().toLowerCase();
+
+    final invitation = CaregiverInvitation.create(
+      userId: uid,
+      email: normalizedEmail,
+      relationship: relationship.trim().isEmpty ? 'Family member' : relationship.trim(),
+      status: 'pending',
+      viewSchedule: viewSchedule,
+      viewHistory: viewHistory,
+      viewRefills: viewRefills,
+      viewAdherence: viewAdherence,
+    );
+
+    final permission = CaregiverPermission.create(
+      invitationId: invitation.id,
+      userId: uid,
+      permViewSchedule: viewSchedule,
+      permViewHistory: viewHistory,
+      permViewRefills: viewRefills,
+      permViewAdherence: viewAdherence,
+    );
+
+    await db.transaction((txn) async {
+      await txn.insert(
+        'caregiver_invitations',
+        invitation.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      await txn.insert(
+        'caregiver_permissions',
+        permission.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    });
+
+    // Sync to Supabase cloud asynchronously
+    SupabaseSyncService.pushCaregiverInvitation(invitation.toMap()).ignore();
+    SupabaseSyncService.pushCaregiverPermission(permission.toMap()).ignore();
+
+    return invitation;
+  }
+
+  /// Revokes an invitation by ID, updating status to 'revoked' and syncing to Supabase.
+  Future<void> revokeInvitation(String invitationId) async {
+    final db = await _database;
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+    await db.update(
+      'caregiver_invitations',
+      {'status': 'revoked', 'updated_at': nowIso},
+      where: 'id = ?',
+      whereArgs: [invitationId],
+    );
+
+    final rows = await db.query(
+      'caregiver_invitations',
+      where: 'id = ?',
+      whereArgs: [invitationId],
+      limit: 1,
+    );
+    if (rows.isNotEmpty) {
+      SupabaseSyncService.pushCaregiverInvitation(rows.first).ignore();
+    }
+  }
 }
 
 final caregiverRepositoryProvider = Provider<CaregiverRepository>((ref) {
@@ -709,5 +870,11 @@ final caregiverRepositoryProvider = Provider<CaregiverRepository>((ref) {
 final patientCaregiversListProvider = FutureProvider<List<AllocatedCaregiver>>((ref) async {
   final repo = ref.watch(caregiverRepositoryProvider);
   return repo.getCaregiversForPatient();
+});
+
+/// Patient Mode: all caregiver invitations created by the current patient.
+final caregiversProvider = FutureProvider<List<CaregiverInvitation>>((ref) async {
+  final repo = ref.watch(caregiverRepositoryProvider);
+  return repo.getInvitations();
 });
 
