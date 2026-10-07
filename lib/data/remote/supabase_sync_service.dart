@@ -33,6 +33,9 @@ class SupabaseSyncService {
       await _pullStockEvents(db, user.id);
       await _pullCaregiverInvitations(db, user.id);
       await _pullCaregiverPermissions(db, user.id);
+      await _pullPatientCaregiverLinks(db, user.id);
+      await _pullAllocatedPatients(db, user.id);
+      await _pullAllocatedCaregivers(db, user.id);
       if (user.email != null && user.email!.isNotEmpty) {
         await _pullIncomingCaregiverInvitations(db, user.email!);
       }
@@ -133,6 +136,36 @@ class SupabaseSyncService {
       );
       for (final row in perms) {
         await pushCaregiverPermission(row);
+      }
+
+      // 8. Patient-Caregiver Links
+      final links = await db.query(
+        'patient_caregiver_links',
+        where: 'patient_user_id = ? OR caregiver_user_id = ?',
+        whereArgs: [user.id, user.id],
+      );
+      for (final row in links) {
+        await pushPatientCaregiverLink(row);
+      }
+
+      // 9. Allocated Patients
+      final allocPatients = await db.query(
+        'allocated_patients',
+        where: 'caregiver_id = ?',
+        whereArgs: [user.id],
+      );
+      for (final row in allocPatients) {
+        await pushAllocatedPatient(row);
+      }
+
+      // 10. Allocated Caregivers
+      final allocCaregivers = await db.query(
+        'allocated_caregivers',
+        where: 'patient_id = ?',
+        whereArgs: [user.id],
+      );
+      for (final row in allocCaregivers) {
+        await pushAllocatedCaregiver(row);
       }
     } catch (e) {
       // ignore: avoid_print
@@ -315,6 +348,48 @@ class SupabaseSyncService {
     final database = await db.database;
     for (final row in rows) {
       await database.insert('caregiver_invitations', _fromCloud(row),
+          conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+  }
+
+  static Future<void> _pullPatientCaregiverLinks(
+      AppDatabase db, String userId) async {
+    final rows = await _client
+        .from('patient_caregiver_links')
+        .select()
+        .or('patient_user_id.eq.$userId,caregiver_user_id.eq.$userId');
+
+    final database = await db.database;
+    for (final row in rows) {
+      await database.insert('patient_caregiver_links', _fromCloud(row),
+          conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+  }
+
+  static Future<void> _pullAllocatedPatients(
+      AppDatabase db, String userId) async {
+    final rows = await _client
+        .from('allocated_patients')
+        .select()
+        .eq('caregiver_id', userId);
+
+    final database = await db.database;
+    for (final row in rows) {
+      await database.insert('allocated_patients', _fromCloud(row),
+          conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+  }
+
+  static Future<void> _pullAllocatedCaregivers(
+      AppDatabase db, String userId) async {
+    final rows = await _client
+        .from('allocated_caregivers')
+        .select()
+        .eq('patient_id', userId);
+
+    final database = await db.database;
+    for (final row in rows) {
+      await database.insert('allocated_caregivers', _fromCloud(row),
           conflictAlgorithm: ConflictAlgorithm.replace);
     }
   }

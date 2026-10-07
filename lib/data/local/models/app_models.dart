@@ -1053,6 +1053,33 @@ class CaregiverPermission {
     );
   }
 
+  CaregiverPermission copyWith({
+    String? caregiverId,
+    bool? permViewSchedule,
+    bool? permViewHistory,
+    bool? permViewRefills,
+    bool? permViewAdherence,
+    bool? alertImportantOnly,
+    int? retryCount,
+    int? gracePeriodMinutes,
+    DateTime? updatedAt,
+  }) =>
+      CaregiverPermission(
+        id: id,
+        invitationId: invitationId,
+        userId: userId,
+        caregiverId: caregiverId ?? this.caregiverId,
+        permViewSchedule: permViewSchedule ?? this.permViewSchedule,
+        permViewHistory: permViewHistory ?? this.permViewHistory,
+        permViewRefills: permViewRefills ?? this.permViewRefills,
+        permViewAdherence: permViewAdherence ?? this.permViewAdherence,
+        alertImportantOnly: alertImportantOnly ?? this.alertImportantOnly,
+        retryCount: retryCount ?? this.retryCount,
+        gracePeriodMinutes: gracePeriodMinutes ?? this.gracePeriodMinutes,
+        createdAt: createdAt,
+        updatedAt: updatedAt ?? DateTime.now().toUtc(),
+      );
+
   Map<String, dynamic> toMap() => {
         'id': id,
         'invitation_id': invitationId,

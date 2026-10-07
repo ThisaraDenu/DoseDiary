@@ -240,6 +240,21 @@ class _CaregiverCard extends ConsumerWidget {
           const SizedBox(height: AppDimensions.stackLg),
           Row(
             children: [
+              if (statusLower == 'accepted' || statusLower == 'active') ...[
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _handleEdit(context, ref),
+                    icon: const Icon(Icons.tune_rounded, size: 16),
+                    label: const Text('Edit Access'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primaryAction,
+                      side: const BorderSide(color: AppColors.primaryAction),
+                      minimumSize: const Size(0, 44),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
               Expanded(
                 child: OutlinedButton(
                   onPressed: () => _handleAction(context, ref),
@@ -268,6 +283,133 @@ class _CaregiverCard extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _handleEdit(BuildContext context, WidgetRef ref) async {
+    final relCtrl = TextEditingController(text: cg.relationship);
+    bool viewSchedule = cg.viewSchedule;
+    bool viewHistory = cg.viewHistory;
+    bool viewRefills = cg.viewRefills;
+    bool viewAdherence = cg.viewAdherence;
+
+    final updated = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setSheetState) => Container(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+          ),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE2E2E2),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    const Icon(Icons.tune_rounded, color: AppColors.primaryAction, size: 22),
+                    const SizedBox(width: 8),
+                    Text('Edit Caregiver Access', style: AppTextStyles.headlineMd()),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text('Manage permissions and relationship for ${cg.email}',
+                    style: AppTextStyles.caption(color: AppColors.textSecondary)),
+                const SizedBox(height: 16),
+                Text('Relationship', style: AppTextStyles.bodyBold()),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: relCtrl,
+                  decoration: const InputDecoration(
+                    hintText: 'e.g. Daughter, Nurse, Brother',
+                    contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text('Permissions', style: AppTextStyles.labelMd()),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  title: const Text('Daily schedule'),
+                  value: viewSchedule,
+                  onChanged: (v) => setSheetState(() => viewSchedule = v),
+                  activeColor: AppColors.primaryAction,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                SwitchListTile(
+                  title: const Text('Dose history'),
+                  value: viewHistory,
+                  onChanged: (v) => setSheetState(() => viewHistory = v),
+                  activeColor: AppColors.primaryAction,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                SwitchListTile(
+                  title: const Text('Adherence reports'),
+                  value: viewAdherence,
+                  onChanged: (v) => setSheetState(() => viewAdherence = v),
+                  activeColor: AppColors.primaryAction,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                SwitchListTile(
+                  title: const Text('Refill reminders'),
+                  value: viewRefills,
+                  onChanged: (v) => setSheetState(() => viewRefills = v),
+                  activeColor: AppColors.primaryAction,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: DdButton(
+                    label: 'Save Changes',
+                    onPressed: () => Navigator.pop(ctx, true),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (updated == true) {
+      await ref.read(caregiverRepositoryProvider).updateCaregiverRelationshipAndPermissions(
+        invitationId: cg.id,
+        relationship: relCtrl.text.trim(),
+        viewSchedule: viewSchedule,
+        viewHistory: viewHistory,
+        viewRefills: viewRefills,
+        viewAdherence: viewAdherence,
+      );
+      ref.invalidate(caregiversProvider);
+      ref.invalidate(patientCaregiversListProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Updated access for ${cg.email}'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _handleAction(BuildContext context, WidgetRef ref) async {

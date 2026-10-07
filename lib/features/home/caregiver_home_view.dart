@@ -60,6 +60,14 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
     final allocatedPatients = allocatedPatientsAsync.valueOrNull ?? [];
     final activePatient = allocatedPatients.isNotEmpty ? allocatedPatients.first : null;
 
+    final permsAsync = activePatient?.patientUserId != null
+        ? ref.watch(patientPermissionsProvider(activePatient!.patientUserId!))
+        : null;
+    final perms = permsAsync?.valueOrNull;
+    final canViewSchedule = perms?.permViewSchedule ?? true;
+    final canViewAdherence = perms?.permViewAdherence ?? true;
+    final canViewRefills = perms?.permViewRefills ?? true;
+
     final patientDisplayName = activePatient?.fullName ??
         (widget.userName.trim().isNotEmpty ? widget.userName : 'Patient');
     final patientFirstName = activePatient != null
@@ -77,22 +85,36 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
         _buildPatientTelemetryCard(context, activePatient),
         const SizedBox(height: 20),
 
-        // 2. Urgent Reminder Banner Card (Real Next Dose)
-        if (nextOcc != null) ...[
+        // 2. Urgent Reminder Banner Card (Real Next Dose) — only if schedule permitted
+        if (canViewSchedule && nextOcc != null) ...[
           _buildUrgentReminderCard(nextOcc, nextMed, now, patientFirstName),
           const SizedBox(height: 20),
         ],
 
         // 3. Today's Regimen (Caregiver View)
-        _buildRegimenSection(dateStr, occs, meds, now, patientFirstName),
+        if (canViewSchedule)
+          _buildRegimenSection(dateStr, occs, meds, now, patientFirstName)
+        else
+          _buildPermissionRestrictedCard(
+            title: 'Schedule Access Restricted',
+            message: '$patientFirstName has not granted permission to view their daily schedule.',
+            icon: Icons.calendar_today_outlined,
+          ),
         const SizedBox(height: 24),
 
         // 4. Caregiver Insights & Weekly Adherence Hub
-        _buildAdherenceCard(weeklyAdherenceAsync, lowStockAsync, lowestStockAsync),
+        if (canViewAdherence)
+          _buildAdherenceCard(weeklyAdherenceAsync, lowStockAsync, lowestStockAsync)
+        else
+          _buildPermissionRestrictedCard(
+            title: 'Adherence Access Restricted',
+            message: '$patientFirstName has not granted permission to view adherence reports.',
+            icon: Icons.insights_outlined,
+          ),
         const SizedBox(height: 24),
 
         // 5. Fast Caregiver Utility Grid (Care Actions)
-        _buildCareActionsGrid(context, meds, patientDisplayName),
+        _buildCareActionsGrid(context, canViewRefills ? meds : [], patientDisplayName),
       ],
     );
   }
@@ -351,15 +373,49 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                     padding: EdgeInsets.zero,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     onSelected: (value) async {
-                      if (value == 'add') {
+                      if (value == 'edit') {
+                        _showEditPatientSheet(context, patient);
+                      } else if (value == 'add') {
                         _showAddPatientSheet(context);
-                      } else if (value == 'remove') {
-                        await ref.read(patientRepositoryProvider).removeAllocatedPatient(patient.id);
-                        ref.invalidate(allocatedPatientsProvider);
-                        widget.onShowToast('Removed ${patient.fullName} from allocated patients.');
+                      } else if (value == 'disconnect') {
+                        final confirmed = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Disconnect Patient'),
+                            content: Text(
+                              'Are you sure you want to disconnect from ${patient.fullName}? You will no longer be able to monitor their regimen.',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, false),
+                                child: const Text('Cancel'),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, true),
+                                child: const Text('Disconnect', style: TextStyle(color: Color(0xFFDC143C))),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirmed == true) {
+                          await ref.read(patientRepositoryProvider).disconnectPatient(patientId: patient.id);
+                          ref.invalidate(allocatedPatientsProvider);
+                          ref.invalidate(caregiverPatientsProvider);
+                          widget.onShowToast('Disconnected from ${patient.fullName}.');
+                        }
                       }
                     },
                     itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'edit',
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit_rounded, size: 18, color: Color(0xFF1B1B1B)),
+                            SizedBox(width: 8),
+                            Text('Edit Patient Details'),
+                          ],
+                        ),
+                      ),
                       const PopupMenuItem(
                         value: 'add',
                         child: Row(
@@ -371,12 +427,12 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                         ),
                       ),
                       const PopupMenuItem(
-                        value: 'remove',
+                        value: 'disconnect',
                         child: Row(
                           children: [
-                            Icon(Icons.person_remove_rounded, size: 18, color: Color(0xFFDC143C)),
+                            Icon(Icons.link_off_rounded, size: 18, color: Color(0xFFDC143C)),
                             SizedBox(width: 8),
-                            Text('Remove Patient', style: TextStyle(color: Color(0xFFDC143C))),
+                            Text('Disconnect Patient', style: TextStyle(color: Color(0xFFDC143C))),
                           ],
                         ),
                       ),
@@ -675,6 +731,232 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
           },
         );
       },
+    );
+  }
+
+  void _showEditPatientSheet(BuildContext context, AllocatedPatient patient) {
+    final phoneController = TextEditingController(text: patient.phoneNumber ?? '');
+    final locationController = TextEditingController(text: patient.location);
+    String selectedRelationship = patient.relationship;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Container(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+              ),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE2E2E2),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        const Icon(Icons.edit_rounded, color: Color(0xFFDC143C), size: 24),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Edit ${patient.fullName}',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1B1B1B),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Update relationship and contact details. Account credentials and privacy settings are managed by the patient.',
+                      style: TextStyle(fontSize: 12.5, color: Color(0xFF545F73)),
+                    ),
+                    const SizedBox(height: 18),
+
+                    // Relationship
+                    const Text('Relationship', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<String>(
+                      value: [
+                        'Mother',
+                        'Father',
+                        'Spouse',
+                        'Child',
+                        'Grandparent',
+                        'Patient',
+                        'Other',
+                      ].contains(selectedRelationship)
+                          ? selectedRelationship
+                          : 'Other',
+                      items: const [
+                        DropdownMenuItem(value: 'Mother', child: Text('Mother')),
+                        DropdownMenuItem(value: 'Father', child: Text('Father')),
+                        DropdownMenuItem(value: 'Spouse', child: Text('Spouse')),
+                        DropdownMenuItem(value: 'Child', child: Text('Child / Dependent')),
+                        DropdownMenuItem(value: 'Grandparent', child: Text('Grandparent')),
+                        DropdownMenuItem(value: 'Patient', child: Text('Patient / Client')),
+                        DropdownMenuItem(value: 'Other', child: Text('Other')),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) setSheetState(() => selectedRelationship = val);
+                      },
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: const Color(0xFFF7F7F7),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Location
+                    const Text('Location', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: locationController,
+                      decoration: InputDecoration(
+                        hintText: 'e.g. Colombo Home',
+                        filled: true,
+                        fillColor: const Color(0xFFF7F7F7),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Phone Number
+                    const Text('Phone Number (Optional)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: phoneController,
+                      keyboardType: TextInputType.phone,
+                      decoration: InputDecoration(
+                        hintText: 'e.g. +94 77 123 4567',
+                        filled: true,
+                        fillColor: const Color(0xFFF7F7F7),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+
+                    // Submit button
+                    ElevatedButton(
+                      onPressed: () async {
+                        await ref.read(patientRepositoryProvider).updateAllocatedPatient(
+                              patientId: patient.id,
+                              relationship: selectedRelationship,
+                              location: locationController.text.trim().isNotEmpty
+                                  ? locationController.text.trim()
+                                  : patient.location,
+                              phoneNumber: phoneController.text.trim().isNotEmpty
+                                  ? phoneController.text.trim()
+                                  : null,
+                            );
+                        ref.invalidate(allocatedPatientsProvider);
+                        if (context.mounted) {
+                          Navigator.of(ctx).pop();
+                        }
+                        widget.onShowToast('Updated details for ${patient.fullName}.');
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFDC143C),
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(double.infinity, 48),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                      ),
+                      child: const Text('Save Changes'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildPermissionRestrictedCard({
+    required String title,
+    required String message,
+    required IconData icon,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E2E2)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF5F5F5),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: const Color(0xFF757575), size: 24),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF1B1B1B),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  message,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    color: Color(0xFF545F73),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

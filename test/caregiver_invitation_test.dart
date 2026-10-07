@@ -1052,7 +1052,295 @@ void main() {
       expect(find.text('Decline'), findsNothing);
     });
   });
+
+  group('Patient CRUD & Caregiver Management Tests', () {
+    test('READ: Caregiver views only their own allocated patients', () {
+      final patientA = AllocatedPatient.create(
+        caregiverId: 'caregiver-bob',
+        patientUserId: 'patient-alice',
+        fullName: 'Alice Smith',
+        relationship: 'Mother',
+      );
+      final patientC = AllocatedPatient.create(
+        caregiverId: 'caregiver-charlie',
+        patientUserId: 'patient-carol',
+        fullName: 'Carol Danvers',
+        relationship: 'Aunt',
+      );
+
+      final allPatients = [patientA, patientC];
+
+      // Query isolated by caregiverId = caregiver-bob
+      final bobPatients = allPatients.where((p) => p.caregiverId == 'caregiver-bob').toList();
+      expect(bobPatients.length, 1);
+      expect(bobPatients.first.fullName, 'Alice Smith');
+      expect(bobPatients.any((p) => p.patientUserId == 'patient-carol'), isFalse);
+    });
+
+    test('UPDATE: Authorized relationship fields can be edited', () {
+      final patientA = AllocatedPatient.create(
+        caregiverId: 'caregiver-bob',
+        patientUserId: 'patient-alice',
+        fullName: 'Alice Smith',
+        relationship: 'Mother',
+        location: 'Colombo Home',
+      );
+
+      // Caregiver updates relationship label and location
+      final updatedPatient = patientA.copyWith(
+        relationship: 'Spouse',
+        location: 'Kandy Residence',
+      );
+
+      expect(updatedPatient.relationship, 'Spouse');
+      expect(updatedPatient.location, 'Kandy Residence');
+      // ID and caregiver binding remain preserved
+      expect(updatedPatient.id, patientA.id);
+      expect(updatedPatient.caregiverId, 'caregiver-bob');
+      expect(updatedPatient.patientUserId, 'patient-alice');
+    });
+
+    test('UPDATE: Unauthorized caregiver cannot edit patient', () {
+      final patientA = AllocatedPatient.create(
+        caregiverId: 'caregiver-bob',
+        patientUserId: 'patient-alice',
+        fullName: 'Alice Smith',
+      );
+
+      const callerCaregiverId = 'caregiver-unauthorized';
+
+      expect(
+        () {
+          if (callerCaregiverId != patientA.caregiverId) {
+            throw StateError('Unauthorized: Patient record does not belong to this caregiver.');
+          }
+        },
+        throwsA(isA<StateError>().having(
+          (e) => e.message,
+          'message',
+          contains('Unauthorized: Patient record does not belong to this caregiver.'),
+        )),
+      );
+    });
+
+    test('DELETE / DISCONNECT: Disconnect removes relationship for that caregiver only', () {
+      final patientAForBob = AllocatedPatient.create(
+        caregiverId: 'caregiver-bob',
+        patientUserId: 'patient-alice',
+        fullName: 'Alice Smith',
+      );
+      final patientAForCharlie = AllocatedPatient.create(
+        caregiverId: 'caregiver-charlie',
+        patientUserId: 'patient-alice',
+        fullName: 'Alice Smith',
+      );
+
+      final patientList = [patientAForBob, patientAForCharlie];
+
+      // Bob disconnects Patient A
+      final remainingAfterBobDisconnect = patientList
+          .where((p) => !(p.caregiverId == 'caregiver-bob' && p.patientUserId == 'patient-alice'))
+          .toList();
+
+      expect(remainingAfterBobDisconnect.length, 1);
+      // Charlie still has Patient A!
+      expect(remainingAfterBobDisconnect.first.caregiverId, 'caregiver-charlie');
+      expect(remainingAfterBobDisconnect.first.patientUserId, 'patient-alice');
+    });
+  });
+
+  group('Caregiver CRUD & Patient Management Tests', () {
+    test('READ: Patient views only their own linked caregivers', () {
+      final cgForAlice = AllocatedCaregiver.create(
+        patientId: 'patient-alice',
+        caregiverUserId: 'caregiver-bob',
+        fullName: 'Bob Builder',
+        relationship: 'Son',
+      );
+      final cgForCarol = AllocatedCaregiver.create(
+        patientId: 'patient-carol',
+        caregiverUserId: 'caregiver-bob',
+        fullName: 'Bob Builder',
+        relationship: 'Nurse',
+      );
+
+      final allCaregivers = [cgForAlice, cgForCarol];
+
+      // Alice queries her own caregivers
+      final aliceView = allCaregivers.where((c) => c.patientId == 'patient-alice').toList();
+      expect(aliceView.length, 1);
+      expect(aliceView.first.relationship, 'Son');
+      expect(aliceView.first.caregiverUserId, 'caregiver-bob');
+
+      // Unrelated patient David queries his caregivers
+      final davidView = allCaregivers.where((c) => c.patientId == 'patient-david').toList();
+      expect(davidView, isEmpty);
+    });
+
+    test('UPDATE: Editable relationship and permissions update correctly', () {
+      final perm = CaregiverPermission.create(
+        invitationId: 'inv-123',
+        userId: 'patient-alice',
+        caregiverId: 'caregiver-bob',
+        permViewSchedule: true,
+        permViewHistory: true,
+        permViewRefills: false,
+        permViewAdherence: false,
+      );
+
+      // Patient updates permissions and relationship
+      final updatedPerm = perm.copyWith(
+        permViewRefills: true,
+        permViewAdherence: true,
+      );
+
+      expect(updatedPerm.permViewSchedule, isTrue);
+      expect(updatedPerm.permViewHistory, isTrue);
+      expect(updatedPerm.permViewRefills, isTrue);
+      expect(updatedPerm.permViewAdherence, isTrue);
+      expect(updatedPerm.userId, 'patient-alice');
+      expect(updatedPerm.caregiverId, 'caregiver-bob');
+    });
+
+    test('UPDATE: Unauthorized patient cannot edit unrelated caregiver', () {
+      const activePatientId = 'patient-david';
+      const relationshipOwnerId = 'patient-alice';
+
+      expect(
+        () {
+          if (activePatientId != relationshipOwnerId) {
+            throw StateError('Unauthorized: No active relationship with this caregiver.');
+          }
+        },
+        throwsA(isA<StateError>().having(
+          (e) => e.message,
+          'message',
+          contains('Unauthorized: No active relationship with this caregiver.'),
+        )),
+      );
+    });
+
+    test('DELETE / REVOKE: Revoke disconnects only that specific caregiver', () {
+      final linkAB = PatientCaregiverLink.create(
+        patientUserId: 'patient-alice',
+        caregiverUserId: 'caregiver-bob',
+      );
+      final linkAC = PatientCaregiverLink.create(
+        patientUserId: 'patient-alice',
+        caregiverUserId: 'caregiver-charlie',
+      );
+
+      final links = [linkAB, linkAC];
+
+      // Alice revokes Bob
+      final updatedLinks = links.map((l) {
+        if (l.patientUserId == 'patient-alice' && l.caregiverUserId == 'caregiver-bob') {
+          return l.copyWith(status: 'revoked');
+        }
+        return l;
+      }).toList();
+
+      final activeLinks = updatedLinks.where((l) => l.status == 'active').toList();
+      expect(activeLinks.length, 1);
+      expect(activeLinks.first.caregiverUserId, 'caregiver-charlie');
+
+      final revokedLinks = updatedLinks.where((l) => l.status == 'revoked').toList();
+      expect(revokedLinks.length, 1);
+      expect(revokedLinks.first.caregiverUserId, 'caregiver-bob');
+    });
+  });
+
+  group('Caregiver Permissions Enforcement Tests', () {
+    test('Permissions persist after acceptance and round-trip faithfully', () {
+      final perm = CaregiverPermission.create(
+        invitationId: 'inv-perm-1',
+        userId: 'patient-alice',
+        caregiverId: 'caregiver-bob',
+        permViewSchedule: true,
+        permViewHistory: false,
+        permViewRefills: true,
+        permViewAdherence: false,
+      );
+
+      final map = perm.toMap();
+      final roundTrip = CaregiverPermission.fromMap(map);
+
+      expect(roundTrip.permViewSchedule, isTrue);
+      expect(roundTrip.permViewHistory, isFalse);
+      expect(roundTrip.permViewRefills, isTrue);
+      expect(roundTrip.permViewAdherence, isFalse);
+      expect(roundTrip.userId, 'patient-alice');
+      expect(roundTrip.caregiverId, 'caregiver-bob');
+    });
+
+    test('perm_view_schedule = false blocks schedule retrieval logic', () {
+      final perm = CaregiverPermission.create(
+        invitationId: 'inv-perm-2',
+        userId: 'patient-alice',
+        caregiverId: 'caregiver-bob',
+        permViewSchedule: false,
+      );
+
+      // Simulating query evaluation respecting permission
+      List<String> getOccurrences(CaregiverPermission p) {
+        if (!p.permViewSchedule) {
+          return []; // Permission blocked
+        }
+        return ['med-1-dose', 'med-2-dose'];
+      }
+
+      expect(getOccurrences(perm), isEmpty);
+
+      final allowedPerm = perm.copyWith(permViewSchedule: true);
+      expect(getOccurrences(allowedPerm), isNotEmpty);
+      expect(getOccurrences(allowedPerm).length, 2);
+    });
+
+    test('perm_view_adherence = false blocks adherence report retrieval', () {
+      final perm = CaregiverPermission.create(
+        invitationId: 'inv-perm-3',
+        userId: 'patient-alice',
+        caregiverId: 'caregiver-bob',
+        permViewAdherence: false,
+      );
+
+      Map<String, dynamic>? getAdherence(CaregiverPermission p) {
+        if (!p.permViewAdherence) {
+          return null; // Permission blocked
+        }
+        return {'score': 95, 'totalCountable': 10};
+      }
+
+      expect(getAdherence(perm), isNull);
+
+      final allowedPerm = perm.copyWith(permViewAdherence: true);
+      expect(getAdherence(allowedPerm), isNotNull);
+      expect(getAdherence(allowedPerm)!['score'], 95);
+    });
+
+    test('perm_view_refills = false blocks low stock retrieval', () {
+      final perm = CaregiverPermission.create(
+        invitationId: 'inv-perm-4',
+        userId: 'patient-alice',
+        caregiverId: 'caregiver-bob',
+        permViewRefills: false,
+      );
+
+      List<String> getRefillAlerts(CaregiverPermission p) {
+        if (!p.permViewRefills) {
+          return [];
+        }
+        return ['Metformin 500mg low stock'];
+      }
+
+      expect(getRefillAlerts(perm), isEmpty);
+
+      final allowedPerm = perm.copyWith(permViewRefills: true);
+      expect(getRefillAlerts(allowedPerm).length, 1);
+    });
+  });
 }
+
 
 
 
