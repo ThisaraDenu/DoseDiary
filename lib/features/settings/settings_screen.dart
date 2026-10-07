@@ -6,9 +6,9 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/theme/app_dimensions.dart';
 import '../../core/widgets/dd_logo.dart';
+import '../../core/widgets/dd_avatar.dart';
 import '../../core/router/route_names.dart';
 import '../../data/remote/auth_service.dart';
-import '../../data/repositories/app_repositories.dart';
 import '../home/home_dashboard_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -20,6 +20,7 @@ class SettingsScreen extends ConsumerWidget {
     final userName = user?.userMetadata?['full_name'] as String? ??
         (user?.email?.split('@').first ?? 'Guest User');
     final userEmail = user?.email ?? 'Not signed in';
+    final avatar = ref.watch(userAvatarUrlProvider);
 
     return Scaffold(
       backgroundColor: AppColors.scaffoldBackground,
@@ -36,21 +37,46 @@ class SettingsScreen extends ConsumerWidget {
             padding: const EdgeInsets.all(AppDimensions.cardPadding),
             child: Row(
               children: [
-                const DdLogo(size: 48),
+                avatar.when(
+                  data: (url) => DdAvatar(
+                    avatarUrl: url,
+                    size: 56,
+                    borderWidth: 0,
+                    showShadow: false,
+                  ),
+                  loading: () => const DdLogo(size: 48),
+                  error: (_, __) => const DdLogo(size: 48),
+                ),
                 const SizedBox(width: AppDimensions.stackMd),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('DoseDiary', style: AppTextStyles.headlineMd()),
-                      Text(userName, style: AppTextStyles.bodyLg(color: AppColors.textSecondary), overflow: TextOverflow.ellipsis),
+                      Text(userName,
+                          style: AppTextStyles.bodyLg(
+                              color: AppColors.textSecondary),
+                          overflow: TextOverflow.ellipsis),
                       Text(
                         user != null ? userEmail : 'Offline / Guest Mode',
                         style: AppTextStyles.caption(),
                         overflow: TextOverflow.ellipsis,
                       ),
+                      const SizedBox(height: 4),
+                      Text(
+                        user != null
+                            ? 'Profile and account settings'
+                            : 'Offline / Guest Mode',
+                        style: AppTextStyles.caption(
+                            color: AppColors.textTertiary),
+                      ),
                     ],
                   ),
+                ),
+                IconButton(
+                  tooltip: 'Open profile',
+                  icon: const Icon(Icons.chevron_right),
+                  onPressed: () => context.push(RouteNames.settingsAccount),
                 ),
               ],
             ),
@@ -168,12 +194,16 @@ class _SettingTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListTile(
-        leading: Icon(icon, color: destructive ? AppColors.error : AppColors.primaryAction),
-        title: Text(label, style: AppTextStyles.bodyBold(color: destructive ? AppColors.error : AppColors.textPrimary)),
+        leading: Icon(icon,
+            color: destructive ? AppColors.error : AppColors.primaryAction),
+        title: Text(label,
+            style: AppTextStyles.bodyBold(
+                color: destructive ? AppColors.error : AppColors.textPrimary)),
         subtitle: subtitle != null
             ? Text(subtitle!, style: AppTextStyles.caption())
             : null,
-        trailing: const Icon(Icons.chevron_right, color: AppColors.textTertiary),
+        trailing:
+            const Icon(Icons.chevron_right, color: AppColors.textTertiary),
         onTap: onTap,
       );
 }
