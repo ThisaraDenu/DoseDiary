@@ -9,6 +9,15 @@ import '../../core/supabase_config.dart';
 import '../local/database_provider.dart';
 import 'supabase_sync_service.dart';
 
+class PasswordChangeException implements Exception {
+  const PasswordChangeException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 /// Thin wrapper around Supabase Auth so UI code never imports supabase_flutter directly.
 class AuthService {
   AuthService._();
@@ -40,6 +49,7 @@ class AuthService {
       return null;
     }
   }
+
   static bool get isLoggedIn => currentUser != null;
 
   /// Stream of auth state changes (sign-in, sign-out, token refresh).
@@ -176,6 +186,35 @@ class AuthService {
     await _client.auth.signOut();
   }
 
+  /// Changes the password for the currently authenticated user.
+  static Future<void> changePassword({
+    required String newPassword,
+  }) async {
+    final user = currentUser;
+    if (user == null) {
+      throw const PasswordChangeException(
+        'You must be signed in to change your password.',
+      );
+    }
+
+    try {
+      await _client.auth.updateUser(UserAttributes(password: newPassword));
+    } on AuthException catch (error) {
+      throw PasswordChangeException(
+        'The new password could not be saved: ${error.message}',
+      );
+    }
+  }
+
+  /// Signs out every active session except the current device.
+  static Future<void> signOutOtherSessions() async {
+    final client = _clientSafe;
+    if (client == null || currentUser == null) {
+      throw Exception('You must be signed in to manage active sessions.');
+    }
+    await client.auth.signOut(scope: SignOutScope.others);
+  }
+
   // ── Profile ───────────────────────────────────────────────────────────────
 
   static Future<Map<String, dynamic>?> getProfile() async {
@@ -192,19 +231,27 @@ class AuthService {
         if (data != null) {
           try {
             final db = await AppDatabase.instance.database;
-            await db.insert('profiles', {
-              'id': data['id'],
-              'full_name': data['full_name'] ?? '',
-              'avatar_url': data['avatar_url'],
-              'preferred_language': data['preferred_language'] ?? 'en',
-              'text_scale_factor': data['text_scale_factor'] ?? 1.0,
-              'simple_wording': data['simple_wording'] == true ? 1 : 0,
-              'notification_sound': data['notification_sound'] == false ? 0 : 1,
-              'notification_vibration': data['notification_vibration'] == false ? 0 : 1,
-              'privacy_safe_previews': data['privacy_safe_previews'] == false ? 0 : 1,
-              'created_at': data['created_at']?.toString() ?? DateTime.now().toIso8601String(),
-              'updated_at': data['updated_at']?.toString() ?? DateTime.now().toIso8601String(),
-            }, conflictAlgorithm: ConflictAlgorithm.replace);
+            await db.insert(
+                'profiles',
+                {
+                  'id': data['id'],
+                  'full_name': data['full_name'] ?? '',
+                  'avatar_url': data['avatar_url'],
+                  'preferred_language': data['preferred_language'] ?? 'en',
+                  'text_scale_factor': data['text_scale_factor'] ?? 1.0,
+                  'simple_wording': data['simple_wording'] == true ? 1 : 0,
+                  'notification_sound':
+                      data['notification_sound'] == false ? 0 : 1,
+                  'notification_vibration':
+                      data['notification_vibration'] == false ? 0 : 1,
+                  'privacy_safe_previews':
+                      data['privacy_safe_previews'] == false ? 0 : 1,
+                  'created_at': data['created_at']?.toString() ??
+                      DateTime.now().toIso8601String(),
+                  'updated_at': data['updated_at']?.toString() ??
+                      DateTime.now().toIso8601String(),
+                },
+                conflictAlgorithm: ConflictAlgorithm.replace);
           } catch (_) {}
           return data;
         }
@@ -264,7 +311,8 @@ class AuthService {
     if (user == null) return null;
 
     final ext = fileExtension.replaceAll('.', '').toLowerCase();
-    final fileName = '${user.id}/avatar_${DateTime.now().millisecondsSinceEpoch}.$ext';
+    final fileName =
+        '${user.id}/avatar_${DateTime.now().millisecondsSinceEpoch}.$ext';
     String? avatarUrl;
 
     // 1. Try uploading to Supabase Storage 'avatars' bucket
