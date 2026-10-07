@@ -6,6 +6,7 @@ import '../../features/splash/splash_screen.dart';
 import '../../features/onboarding/onboarding_screen.dart';
 import '../../features/auth/login/login_screen.dart';
 import '../../features/auth/signup/signup_screen.dart';
+import '../../features/auth/verify_email/email_verification_screen.dart';
 import '../../features/auth/forgot_password/forgot_password_screen.dart';
 import '../../features/home/home_dashboard_screen.dart';
 import '../../features/medications/medication_schedule_screen.dart';
@@ -41,6 +42,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.signup,
         builder: (ctx, state) => const SignUpScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.verifyEmail,
+        builder: (ctx, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? {};
+          final email = extra['email'] as String? ?? '';
+          return EmailVerificationScreen(email: email);
+        },
       ),
       GoRoute(
         path: RouteNames.forgotPassword,

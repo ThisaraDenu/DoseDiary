@@ -17,18 +17,17 @@ void main() {
   });
 
   group('PermissionsScreen Widget Tests', () {
-    testWidgets('renders all 5 requested permission items and header', (tester) async {
+    testWidgets('renders App permissions header, recommended and optional items', (tester) async {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
             sharedPreferencesProvider.overrideWithValue(prefs),
             permissionsControllerProvider.overrideWith(
               (ref) => PermissionsController({
+                AppPermissionType.notification: false,
                 AppPermissionType.contacts: false,
-                AppPermissionType.location: false,
-                AppPermissionType.media: false,
                 AppPermissionType.camera: false,
-                AppPermissionType.calendar: false,
+                AppPermissionType.microphone: false,
               }),
             ),
           ],
@@ -40,36 +39,25 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      // Header and description
-      expect(find.text('Enable App Permissions'), findsOneWidget);
-      expect(find.textContaining('To give you the safest, most personalized health tracking experience'), findsOneWidget);
+      // Header and title
+      expect(find.text('App permissions'), findsOneWidget);
+      expect(find.textContaining('Helpful reminders'), findsOneWidget);
 
-      // 1. Contacts
-      expect(find.text('Emergency Contacts & Caregivers'), findsOneWidget);
-      expect(find.byIcon(Icons.contacts_rounded), findsOneWidget);
+      // Recommended Notifications Card
+      expect(find.text('Notifications'), findsOneWidget);
+      expect(find.text('Recommended'), findsOneWidget);
 
-      // 2. Location
-      expect(find.text('Nearby Medical & Pharmacies'), findsOneWidget);
-      expect(find.byIcon(Icons.location_on_rounded), findsOneWidget);
-
-      // 3. Media
-      expect(find.text('Prescriptions & Photos'), findsOneWidget);
-      expect(find.byIcon(Icons.perm_media_rounded), findsOneWidget);
-
-      // 4. Camera
-      expect(find.text('Camera & Barcode Scanner'), findsOneWidget);
-      expect(find.byIcon(Icons.camera_alt_rounded), findsOneWidget);
-
-      // 5. Calendar
-      expect(find.text('Device Calendar Sync'), findsOneWidget);
-      expect(find.byIcon(Icons.calendar_month_rounded), findsOneWidget);
+      // Optional items
+      expect(find.text('Contacts'), findsOneWidget);
+      expect(find.text('Camera'), findsOneWidget);
+      expect(find.text('Microphone'), findsOneWidget);
 
       // Action buttons
-      expect(find.text('Skip for now'), findsOneWidget);
-      expect(find.text('Allow All Permissions'), findsOneWidget);
+      expect(find.text('Enable notifications'), findsOneWidget);
+      expect(find.text('Not now'), findsOneWidget);
     });
 
-    testWidgets('marks permissions_prompted as true in SharedPreferences when skip is tapped', (tester) async {
+    testWidgets('marks permissions_prompted as true in SharedPreferences when "Not now" is tapped', (tester) async {
       expect(PermissionService.hasPrompted(prefs), isFalse);
 
       await tester.pumpWidget(
@@ -78,11 +66,10 @@ void main() {
             sharedPreferencesProvider.overrideWithValue(prefs),
             permissionsControllerProvider.overrideWith(
               (ref) => PermissionsController({
+                AppPermissionType.notification: false,
                 AppPermissionType.contacts: false,
-                AppPermissionType.location: false,
-                AppPermissionType.media: false,
                 AppPermissionType.camera: false,
-                AppPermissionType.calendar: false,
+                AppPermissionType.microphone: false,
               }),
             ),
           ],
@@ -94,27 +81,27 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      final skipButton = find.text('Skip for now');
-      expect(skipButton, findsOneWidget);
+      final notNowButton = find.text('Not now');
+      expect(notNowButton, findsOneWidget);
 
-      await tester.tap(skipButton);
+      await tester.ensureVisible(notNowButton);
+      await tester.tap(notNowButton);
       await tester.pumpAndSettle();
 
       expect(PermissionService.hasPrompted(prefs), isTrue);
     });
 
-    testWidgets('shows Granted badge when all permissions are already granted', (tester) async {
+    testWidgets('shows Continue to DoseDiary when notification is already granted', (tester) async {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
             sharedPreferencesProvider.overrideWithValue(prefs),
             permissionsControllerProvider.overrideWith(
               (ref) => PermissionsController({
+                AppPermissionType.notification: true,
                 AppPermissionType.contacts: true,
-                AppPermissionType.location: true,
-                AppPermissionType.media: true,
                 AppPermissionType.camera: true,
-                AppPermissionType.calendar: true,
+                AppPermissionType.microphone: true,
               }),
             ),
           ],
@@ -126,10 +113,8 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      // All 5 should have 'Granted' pills
-      expect(find.text('Granted'), findsNWidgets(5));
       expect(find.text('Continue to DoseDiary'), findsOneWidget);
-      expect(find.text('Allow All Permissions'), findsNothing);
+      expect(find.text('Enable notifications'), findsNothing);
     });
   });
 }

@@ -38,6 +38,16 @@ class AppDatabase {
     try {
       await db.execute('ALTER TABLE allocated_patients ADD COLUMN patient_user_id TEXT');
     } catch (_) { /* column already exists — safe to ignore */ }
+    // Add date_of_birth and gender to profiles
+    try {
+      await db.execute('ALTER TABLE profiles ADD COLUMN date_of_birth TEXT');
+    } catch (_) { /* column already exists — safe to ignore */ }
+    try {
+      await db.execute('ALTER TABLE profiles ADD COLUMN gender TEXT');
+    } catch (_) { /* column already exists — safe to ignore */ }
+    try {
+      await db.execute('ALTER TABLE profiles ADD COLUMN phone_number TEXT');
+    } catch (_) { /* column already exists — safe to ignore */ }
     await _clearSeedData(db);
     return db;
   }
@@ -78,6 +88,9 @@ class AppDatabase {
       id TEXT PRIMARY KEY,
       full_name TEXT NOT NULL DEFAULT '',
       avatar_url TEXT,
+      date_of_birth TEXT,
+      gender TEXT,
+      phone_number TEXT,
       preferred_language TEXT NOT NULL DEFAULT 'en',
       text_scale_factor REAL NOT NULL DEFAULT 1.0,
       simple_wording INTEGER NOT NULL DEFAULT 0,

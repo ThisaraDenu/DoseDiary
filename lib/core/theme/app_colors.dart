@@ -13,6 +13,8 @@ class AppColors {
   // ── Surface ───────────────────────────────────────────────
   static const Color cardSurface = Color(0xFFFFFFFF);
   static const Color scaffoldBackground = Color(0xFFF9F9F9);
+  static const Color onboardingBackground = Color(0xFFF3EFE8); // Warm cream from design mockups
+  static const Color onboardingDotInactive = Color(0xFFD1CDC5); // Neutral inactive dot
 
   // ── Text ─────────────────────────────────────────────────
   static const Color textPrimary = Color(0xFF000000);

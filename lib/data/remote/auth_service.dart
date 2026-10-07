@@ -40,6 +40,7 @@ class AuthService {
       return null;
     }
   }
+
   static bool get isLoggedIn => currentUser != null;
 
   /// Stream of auth state changes (sign-in, sign-out, token refresh).
@@ -63,16 +64,30 @@ class AuthService {
     required String email,
     required String password,
     String? fullName,
+    String? dateOfBirth,
+    String? gender,
+    String? phoneNumber,
   }) async {
     final response = await _client.auth.signUp(
       email: email,
       password: password,
-      data: fullName != null ? {'full_name': fullName} : null,
+      data: {
+        if (fullName != null) 'full_name': fullName,
+        if (dateOfBirth != null) 'date_of_birth': dateOfBirth,
+        if (gender != null) 'gender': gender,
+        if (phoneNumber != null) 'phone_number': phoneNumber,
+      },
     );
 
     // Create profile row and initialize clean storage if user was created successfully
     if (response.user != null) {
-      await _upsertProfile(response.user!, fullName: fullName);
+      await _upsertProfile(
+        response.user!,
+        fullName: fullName,
+        dateOfBirth: dateOfBirth,
+        gender: gender,
+        phoneNumber: phoneNumber,
+      );
       try {
         await AppDatabase.instance.clearAllUserData();
         await SupabaseSyncService.pullFromCloud();
@@ -161,6 +176,37 @@ class AuthService {
     await _client.auth.resetPasswordForEmail(email);
   }
 
+  // ── Email Verification ────────────────────────────────────────────────────
+
+  /// Resends the signup confirmation OTP through Supabase Auth.
+  /// Email delivery is handled by the SMTP provider configured in Supabase.
+  static Future<void> resendSignupCode(String email) async {
+    await _client.auth.resend(
+      type: OtpType.signup,
+      email: email.trim().toLowerCase(),
+    );
+  }
+
+  /// Validates the signup OTP that Supabase sent to the user's email.
+  static Future<bool> verifyEmailCode({
+    required String email,
+    required String code,
+  }) async {
+    final cleanEmail = email.trim().toLowerCase();
+    final cleanCode = code.trim();
+
+    try {
+      final response = await _client.auth.verifyOTP(
+        email: cleanEmail,
+        token: cleanCode,
+        type: OtpType.signup,
+      );
+      return response.user != null || response.session != null;
+    } on AuthException {
+      return false;
+    }
+  }
+
   // ── Sign Out ──────────────────────────────────────────────────────────────
 
   static Future<void> signOut() async {
@@ -192,19 +238,30 @@ class AuthService {
         if (data != null) {
           try {
             final db = await AppDatabase.instance.database;
-            await db.insert('profiles', {
-              'id': data['id'],
-              'full_name': data['full_name'] ?? '',
-              'avatar_url': data['avatar_url'],
-              'preferred_language': data['preferred_language'] ?? 'en',
-              'text_scale_factor': data['text_scale_factor'] ?? 1.0,
-              'simple_wording': data['simple_wording'] == true ? 1 : 0,
-              'notification_sound': data['notification_sound'] == false ? 0 : 1,
-              'notification_vibration': data['notification_vibration'] == false ? 0 : 1,
-              'privacy_safe_previews': data['privacy_safe_previews'] == false ? 0 : 1,
-              'created_at': data['created_at']?.toString() ?? DateTime.now().toIso8601String(),
-              'updated_at': data['updated_at']?.toString() ?? DateTime.now().toIso8601String(),
-            }, conflictAlgorithm: ConflictAlgorithm.replace);
+            await db.insert(
+                'profiles',
+                {
+                  'id': data['id'],
+                  'full_name': data['full_name'] ?? '',
+                  'avatar_url': data['avatar_url'],
+                  'date_of_birth': data['date_of_birth'],
+                  'gender': data['gender'],
+                  'phone_number': data['phone_number'],
+                  'preferred_language': data['preferred_language'] ?? 'en',
+                  'text_scale_factor': data['text_scale_factor'] ?? 1.0,
+                  'simple_wording': data['simple_wording'] == true ? 1 : 0,
+                  'notification_sound':
+                      data['notification_sound'] == false ? 0 : 1,
+                  'notification_vibration':
+                      data['notification_vibration'] == false ? 0 : 1,
+                  'privacy_safe_previews':
+                      data['privacy_safe_previews'] == false ? 0 : 1,
+                  'created_at': data['created_at']?.toString() ??
+                      DateTime.now().toIso8601String(),
+                  'updated_at': data['updated_at']?.toString() ??
+                      DateTime.now().toIso8601String(),
+                },
+                conflictAlgorithm: ConflictAlgorithm.replace);
           } catch (_) {}
           return data;
         }
@@ -264,7 +321,8 @@ class AuthService {
     if (user == null) return null;
 
     final ext = fileExtension.replaceAll('.', '').toLowerCase();
-    final fileName = '${user.id}/avatar_${DateTime.now().millisecondsSinceEpoch}.$ext';
+    final fileName =
+        '${user.id}/avatar_${DateTime.now().millisecondsSinceEpoch}.$ext';
     String? avatarUrl;
 
     // 1. Try uploading to Supabase Storage 'avatars' bucket
@@ -295,21 +353,77 @@ class AuthService {
 
   // ── Private Helpers ───────────────────────────────────────────────────────
 
-  static Future<void> _upsertProfile(User user, {String? fullName}) async {
+  /// Computes integer age given an ISO date string (YYYY-MM-DD). Returns null if invalid.
+  static int? calculateAge(String? dateOfBirthStr) {
+    if (dateOfBirthStr == null || dateOfBirthStr.trim().isEmpty) return null;
     try {
-      await _client.from('profiles').upsert({
+      final dob = DateTime.parse(dateOfBirthStr);
+      final now = DateTime.now();
+      int age = now.year - dob.year;
+      if (now.month < dob.month ||
+          (now.month == dob.month && now.day < dob.day)) {
+        age--;
+      }
+      return age >= 0 ? age : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> _upsertProfile(
+    User user, {
+    String? fullName,
+    String? dateOfBirth,
+    String? gender,
+    String? phoneNumber,
+  }) async {
+    try {
+      final meta = user.userMetadata ?? {};
+      final name = fullName ??
+          meta['full_name'] as String? ??
+          user.email?.split('@').first ??
+          '';
+      final dob = dateOfBirth ?? meta['date_of_birth'] as String?;
+      final gen = gender ?? meta['gender'] as String?;
+      final phone = phoneNumber ?? meta['phone_number'] as String?;
+
+      final profileMap = <String, dynamic>{
         'id': user.id,
-        'full_name': fullName ??
-            user.userMetadata?['full_name'] ??
-            user.email?.split('@').first ??
-            '',
+        'full_name': name,
+        if (dob != null) 'date_of_birth': dob,
+        if (gen != null) 'gender': gen,
+        if (phone != null) 'phone_number': phone,
         'preferred_language': 'en',
         'text_scale_factor': 1.0,
         'simple_wording': false,
         'notification_sound': true,
         'notification_vibration': true,
         'privacy_safe_previews': true,
-      }, onConflict: 'id');
+      };
+
+      await _client.from('profiles').upsert(profileMap, onConflict: 'id');
+
+      try {
+        final db = await AppDatabase.instance.database;
+        await db.insert(
+            'profiles',
+            {
+              'id': user.id,
+              'full_name': name,
+              'date_of_birth': dob,
+              'gender': gen,
+              'phone_number': phone,
+              'preferred_language': 'en',
+              'text_scale_factor': 1.0,
+              'simple_wording': 0,
+              'notification_sound': 1,
+              'notification_vibration': 1,
+              'privacy_safe_previews': 1,
+              'created_at': DateTime.now().toIso8601String(),
+              'updated_at': DateTime.now().toIso8601String(),
+            },
+            conflictAlgorithm: ConflictAlgorithm.replace);
+      } catch (_) {}
     } catch (_) {
       // Silently ignore if profiles table is not yet migrated in Supabase
     }

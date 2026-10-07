@@ -8,7 +8,6 @@ import '../../core/theme/app_dimensions.dart';
 import '../../core/widgets/dd_logo.dart';
 import '../../core/router/route_names.dart';
 import '../../data/remote/auth_service.dart';
-import '../../data/repositories/app_repositories.dart';
 import '../home/home_dashboard_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -44,6 +43,37 @@ class SettingsScreen extends ConsumerWidget {
                     children: [
                       Text('DoseDiary', style: AppTextStyles.headlineMd()),
                       Text(userName, style: AppTextStyles.bodyLg(color: AppColors.textSecondary), overflow: TextOverflow.ellipsis),
+                      ref.watch(userAgeProvider).when(
+                        data: (age) => ref.watch(userGenderProvider).when(
+                          data: (gender) => ref.watch(userPhoneProvider).when(
+                            data: (phone) {
+                              final parts = <String>[];
+                              if (age != null) parts.add('$age yrs');
+                              if (gender != null && gender.isNotEmpty) parts.add(gender);
+                              if (phone != null && phone.isNotEmpty) parts.add(phone);
+                              if (parts.isEmpty) return const SizedBox.shrink();
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 2, bottom: 2),
+                                child: Text(
+                                  parts.join(' • '),
+                                  style: const TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.primaryAction,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              );
+                            },
+                            loading: () => const SizedBox.shrink(),
+                            error: (_, __) => const SizedBox.shrink(),
+                          ),
+                          loading: () => const SizedBox.shrink(),
+                          error: (_, __) => const SizedBox.shrink(),
+                        ),
+                        loading: () => const SizedBox.shrink(),
+                        error: (_, __) => const SizedBox.shrink(),
+                      ),
                       Text(
                         user != null ? userEmail : 'Offline / Guest Mode',
                         style: AppTextStyles.caption(),
@@ -81,7 +111,7 @@ class SettingsScreen extends ConsumerWidget {
           _SettingTile(
             icon: Icons.account_circle_outlined,
             label: 'Account',
-            subtitle: 'Profile, email, password',
+            subtitle: 'Profile, phone, age, gender, email',
             onTap: () => context.push(RouteNames.settingsAccount),
           ),
           _SettingTile(
