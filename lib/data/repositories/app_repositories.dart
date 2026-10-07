@@ -3,10 +3,13 @@ import 'package:intl/intl.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../local/database_provider.dart';
+import '../local/models/adherence_models.dart';
 import '../local/models/app_models.dart';
 import '../local/models/dose_status.dart';
 import '../remote/auth_service.dart';
 import '../remote/supabase_sync_service.dart';
+
+export '../local/models/adherence_models.dart';
 
 /// Returns the currently authenticated user's ID, or falls back to 'guest-user'.
 String get _activeUserId => AuthService.currentUser?.id ?? 'guest-user';
@@ -75,6 +78,19 @@ class MedicationRepository {
       SupabaseSyncService.pushMedication(med.toMap()).ignore();
     }
   }
+
+  Future<MedicationSchedule?> getScheduleForMedication(String medicationId) async {
+    final db = await _database;
+    final rows = await db.query(
+      'schedules',
+      where: 'medication_id = ? AND superseded_at IS NULL',
+      whereArgs: [medicationId],
+      orderBy: 'created_at DESC',
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return MedicationSchedule.fromMap(rows.first);
+  }
 }
 
 // ── Dose Repository ───────────────────────────────────────────────────────────
@@ -82,6 +98,7 @@ class MedicationRepository {
 class DoseRepository {
   DoseRepository(this._db);
   final AppDatabase _db;
+  late final MedicationRepository _medRepo = MedicationRepository(_db);
 
   Future<Database> get _database => _db.database;
 
@@ -281,6 +298,292 @@ class DoseRepository {
       totalTaken: totalTaken,
       totalMissed: missed,
       dailyPips: pips,
+    );
+  }
+
+  /// Comprehensive Adherence Report for the Medication Adherence screen.
+  /// Fully queried and calculated from SQLite database records.
+  Future<ComprehensiveAdherenceReport> getComprehensiveAdherenceReport(
+    AdherencePeriod period, {
+    String? userId,
+  }) async {
+    final db = await _database;
+    final uid = userId ?? _activeUserId;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    // 1. Fetch active medications from database
+    final meds = await _medRepo.getMedications(activeOnly: true);
+    if (meds.isEmpty) {
+      return ComprehensiveAdherenceReport.empty(period);
+    }
+
+    // 2. Determine Date Range based on selected period
+    DateTime startDate;
+    final endDate = now;
+
+    switch (period) {
+      case AdherencePeriod.thisWeek:
+        startDate = today.subtract(const Duration(days: 6));
+        break;
+      case AdherencePeriod.monthly:
+        startDate = today.subtract(const Duration(days: 29));
+        break;
+      case AdherencePeriod.allTime:
+        DateTime earliest = today.subtract(const Duration(days: 89));
+        for (final m in meds) {
+          if (m.createdAt.isBefore(earliest)) earliest = m.createdAt;
+        }
+        startDate = DateTime(earliest.year, earliest.month, earliest.day);
+        break;
+    }
+
+    // 3. Ensure dose occurrences for each date in range up to today
+    final daysCount = endDate.difference(startDate).inDays + 1;
+    final checkLimit = daysCount.clamp(1, 90);
+    for (int i = 0; i < checkLimit; i++) {
+      final d = startDate.add(Duration(days: i));
+      if (d.isAfter(now)) break;
+      final localDate =
+          '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      await _ensureOccurrencesForDate(db, uid, d, localDate);
+    }
+
+    // 4. Query occurrences in date range
+    final occurrences = await getOccurrencesForDateRange(startDate, endDate);
+
+    // Only count doses that were due before now or are in terminal status
+    final countable = occurrences
+        .where((o) => o.scheduledAt.isBefore(now) || o.status.isTerminal)
+        .toList();
+
+    final totalCountable = countable.length;
+    final totalTaken =
+        countable.where((o) => o.status == DoseStatus.taken).length;
+    final totalMissed = countable
+        .where((o) =>
+            o.status == DoseStatus.missed || o.status == DoseStatus.overdue)
+        .length;
+
+    // Delayed calculation & most recent missed date
+    int totalDelayed = 0;
+    int totalDelayMinutes = 0;
+    DateTime? mostRecentMissed;
+
+    for (final occ in countable) {
+      if (occ.status == DoseStatus.missed || occ.status == DoseStatus.overdue) {
+        if (mostRecentMissed == null ||
+            occ.scheduledAt.isAfter(mostRecentMissed)) {
+          mostRecentMissed = occ.scheduledAt;
+        }
+      }
+      if (occ.status == DoseStatus.taken) {
+        final events = await getEventsForOccurrence(occ.id);
+        if (events.isNotEmpty) {
+          final diff =
+              events.first.recordedAt.difference(occ.scheduledAt).inMinutes;
+          if (diff > 30) {
+            totalDelayed++;
+            totalDelayMinutes += diff;
+          }
+        }
+      }
+    }
+
+    final scorePercentage = totalCountable > 0
+        ? (totalTaken / totalCountable * 100).round().clamp(0, 100)
+        : 0;
+
+    // 5. Current Streak: consecutive days ending today/yesterday with 100% adherence
+    int streak = 0;
+    for (int i = 0; i < 365; i++) {
+      final day = today.subtract(Duration(days: i));
+      final dayOccs = await getOccurrencesForDate(day);
+      final dayCountable = dayOccs
+          .where((o) => o.scheduledAt.isBefore(now) || o.status.isTerminal)
+          .toList();
+
+      if (i == 0 && dayCountable.isEmpty) {
+        // Today has no due doses yet, continue backwards to yesterday
+        continue;
+      }
+      if (dayCountable.isNotEmpty) {
+        final dayTaken =
+            dayCountable.where((o) => o.status == DoseStatus.taken).length;
+        if (dayTaken == dayCountable.length) {
+          streak++;
+        } else {
+          break;
+        }
+      } else {
+        if (streak > 0) break;
+      }
+    }
+
+    // 6. 7-Day Breakdown (always 6 days ago up to today, matching the breakdown card)
+    final breakdown = <AdherenceDayBreakdown>[];
+    for (int i = 6; i >= 0; i--) {
+      final day = today.subtract(Duration(days: i));
+      final isToday = (i == 0);
+      final dayOccs = await getOccurrencesForDate(day);
+      final dayCountable = dayOccs
+          .where((o) => o.scheduledAt.isBefore(now) || o.status.isTerminal)
+          .toList();
+
+      final dayTaken =
+          dayCountable.where((o) => o.status == DoseStatus.taken).length;
+      final dayMissed = dayCountable
+          .where((o) =>
+              o.status == DoseStatus.missed || o.status == DoseStatus.overdue)
+          .length;
+
+      int dayDelayed = 0;
+      for (final occ in dayCountable) {
+        if (occ.status == DoseStatus.taken) {
+          final evts = await getEventsForOccurrence(occ.id);
+          if (evts.isNotEmpty &&
+              evts.first.recordedAt.difference(occ.scheduledAt).inMinutes > 30) {
+            dayDelayed++;
+          }
+        }
+      }
+
+      DayAdherenceStatus status = DayAdherenceStatus.noDoses;
+      if (dayCountable.isNotEmpty) {
+        if (dayMissed > 0) {
+          status = DayAdherenceStatus.missed;
+        } else if (dayDelayed > 0) {
+          status = DayAdherenceStatus.delayed;
+        } else if (dayTaken == dayCountable.length) {
+          status = DayAdherenceStatus.taken100;
+        }
+      }
+
+      final dayPct = dayCountable.isNotEmpty
+          ? (dayTaken / dayCountable.length * 100).clamp(0.0, 100.0)
+          : 0.0;
+
+      breakdown.add(AdherenceDayBreakdown(
+        date: day,
+        dayLabel: isToday ? 'Today' : DateFormat('E').format(day),
+        dayNumber: day.day,
+        isToday: isToday,
+        countable: dayCountable.length,
+        taken: dayTaken,
+        missed: dayMissed,
+        delayed: dayDelayed,
+        status: status,
+        percentage: dayPct,
+      ));
+    }
+
+    // 7. Individual Medication Adherences
+    final todayOccs = await getOccurrencesForDate(today);
+    final medItems = <MedicationAdherenceItem>[];
+
+    for (final med in meds) {
+      final schedule = await _medRepo.getScheduleForMedication(med.id);
+      final medOccs =
+          countable.where((o) => o.medicationId == med.id).toList();
+      final medCountable = medOccs.length;
+      final medTaken =
+          medOccs.where((o) => o.status == DoseStatus.taken).length;
+      final medMissed = medOccs
+          .where((o) =>
+              o.status == DoseStatus.missed || o.status == DoseStatus.overdue)
+          .length;
+
+      int medDelayed = 0;
+      for (final occ in medOccs) {
+        if (occ.status == DoseStatus.taken) {
+          final evts = await getEventsForOccurrence(occ.id);
+          if (evts.isNotEmpty &&
+              evts.first.recordedAt.difference(occ.scheduledAt).inMinutes > 30) {
+            medDelayed++;
+          }
+        }
+      }
+
+      final medPct = medCountable > 0
+          ? (medTaken / medCountable * 100).round().clamp(0, 100)
+          : 0;
+
+      final daysSupply = med.amountPerDose > 0
+          ? (med.quantityOnHand / med.amountPerDose).floor()
+          : 0;
+
+      // Next scheduled dose
+      final upcomingToday = todayOccs
+          .where((o) =>
+              o.medicationId == med.id &&
+              o.status.isActionable &&
+              o.scheduledAt.isAfter(now))
+          .toList();
+      upcomingToday.sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
+
+      String? nextDoseStr;
+      if (upcomingToday.isNotEmpty) {
+        nextDoseStr =
+            'Next dose: ${DateFormat('h:mm a').format(upcomingToday.first.scheduledAt.toLocal())}';
+      } else if (schedule != null && schedule.timesOfDay.isNotEmpty) {
+        nextDoseStr = 'Next dose: ${schedule.timesOfDay.first}';
+      }
+
+      // Last taken dose
+      final takenToday = todayOccs
+          .where((o) =>
+              o.medicationId == med.id && o.status == DoseStatus.taken)
+          .toList();
+      String? lastTakenStr;
+      if (takenToday.isNotEmpty) {
+        lastTakenStr =
+            'Taken ${DateFormat('h:mm a').format(takenToday.last.scheduledAt.toLocal())} today';
+      }
+
+      // Subtitle
+      String subtitle = med.instructions ?? '';
+      if (subtitle.isEmpty) {
+        if (schedule != null && schedule.timesOfDay.isNotEmpty) {
+          final count = schedule.timesOfDay.length;
+          subtitle = count == 1 ? 'Once daily' : '$count times daily';
+        } else {
+          subtitle = med.isAsNeeded ? 'As needed' : 'Daily schedule';
+        }
+      }
+
+      medItems.add(MedicationAdherenceItem(
+        medication: med,
+        schedule: schedule,
+        countable: medCountable,
+        taken: medTaken,
+        missed: medMissed,
+        delayed: medDelayed,
+        adherencePercentage: medPct,
+        daysSupplyLeft: daysSupply,
+        nextDoseTime: nextDoseStr,
+        lastTakenTime: lastTakenStr,
+        courseEndDate: schedule?.endDate,
+        subtitle: subtitle,
+      ));
+    }
+
+    return ComprehensiveAdherenceReport(
+      period: period,
+      startDate: startDate,
+      endDate: endDate,
+      totalCountable: totalCountable,
+      totalTaken: totalTaken,
+      totalMissed: totalMissed,
+      totalDelayed: totalDelayed,
+      scorePercentage: scorePercentage,
+      hasData: totalCountable > 0,
+      currentStreakDays: streak,
+      mostRecentMissedDate: mostRecentMissed,
+      averageDelayMinutes:
+          totalDelayed > 0 ? (totalDelayMinutes / totalDelayed).round() : 0,
+      dailyBreakdown: breakdown,
+      medicationAdherences: medItems,
+      activePrescriptionsCount: meds.length,
     );
   }
 
@@ -502,6 +805,17 @@ final lowStockProvider = FutureProvider<List<Medication>>((ref) async {
 final weeklyAdherenceProvider = FutureProvider<WeeklyAdherenceReport>((ref) async {
   final repo = ref.watch(doseRepositoryProvider);
   return repo.getWeeklyAdherenceReport();
+});
+
+final selectedAdherencePeriodProvider = StateProvider<AdherencePeriod>((ref) {
+  return AdherencePeriod.thisWeek;
+});
+
+final comprehensiveAdherenceProvider =
+    FutureProvider<ComprehensiveAdherenceReport>((ref) async {
+  final period = ref.watch(selectedAdherencePeriodProvider);
+  final repo = ref.watch(doseRepositoryProvider);
+  return repo.getComprehensiveAdherenceReport(period);
 });
 
 final lowestStockMedicationProvider = FutureProvider<Medication?>((ref) async {

@@ -1604,24 +1604,34 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Row(
-                children: [
-                  Icon(
-                    Icons.insights_rounded,
-                    color: Color(0xFF006448),
-                    size: 24,
-                  ),
-                  SizedBox(width: 8),
-                  Text(
-                    'Weekly Adherence',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF1B1B1B),
-                      letterSpacing: -0.2,
+              InkWell(
+                onTap: () => context.push(RouteNames.adherence),
+                borderRadius: BorderRadius.circular(8),
+                child: const Row(
+                  children: [
+                    Icon(
+                      Icons.insights_rounded,
+                      color: Color(0xFF006448),
+                      size: 24,
                     ),
-                  ),
-                ],
+                    SizedBox(width: 8),
+                    Text(
+                      'Weekly Adherence',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1B1B1B),
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    SizedBox(width: 4),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: 20,
+                      color: Color(0xFF667085),
+                    ),
+                  ],
+                ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),

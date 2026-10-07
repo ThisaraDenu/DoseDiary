@@ -12,9 +12,9 @@ import '../../../core/widgets/dd_google_button.dart';
 import '../../../core/widgets/dd_text_field.dart';
 import '../../../core/widgets/dd_phone_input.dart';
 import '../../../core/router/route_names.dart';
+import '../../../core/services/permission_service.dart';
 import '../../../data/remote/auth_service.dart';
 import '../../../data/remote/supabase_sync_service.dart';
-import '../../../core/services/permission_service.dart';
 import '../../../main.dart';
 
 class SignUpScreen extends ConsumerStatefulWidget {
@@ -94,7 +94,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
           ? DdPhoneInput.formatFullNumber(_selectedRegion, phoneTrimmed)
           : null;
 
-      final email = _emailController.text.trim();
+      final email = _emailController.text.trim().toLowerCase();
       await AuthService.signUp(
         email: email,
         password: _passwordController.text,
@@ -112,13 +112,28 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         extra: {'email': email},
       );
     } catch (e) {
-      String msg = 'Sign up failed. Please try again.';
-      final s = e.toString();
+      String msg = 'Could not create your account. Please try again.';
+      final s = e.toString().toLowerCase();
       if (s.contains('already registered') ||
-          s.contains('already been registered')) {
+          s.contains('already been registered') ||
+          s.contains('user already exists')) {
         msg = 'An account with this email already exists. Try logging in.';
-      } else if (s.contains('Password should be')) {
+      } else if (s.contains('password should be')) {
         msg = 'Password must be at least 6 characters.';
+      } else if (s.contains('email address not authorized') ||
+          s.contains('error sending confirmation email') ||
+          s.contains('smtp')) {
+        msg = 'Could not send the verification code to this address. '
+            'Configure a verified email domain in Supabase SMTP.';
+      } else if (s.contains('rate limit') ||
+          s.contains('too many requests') ||
+          s.contains('over_email_send_rate_limit')) {
+        msg = 'Too many verification emails were requested. '
+            'Please wait and try again.';
+      } else if (s.contains('invalid email')) {
+        msg = 'Enter a valid email address.';
+      } else if (s.contains('network') || s.contains('socketexception')) {
+        msg = 'No internet connection. Check your network and try again.';
       }
       setState(() => _error = msg);
     } finally {
@@ -144,10 +159,12 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       SupabaseSyncService.pullFromCloud().ignore();
 
       if (!mounted) return;
-      if (!PermissionService.hasPrompted(prefs)) {
-        context.go(RouteNames.permissions);
+      if (await AuthService.needsProfileCompletion()) {
+        if (mounted) context.go(RouteNames.completeGoogleProfile);
+      } else if (!PermissionService.hasPrompted(prefs)) {
+        if (mounted) context.go(RouteNames.permissions);
       } else {
-        context.go(RouteNames.home);
+        if (mounted) context.go(RouteNames.home);
       }
     } catch (e) {
       setState(() => _error = _friendlyGoogleError(e.toString()));
@@ -298,8 +315,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                 textInputAction: TextInputAction.next,
                 helperText: 'Minimum 8 characters',
                 validator: (v) {
-                  if (v == null || v.length < 8)
+                  if (v == null || v.length < 8) {
                     return 'At least 8 characters required';
+                  }
                   return null;
                 },
                 suffixIcon: IconButton(
@@ -318,8 +336,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                 textInputAction: TextInputAction.done,
                 onFieldSubmitted: (_) => _signUp(),
                 validator: (v) {
-                  if (v != _passwordController.text)
+                  if (v != _passwordController.text) {
                     return 'Passwords do not match';
+                  }
                   return null;
                 },
                 suffixIcon: IconButton(
@@ -396,7 +415,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                   Text('Already have an account? ',
                       style: AppTextStyles.bodyLg()),
                   TextButton(
-                    onPressed: () => context.pop(),
+                    onPressed: () => context.go(RouteNames.login),
                     child: Text('Log In',
                         style: AppTextStyles.labelLg(
                             color: AppColors.primaryAction)),

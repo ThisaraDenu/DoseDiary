@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/router/route_names.dart';
 import '../../core/services/permission_service.dart';
+import '../../data/remote/auth_service.dart';
 import '../../data/remote/supabase_sync_service.dart';
 import '../../main.dart';
 
@@ -55,7 +56,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       context.go(RouteNames.onboarding);
     } else if (session != null) {
       SupabaseSyncService.pullFromCloud().ignore();
-      if (!PermissionService.hasPrompted(prefs)) {
+      final needsGoogleProfile = AuthService.isGoogleUser &&
+          await AuthService.needsProfileCompletion();
+      if (!mounted) return;
+      if (needsGoogleProfile) {
+        context.go(RouteNames.completeGoogleProfile);
+      } else if (!PermissionService.hasPrompted(prefs)) {
         context.go(RouteNames.permissions);
       } else {
         context.go(RouteNames.home);
@@ -119,7 +125,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                                   width: 220,
                                   height: 220,
                                   fit: BoxFit.contain,
-                                  errorBuilder: (_, __, ___) => const SizedBox(),
+                                  errorBuilder: (_, __, ___) =>
+                                      const SizedBox(),
                                 ),
                               ),
                               // Clock hands — no MaskFilter, no BoxShadow
@@ -184,11 +191,11 @@ class _ClockPainter extends CustomPainter {
     // Centre of the capsule pill in the logo image (empirically measured)
     final c = Offset(size.width * 0.478, size.height * 0.492);
 
-    final minAngle = -math.pi / 4 + t * 2 * math.pi;       // full rotation
-    final hrAngle  = -math.pi / 4 + t * 0.5 * math.pi;     // quarter rotation
+    final minAngle = -math.pi / 4 + t * 2 * math.pi; // full rotation
+    final hrAngle = -math.pi / 4 + t * 0.5 * math.pi; // quarter rotation
 
     final minLen = size.width * 0.16;
-    final hrLen  = size.width * 0.11;
+    final hrLen = size.width * 0.11;
 
     // Offset shadow — GPU-safe alternative to MaskFilter.blur
     const sh = Offset(2.0, 3.0);
@@ -202,8 +209,10 @@ class _ClockPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
 
-    final hrEnd  = c + Offset(math.cos(hrAngle)  * hrLen,  math.sin(hrAngle)  * hrLen);
-    final minEnd = c + Offset(math.cos(minAngle) * minLen, math.sin(minAngle) * minLen);
+    final hrEnd =
+        c + Offset(math.cos(hrAngle) * hrLen, math.sin(hrAngle) * hrLen);
+    final minEnd =
+        c + Offset(math.cos(minAngle) * minLen, math.sin(minAngle) * minLen);
 
     // Hour hand
     shPaint.strokeWidth = hp.strokeWidth = size.width * 0.024;
@@ -217,16 +226,28 @@ class _ClockPainter extends CustomPainter {
 
     // Pivot pin shadow
     final r = size.width * 0.022;
-    canvas.drawCircle(c + sh, r,
-        Paint()..color = Colors.black.withOpacity(0.15)..style = PaintingStyle.fill);
+    canvas.drawCircle(
+        c + sh,
+        r,
+        Paint()
+          ..color = Colors.black.withOpacity(0.15)
+          ..style = PaintingStyle.fill);
 
     // Pivot pin fill
-    canvas.drawCircle(c, r,
-        Paint()..color = const Color(0xFFDC143C)..style = PaintingStyle.fill);
+    canvas.drawCircle(
+        c,
+        r,
+        Paint()
+          ..color = const Color(0xFFDC143C)
+          ..style = PaintingStyle.fill);
 
     // Specular highlight
-    canvas.drawCircle(c - const Offset(0.8, 0.8), r * 0.35,
-        Paint()..color = Colors.white.withOpacity(0.80)..style = PaintingStyle.fill);
+    canvas.drawCircle(
+        c - const Offset(0.8, 0.8),
+        r * 0.35,
+        Paint()
+          ..color = Colors.white.withOpacity(0.80)
+          ..style = PaintingStyle.fill);
   }
 
   @override
@@ -247,9 +268,8 @@ class _WaveDots extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: List.generate(3, (i) {
         final phase = ((wave - i * 0.28) % 1.0 + 1.0) % 1.0;
-        final intensity = phase < 0.5
-            ? math.sin(phase * 2 * math.pi).clamp(0.0, 1.0)
-            : 0.0;
+        final intensity =
+            phase < 0.5 ? math.sin(phase * 2 * math.pi).clamp(0.0, 1.0) : 0.0;
         final color = Color.lerp(
           const Color(0xFFE8C5CC),
           const Color(0xFFDC143C),

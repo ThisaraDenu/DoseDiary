@@ -16,7 +16,15 @@ import '../../../core/services/permission_service.dart';
 import '../../../main.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({
+    super.key,
+    this.emailPasswordSignIn,
+  });
+
+  final Future<void> Function({
+    required String email,
+    required String password,
+  })? emailPasswordSignIn;
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
@@ -45,27 +53,43 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _error = null;
     });
 
+    final email = _emailController.text.trim().toLowerCase();
+    final password = _passwordController.text;
+
     try {
-      await AuthService.signIn(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-      );
-
-      // Mark onboarding complete and pull cloud data
-      final prefs = ref.read(sharedPreferencesProvider);
-      await prefs.setBool('onboarding_complete', true);
-      SupabaseSyncService.pullFromCloud().ignore();
-
-      if (!mounted) return;
-      if (!PermissionService.hasPrompted(prefs)) {
-        context.go(RouteNames.permissions);
+      if (widget.emailPasswordSignIn != null) {
+        await widget.emailPasswordSignIn!(
+          email: email,
+          password: password,
+        );
       } else {
-        context.go(RouteNames.home);
+        await AuthService.signIn(email: email, password: password);
       }
     } catch (e) {
-      setState(() => _error = _friendlyError(e.toString()));
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _error = _friendlyError(e.toString());
+      });
+      return;
+    }
+
+    if (!mounted) return;
+
+    // Local setup must not turn a successful Supabase authentication into a
+    // misleading sign-in failure.
+    final prefs = ref.read(sharedPreferencesProvider);
+    try {
+      await prefs.setBool('onboarding_complete', true);
+    } catch (_) {}
+    SupabaseSyncService.pullFromCloud().ignore();
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+    if (!PermissionService.hasPrompted(prefs)) {
+      context.go(RouteNames.permissions);
+    } else {
+      context.go(RouteNames.home);
     }
   }
 
@@ -88,10 +112,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       SupabaseSyncService.pullFromCloud().ignore();
 
       if (!mounted) return;
-      if (!PermissionService.hasPrompted(prefs)) {
-        context.go(RouteNames.permissions);
+      if (await AuthService.needsProfileCompletion()) {
+        if (mounted) context.go(RouteNames.completeGoogleProfile);
+      } else if (!PermissionService.hasPrompted(prefs)) {
+        if (mounted) context.go(RouteNames.permissions);
       } else {
-        context.go(RouteNames.home);
+        if (mounted) context.go(RouteNames.home);
       }
     } catch (e) {
       setState(() => _error = _friendlyGoogleError(e.toString()));
@@ -114,14 +140,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   String _friendlyError(String raw) {
-    if (raw.contains('Invalid login credentials') ||
-        raw.contains('invalid_credentials')) {
+    final message = raw.toLowerCase();
+    if (message.contains('invalid login credentials') ||
+        message.contains('invalid_credentials') ||
+        message.contains('user not found')) {
       return 'Incorrect email or password. Please try again.';
     }
-    if (raw.contains('Email not confirmed')) {
+    if (message.contains('email not confirmed')) {
       return 'Please verify your email address before signing in.';
     }
-    if (raw.contains('network') || raw.contains('SocketException')) {
+    if (message.contains('too many requests') ||
+        message.contains('rate limit')) {
+      return 'Too many sign-in attempts. Please wait and try again.';
+    }
+    if (message.contains('network') || message.contains('socketexception')) {
       return 'No internet connection. Check your network and try again.';
     }
     return 'Sign in failed. Please try again.';
@@ -150,7 +182,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       const SizedBox(height: AppDimensions.stackSm),
                       Text(
                         'Welcome back',
-                        style: AppTextStyles.bodyXl(color: AppColors.textSecondary),
+                        style: AppTextStyles.bodyXl(
+                            color: AppColors.textSecondary),
                       ),
                     ],
                   ),
@@ -164,7 +197,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   keyboardType: TextInputType.emailAddress,
                   textInputAction: TextInputAction.next,
                   validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'Email is required';
+                    if (v == null || v.trim().isEmpty) {
+                      return 'Email is required';
+                    }
                     return null;
                   },
                 ),
@@ -182,10 +217,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   },
                   suffixIcon: IconButton(
                     icon: Icon(
-                      _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                      _obscurePassword
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
                     ),
-                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                    tooltip: _obscurePassword ? 'Show password' : 'Hide password',
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
+                    tooltip:
+                        _obscurePassword ? 'Show password' : 'Hide password',
                   ),
                 ),
                 const SizedBox(height: AppDimensions.stackSm),
@@ -195,7 +234,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   child: TextButton(
                     onPressed: () => context.push(RouteNames.forgotPassword),
                     child: Text('Forgot password?',
-                        style: AppTextStyles.labelMd(color: AppColors.primaryAction)),
+                        style: AppTextStyles.labelMd(
+                            color: AppColors.primaryAction)),
                   ),
                 ),
 
@@ -205,13 +245,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     padding: const EdgeInsets.all(AppDimensions.stackMd),
                     decoration: BoxDecoration(
                       color: AppColors.errorContainer,
-                      borderRadius: BorderRadius.circular(AppDimensions.badgeRadius),
+                      borderRadius:
+                          BorderRadius.circular(AppDimensions.badgeRadius),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.error_outline, size: 18, color: AppColors.error),
+                        const Icon(Icons.error_outline,
+                            size: 18, color: AppColors.error),
                         const SizedBox(width: 8),
-                        Expanded(child: Text(_error!, style: AppTextStyles.bodyLg(color: AppColors.error))),
+                        Expanded(
+                            child: Text(_error!,
+                                style: AppTextStyles.bodyLg(
+                                    color: AppColors.error))),
                       ],
                     ),
                   ),
@@ -228,16 +273,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 // "OR" Divider
                 Row(
                   children: [
-                    const Expanded(child: Divider(color: AppColors.borderLight, thickness: 1)),
+                    const Expanded(
+                        child: Divider(
+                            color: AppColors.borderLight, thickness: 1)),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Text(
                         'OR CONTINUE WITH',
-                        style: AppTextStyles.caption(color: AppColors.textTertiary)
-                            .copyWith(letterSpacing: 1.1, fontWeight: FontWeight.w600),
+                        style:
+                            AppTextStyles.caption(color: AppColors.textTertiary)
+                                .copyWith(
+                                    letterSpacing: 1.1,
+                                    fontWeight: FontWeight.w600),
                       ),
                     ),
-                    const Expanded(child: Divider(color: AppColors.borderLight, thickness: 1)),
+                    const Expanded(
+                        child: Divider(
+                            color: AppColors.borderLight, thickness: 1)),
                   ],
                 ),
                 const SizedBox(height: AppDimensions.stackLg),
@@ -252,11 +304,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.lock_outline, size: 13, color: AppColors.textTertiary),
+                      const Icon(Icons.lock_outline,
+                          size: 13, color: AppColors.textTertiary),
                       const SizedBox(width: 5),
                       Text(
                         'Secure 1-tap sign in via Google & Supabase',
-                        style: AppTextStyles.caption(color: AppColors.textTertiary),
+                        style: AppTextStyles.caption(
+                            color: AppColors.textTertiary),
                       ),
                     ],
                   ),
@@ -266,11 +320,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text("Don't have an account? ", style: AppTextStyles.bodyLg()),
+                    Text("Don't have an account? ",
+                        style: AppTextStyles.bodyLg()),
                     TextButton(
                       onPressed: () => context.push(RouteNames.signup),
                       child: Text('Sign Up',
-                          style: AppTextStyles.labelLg(color: AppColors.primaryAction)),
+                          style: AppTextStyles.labelLg(
+                              color: AppColors.primaryAction)),
                     ),
                   ],
                 ),
