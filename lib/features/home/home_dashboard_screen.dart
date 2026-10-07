@@ -59,6 +59,25 @@ final userNameProvider = FutureProvider<String>((ref) async {
   return 'Ishara';
 });
 
+final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
+  return await AuthService.getProfile();
+});
+
+final userAgeProvider = FutureProvider<int?>((ref) async {
+  final profile = await AuthService.getProfile();
+  return AuthService.calculateAge(profile?['date_of_birth'] as String?);
+});
+
+final userGenderProvider = FutureProvider<String?>((ref) async {
+  final profile = await AuthService.getProfile();
+  return profile?['gender'] as String?;
+});
+
+final userPhoneProvider = FutureProvider<String?>((ref) async {
+  final profile = await AuthService.getProfile();
+  return profile?['phone_number'] as String?;
+});
+
 // (Providers todayOccurrencesProvider, todayMedicationsProvider, todayAdherenceProvider,
 // lowStockProvider, weeklyAdherenceProvider are exported from app_repositories.dart)
 
