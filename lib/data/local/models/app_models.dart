@@ -870,6 +870,8 @@ class CaregiverInvitation {
     this.viewHistory = true,
     this.viewRefills = false,
     this.viewAdherence = true,
+    this.patientName,
+    this.patientEmail,
   });
 
   final String id;
@@ -885,6 +887,8 @@ class CaregiverInvitation {
   final bool viewHistory;
   final bool viewRefills;
   final bool viewAdherence;
+  final String? patientName;
+  final String? patientEmail;
 
   String get caregiverEmail => email;
 
@@ -897,6 +901,8 @@ class CaregiverInvitation {
     bool viewHistory = true,
     bool viewRefills = false,
     bool viewAdherence = true,
+    String? patientName,
+    String? patientEmail,
     Duration validityDuration = const Duration(days: 7),
   }) {
     final now = DateTime.now().toUtc();
@@ -914,6 +920,8 @@ class CaregiverInvitation {
       viewHistory: viewHistory,
       viewRefills: viewRefills,
       viewAdherence: viewAdherence,
+      patientName: patientName,
+      patientEmail: patientEmail,
     );
   }
 
@@ -925,6 +933,8 @@ class CaregiverInvitation {
     bool? viewRefills,
     bool? viewAdherence,
     DateTime? updatedAt,
+    String? patientName,
+    String? patientEmail,
   }) =>
       CaregiverInvitation(
         id: id,
@@ -940,6 +950,8 @@ class CaregiverInvitation {
         viewHistory: viewHistory ?? this.viewHistory,
         viewRefills: viewRefills ?? this.viewRefills,
         viewAdherence: viewAdherence ?? this.viewAdherence,
+        patientName: patientName ?? this.patientName,
+        patientEmail: patientEmail ?? this.patientEmail,
       );
 
   Map<String, dynamic> toMap() => {
@@ -975,6 +987,8 @@ class CaregiverInvitation {
         viewHistory: viewHistory ?? ((map['perm_view_history'] as int?) != 0 && (map['view_history'] ?? true) != false),
         viewRefills: viewRefills ?? ((map['perm_view_refills'] as int?) == 1 || (map['view_refills'] == true)),
         viewAdherence: viewAdherence ?? ((map['perm_view_adherence'] as int?) != 0 && (map['view_adherence'] ?? true) != false),
+        patientName: (map['patient_name'] ?? map['patientName']) as String?,
+        patientEmail: (map['patient_email'] ?? map['patientEmail']) as String?,
       );
 }
 

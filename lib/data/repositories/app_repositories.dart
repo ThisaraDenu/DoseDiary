@@ -859,6 +859,84 @@ class CaregiverRepository {
       SupabaseSyncService.pushCaregiverInvitation(rows.first).ignore();
     }
   }
+
+  /// Permanently removes an invitation record and its permissions by ID from SQLite.
+  Future<void> deleteInvitation(String invitationId) async {
+    final db = await _database;
+    await db.delete('caregiver_permissions', where: 'invitation_id = ?', whereArgs: [invitationId]);
+    await db.delete('caregiver_invitations', where: 'id = ?', whereArgs: [invitationId]);
+  }
+
+  // ── Caregiver-Side Incoming Invitations ────────────────────────────────────
+
+  /// Returns all incoming invitations addressed to this caregiver (filtered by caregiver email).
+  ///
+  /// CRITICAL SECURITY / ISOLATION:
+  /// - Does NOT use patient user_id.
+  /// - Strictly matches LOWER(caregiver_email) against the authenticated caregiver's email.
+  /// - Returns invitations joined with caregiver_permissions and patient profile full name.
+  Future<List<CaregiverInvitation>> getIncomingInvitations({String? caregiverEmail}) async {
+    final email = (caregiverEmail ?? AuthService.currentUser?.email)?.trim().toLowerCase();
+    if (email == null || email.isEmpty) {
+      return [];
+    }
+
+    final db = await _database;
+    final rows = await db.rawQuery('''
+      SELECT i.*,
+             p.perm_view_schedule,
+             p.perm_view_history,
+             p.perm_view_refills,
+             p.perm_view_adherence,
+             prof.full_name AS patient_name
+      FROM caregiver_invitations i
+      LEFT JOIN caregiver_permissions p ON p.invitation_id = i.id
+      LEFT JOIN profiles prof ON prof.id = i.user_id
+      WHERE LOWER(i.caregiver_email) = ?
+      ORDER BY i.created_at DESC
+    ''', [email]);
+
+    return rows.map((r) => CaregiverInvitation.fromMap(r)).toList();
+  }
+
+  /// Updates status of an incoming invitation ('accepted' or 'declined') in SQLite
+  /// and syncs to Supabase. Does not prematurely create patient-caregiver links.
+  Future<void> respondToIncomingInvitation({
+    required String invitationId,
+    required String status,
+  }) async {
+    final normalizedStatus = status.trim().toLowerCase();
+    if (normalizedStatus != 'accepted' && normalizedStatus != 'declined') {
+      throw ArgumentError("Status must be either 'accepted' or 'declined'.");
+    }
+
+    final db = await _database;
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+    await db.update(
+      'caregiver_invitations',
+      {'status': normalizedStatus, 'updated_at': nowIso},
+      where: 'id = ?',
+      whereArgs: [invitationId],
+    );
+
+    final rows = await db.query(
+      'caregiver_invitations',
+      where: 'id = ?',
+      whereArgs: [invitationId],
+      limit: 1,
+    );
+    if (rows.isNotEmpty) {
+      SupabaseSyncService.pushCaregiverInvitation(rows.first).ignore();
+    }
+  }
+
+  /// Convenience helper to accept an incoming invitation.
+  Future<void> acceptIncomingInvitation(String invitationId) =>
+      respondToIncomingInvitation(invitationId: invitationId, status: 'accepted');
+
+  /// Convenience helper to decline an incoming invitation.
+  Future<void> declineIncomingInvitation(String invitationId) =>
+      respondToIncomingInvitation(invitationId: invitationId, status: 'declined');
 }
 
 final caregiverRepositoryProvider = Provider<CaregiverRepository>((ref) {
@@ -876,5 +954,11 @@ final patientCaregiversListProvider = FutureProvider<List<AllocatedCaregiver>>((
 final caregiversProvider = FutureProvider<List<CaregiverInvitation>>((ref) async {
   final repo = ref.watch(caregiverRepositoryProvider);
   return repo.getInvitations();
+});
+
+/// Caregiver Mode: all incoming invitations addressed to the current caregiver.
+final incomingCaregiverInvitationsProvider = FutureProvider<List<CaregiverInvitation>>((ref) async {
+  final repo = ref.watch(caregiverRepositoryProvider);
+  return repo.getIncomingInvitations();
 });
 

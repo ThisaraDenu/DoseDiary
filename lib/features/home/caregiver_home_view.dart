@@ -9,6 +9,7 @@ import '../../data/remote/auth_service.dart';
 import '../../data/local/models/app_models.dart';
 import '../../data/local/models/dose_status.dart';
 import '../../data/repositories/app_repositories.dart';
+import '../caregivers/incoming_invitations_widget.dart';
 
 /// Caregiver Mode dashboard view matching the high-fidelity DoseDiary design.
 /// All telemetry, next dose banners, regimen schedules, weekly adherence analytics,
@@ -68,6 +69,10 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // 0. Incoming Invitations Section (addressed to this caregiver)
+        const IncomingCaregiverInvitationsWidget(),
+        const SizedBox(height: 20),
+
         // 1. Patient Quick Telemetry & Status Card (or Add Patient option if not allocated)
         _buildPatientTelemetryCard(context, activePatient),
         const SizedBox(height: 20),

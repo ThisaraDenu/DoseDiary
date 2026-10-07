@@ -33,6 +33,9 @@ class SupabaseSyncService {
       await _pullStockEvents(db, user.id);
       await _pullCaregiverInvitations(db, user.id);
       await _pullCaregiverPermissions(db, user.id);
+      if (user.email != null && user.email!.isNotEmpty) {
+        await _pullIncomingCaregiverInvitations(db, user.email!);
+      }
     } catch (e) {
       // Non-fatal: local data still usable offline
       // ignore: avoid_print
@@ -281,6 +284,32 @@ class SupabaseSyncService {
     for (final row in rows) {
       await database.insert('caregiver_permissions', _fromCloud(row),
           conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+  }
+
+  static Future<void> _pullIncomingCaregiverInvitations(
+      AppDatabase db, String email) async {
+    final rows = await _client
+        .from('caregiver_invitations')
+        .select()
+        .ilike('caregiver_email', email.trim());
+
+    final database = await db.database;
+    for (final row in rows) {
+      await database.insert('caregiver_invitations', _fromCloud(row),
+          conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+  }
+
+  /// Pulls incoming caregiver invitations addressed to the specified email (or current user's email).
+  static Future<void> pullIncomingCaregiverInvitations({String? email}) async {
+    final targetEmail = email ?? AuthService.currentUser?.email;
+    if (targetEmail == null || targetEmail.isEmpty) return;
+    try {
+      await _pullIncomingCaregiverInvitations(AppDatabase.instance, targetEmail);
+    } catch (e) {
+      // ignore: avoid_print
+      print('SupabaseSyncService.pullIncomingCaregiverInvitations error: $e');
     }
   }
 

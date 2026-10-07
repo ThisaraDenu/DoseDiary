@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
@@ -10,12 +11,15 @@ import '../../core/widgets/dd_button.dart';
 import '../../core/widgets/dd_loading.dart';
 import '../../core/router/route_names.dart';
 import '../../data/local/models/app_models.dart';
+import '../../data/remote/auth_service.dart';
+import '../../data/remote/supabase_sync_service.dart';
 import '../../data/repositories/app_repositories.dart';
 import '../home/caregiver_home_view.dart';
 
 // Re-export models and providers for backward compatibility
 export '../../data/local/models/app_models.dart' show CaregiverInvitation, CaregiverPermission;
-export '../../data/repositories/app_repositories.dart' show caregiversProvider;
+export '../../data/repositories/app_repositories.dart' show caregiversProvider, incomingCaregiverInvitationsProvider;
+export 'incoming_invitations_widget.dart' show IncomingCaregiverInvitationsWidget;
 
 // Screen
 class CaregiverManagementScreen extends ConsumerWidget {
@@ -60,62 +64,73 @@ class CaregiverManagementScreen extends ConsumerWidget {
             ),
           ),
         ),
-        data: (caregivers) => ListView(
-          padding: const EdgeInsets.all(AppDimensions.screenMargin),
-          children: [
-            // Privacy notice
-            DdCard(
-              borderColor: AppColors.info.withOpacity(0.3),
-              color: AppColors.info.withOpacity(0.04),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.shield_outlined, size: 20, color: AppColors.info),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Your Privacy', style: AppTextStyles.bodyBold(color: AppColors.info)),
-                        const SizedBox(height: 4),
-                        Text(
-                          'You control exactly what caregivers can see. Medication names are never shared — only the information you permit.',
-                          style: AppTextStyles.bodyLg(color: AppColors.textSecondary),
-                        ),
-                      ],
+        data: (caregivers) => RefreshIndicator(
+          color: AppColors.primaryAction,
+          onRefresh: () async {
+            if (AuthService.isLoggedIn) {
+              await SupabaseSyncService.pullFromCloud();
+            }
+            ref.invalidate(caregiversProvider);
+            await ref.read(caregiversProvider.future);
+          },
+          child: ListView(
+            padding: const EdgeInsets.all(AppDimensions.screenMargin),
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [
+              // Privacy notice
+              DdCard(
+                borderColor: AppColors.info.withOpacity(0.3),
+                color: AppColors.info.withOpacity(0.04),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.shield_outlined, size: 20, color: AppColors.info),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Your Privacy', style: AppTextStyles.bodyBold(color: AppColors.info)),
+                          const SizedBox(height: 4),
+                          Text(
+                            'You control exactly what caregivers can see. Medication names are never shared — only the information you permit.',
+                            style: AppTextStyles.bodyLg(color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: AppDimensions.stackXl),
+              const SizedBox(height: AppDimensions.stackXl),
 
-            if (caregivers.isEmpty) ...[
-              DdEmptyState(
-                icon: Icons.people_outline,
-                title: 'No caregivers added',
-                subtitle: 'Invite a trusted family member or carer to view your schedule.',
-                actionLabel: 'Invite a Caregiver',
-                onAction: () => context.push(RouteNames.inviteCaregiver),
-              ),
-            ] else ...[
-              Row(
-                children: [
-                  Expanded(child: Text('Caregivers (${caregivers.length})', style: AppTextStyles.headlineMd())),
-                  TextButton.icon(
-                    onPressed: () => context.push(RouteNames.inviteCaregiver),
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Invite'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppDimensions.stackMd),
-              for (final cg in caregivers) ...[
-                _CaregiverCard(cg: cg),
+              if (caregivers.isEmpty) ...[
+                DdEmptyState(
+                  icon: Icons.people_outline,
+                  title: 'No caregivers added',
+                  subtitle: 'Invite a trusted family member or carer to view your schedule.',
+                  actionLabel: 'Invite a Caregiver',
+                  onAction: () => context.push(RouteNames.inviteCaregiver),
+                ),
+              ] else ...[
+                Row(
+                  children: [
+                    Expanded(child: Text('Caregivers (${caregivers.length})', style: AppTextStyles.headlineMd())),
+                    TextButton.icon(
+                      onPressed: () => context.push(RouteNames.inviteCaregiver),
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text('Invite'),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: AppDimensions.stackMd),
+                for (final cg in caregivers) ...[
+                  _CaregiverCard(cg: cg),
+                  const SizedBox(height: AppDimensions.stackMd),
+                ],
               ],
             ],
-          ],
+          ),
         ),
       ),
       floatingActionButton: caregiversAsync.maybeWhen(
@@ -139,15 +154,23 @@ class _CaregiverCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final statusColor = switch (cg.status) {
+    final statusLower = cg.status.toLowerCase();
+    final statusColor = switch (statusLower) {
       'active' || 'accepted' => AppColors.takenForeground,
       'pending' => AppColors.skippedForeground,
       'declined' => AppColors.error,
       _ => AppColors.textTertiary,
     };
 
-    final statusLabel = switch (cg.status) {
-      'active' || 'accepted' => 'Active',
+    final statusBg = switch (statusLower) {
+      'active' || 'accepted' => AppColors.takenBackground,
+      'pending' => AppColors.skippedBackground,
+      'declined' => AppColors.error.withOpacity(0.12),
+      _ => AppColors.textTertiary.withOpacity(0.12),
+    };
+
+    final statusLabel = switch (statusLower) {
+      'active' || 'accepted' => 'Accepted',
       'pending' => 'Pending',
       'declined' => 'Declined',
       _ => 'Revoked',
@@ -173,15 +196,27 @@ class _CaregiverCard extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(cg.email, style: AppTextStyles.bodyBold()),
-                    Text(cg.relationship, style: AppTextStyles.caption()),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        if (cg.relationship.isNotEmpty) ...[
+                          Text(cg.relationship, style: AppTextStyles.caption()),
+                          Text(' • ', style: AppTextStyles.caption(color: AppColors.textTertiary)),
+                        ],
+                        Text(
+                          'Invited ${DateFormat('d MMM yyyy').format(cg.createdAt.toLocal())}',
+                          style: AppTextStyles.caption(color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(6),
+                  color: statusBg,
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(statusLabel, style: AppTextStyles.statusBadge(color: statusColor)),
               ),
@@ -202,62 +237,122 @@ class _CaregiverCard extends ConsumerWidget {
               if (cg.viewAdherence) const _PermChip(label: 'Adherence'),
             ],
           ),
-          if (cg.status != 'revoked') ...[
-            const SizedBox(height: AppDimensions.stackLg),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => _revoke(context, ref),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.error,
-                      side: const BorderSide(color: AppColors.error),
-                      minimumSize: const Size(0, 44),
+          const SizedBox(height: AppDimensions.stackLg),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => _handleAction(context, ref),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: statusLower == 'declined' || statusLower == 'revoked'
+                        ? AppColors.textSecondary
+                        : AppColors.error,
+                    side: BorderSide(
+                      color: statusLower == 'declined' || statusLower == 'revoked'
+                          ? AppColors.borderMedium
+                          : AppColors.error,
                     ),
-                    child: Text(cg.status == 'pending' ? 'Cancel Invitation' : 'Revoke Access'),
+                    minimumSize: const Size(0, 44),
+                  ),
+                  child: Text(
+                    switch (statusLower) {
+                      'pending' => 'Cancel Invitation',
+                      'accepted' || 'active' => 'Revoke Access',
+                      _ => 'Remove',
+                    },
                   ),
                 ),
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  Future<void> _revoke(BuildContext context, WidgetRef ref) async {
-    final isPending = cg.status == 'pending';
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(isPending ? 'Cancel Invitation' : 'Revoke Access'),
-        content: Text(
-          isPending
-              ? 'Cancel the pending invitation to ${cg.email}?'
-              : 'Remove ${cg.email}\'s caregiver access? They will no longer receive alerts.',
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(
-              isPending ? 'Cancel Invitation' : 'Revoke',
-              style: const TextStyle(color: AppColors.error),
+  Future<void> _handleAction(BuildContext context, WidgetRef ref) async {
+    final statusLower = cg.status.toLowerCase();
+    if (statusLower == 'pending') {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Cancel Invitation'),
+          content: Text('Cancel the pending invitation to ${cg.email}?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Cancel Invitation', style: TextStyle(color: AppColors.error)),
             ),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true) {
-      await ref.read(caregiverRepositoryProvider).revokeInvitation(cg.id);
-      ref.invalidate(caregiversProvider);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(isPending ? 'Invitation to ${cg.email} cancelled' : 'Caregiver access revoked for ${cg.email}'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+          ],
+        ),
+      );
+      if (confirmed == true) {
+        await ref.read(caregiverRepositoryProvider).revokeInvitation(cg.id);
+        ref.invalidate(caregiversProvider);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Invitation to ${cg.email} cancelled'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    } else if (statusLower == 'accepted' || statusLower == 'active') {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Revoke Access'),
+          content: Text('Remove ${cg.email}\'s caregiver access? They will no longer receive alerts.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Revoke', style: TextStyle(color: AppColors.error)),
+            ),
+          ],
+        ),
+      );
+      if (confirmed == true) {
+        await ref.read(caregiverRepositoryProvider).revokeInvitation(cg.id);
+        ref.invalidate(caregiversProvider);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Caregiver access revoked for ${cg.email}'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    } else {
+      // Declined or revoked
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Remove Record'),
+          content: Text('Remove this invitation record for ${cg.email}?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Remove', style: TextStyle(color: AppColors.error)),
+            ),
+          ],
+        ),
+      );
+      if (confirmed == true) {
+        await ref.read(caregiverRepositoryProvider).deleteInvitation(cg.id);
+        ref.invalidate(caregiversProvider);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Removed record for ${cg.email}'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
       }
     }
   }

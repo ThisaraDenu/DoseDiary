@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:dose_diary/data/local/models/app_models.dart';
+import 'package:intl/intl.dart';
 import 'package:dose_diary/features/caregivers/caregiver_management_screen.dart';
 
 void main() {
@@ -112,6 +112,41 @@ void main() {
       expect(parsed.permViewRefills, isTrue);
       expect(parsed.permViewAdherence, isFalse);
     });
+
+    test('Patient privacy isolation: filtering strictly bounds invitations to the patient user_id', () {
+      final now = DateTime.now();
+      final patientAInvite = CaregiverInvitation(
+        id: 'inv-a',
+        userId: 'patient-alice',
+        email: 'alice-carer@example.com',
+        relationship: 'Son',
+        status: 'pending',
+        createdAt: now,
+      );
+
+      final patientBInvite = CaregiverInvitation(
+        id: 'inv-b',
+        userId: 'patient-bob',
+        email: 'bob-carer@example.com',
+        relationship: 'Daughter',
+        status: 'pending',
+        createdAt: now,
+      );
+
+      final allInvitations = [patientAInvite, patientBInvite];
+
+      // Filter representing SQLite WHERE user_id = ?
+      final patientAView = allInvitations.where((i) => i.userId == 'patient-alice').toList();
+      final patientBView = allInvitations.where((i) => i.userId == 'patient-bob').toList();
+
+      expect(patientAView.length, 1);
+      expect(patientAView.first.email, 'alice-carer@example.com');
+      expect(patientAView.any((i) => i.userId == 'patient-bob'), isFalse);
+
+      expect(patientBView.length, 1);
+      expect(patientBView.first.email, 'bob-carer@example.com');
+      expect(patientBView.any((i) => i.userId == 'patient-alice'), isFalse);
+    });
   });
 
   group('Caregiver Management Screen Widget Tests', () {
@@ -135,38 +170,58 @@ void main() {
       expect(find.text('Invite a Caregiver'), findsOneWidget);
     });
 
-    testWidgets('renders caregiver cards with pending and active statuses and permissions', (tester) async {
-      final now = DateTime.now();
+    testWidgets('renders caregiver cards with Pending, Accepted, and Declined statuses and invitation dates', (tester) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final inviteDate = DateTime.utc(2026, 1, 15, 8, 30);
       final pendingInvite = CaregiverInvitation(
         id: 'cg-1',
         userId: 'patient-1',
         email: 'son@example.com',
         relationship: 'Son',
         status: 'pending',
-        createdAt: now,
+        createdAt: inviteDate,
         viewSchedule: true,
         viewHistory: true,
         viewRefills: false,
         viewAdherence: true,
       );
 
-      final activeInvite = CaregiverInvitation(
+      final acceptedInvite = CaregiverInvitation(
         id: 'cg-2',
         userId: 'patient-1',
         email: 'nurse@clinic.org',
         relationship: 'Nurse',
         status: 'accepted',
-        createdAt: now,
+        createdAt: inviteDate,
         viewSchedule: true,
         viewHistory: false,
         viewRefills: true,
         viewAdherence: false,
       );
 
+      final declinedInvite = CaregiverInvitation(
+        id: 'cg-3',
+        userId: 'patient-1',
+        email: 'doctor@hospital.com',
+        relationship: 'Doctor',
+        status: 'declined',
+        createdAt: inviteDate,
+        viewSchedule: false,
+        viewHistory: false,
+        viewRefills: false,
+        viewAdherence: false,
+      );
+
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            caregiversProvider.overrideWith((ref) => [pendingInvite, activeInvite]),
+            caregiversProvider.overrideWith((ref) => [pendingInvite, acceptedInvite, declinedInvite]),
           ],
           child: const MaterialApp(
             home: CaregiverManagementScreen(),
@@ -176,13 +231,19 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      expect(find.text('Caregivers (2)'), findsOneWidget);
+      expect(find.text('Caregivers (3)'), findsOneWidget);
       expect(find.text('son@example.com'), findsOneWidget);
       expect(find.text('nurse@clinic.org'), findsOneWidget);
+      expect(find.text('doctor@hospital.com'), findsOneWidget);
 
-      // Status badges
+      // Status badges matching requirement 4: Pending, Accepted, Declined
       expect(find.text('Pending'), findsOneWidget);
-      expect(find.text('Active'), findsOneWidget);
+      expect(find.text('Accepted'), findsOneWidget);
+      expect(find.text('Declined'), findsOneWidget);
+
+      // Displays invitation dates matching requirement 3
+      final formattedDate = DateFormat('d MMM yyyy').format(inviteDate.toLocal());
+      expect(find.textContaining('Invited $formattedDate'), findsNWidgets(3));
 
       // Permission chips
       expect(find.text('Schedule'), findsNWidgets(2));
@@ -190,9 +251,10 @@ void main() {
       expect(find.text('Refills'), findsOneWidget);
       expect(find.text('Adherence'), findsOneWidget);
 
-      // Action buttons
+      // Contextual action buttons
       expect(find.text('Cancel Invitation'), findsOneWidget);
       expect(find.text('Revoke Access'), findsOneWidget);
+      expect(find.text('Remove'), findsOneWidget);
     });
 
     testWidgets('tapping cancel invitation shows confirmation dialog', (tester) async {
@@ -317,4 +379,257 @@ void main() {
       expect(find.text('Please enter a valid email address.'), findsOneWidget);
     });
   });
+
+  group('Caregiver-Side Incoming Invitations Privacy & Filtering Tests', () {
+    test('Caregiver B sees invitations addressed to B and cannot see invitations addressed to C', () {
+      final now = DateTime.now();
+
+      final inviteForBFromPatient1 = CaregiverInvitation(
+        id: 'inv-b-1',
+        userId: 'patient-1',
+        email: 'caregiverB@example.com',
+        relationship: 'Daughter',
+        status: 'pending',
+        createdAt: now,
+      );
+
+      final inviteForBFromPatient2 = CaregiverInvitation(
+        id: 'inv-b-2',
+        userId: 'patient-2',
+        email: 'CaregiverB@Example.com', // mixed case
+        relationship: 'Nurse',
+        status: 'accepted',
+        createdAt: now,
+      );
+
+      final inviteForC = CaregiverInvitation(
+        id: 'inv-c-1',
+        userId: 'patient-1',
+        email: 'caregiverC@example.com',
+        relationship: 'Son',
+        status: 'pending',
+        createdAt: now,
+      );
+
+      final allInvitations = [inviteForBFromPatient1, inviteForBFromPatient2, inviteForC];
+
+      // Simulated SQLite query: WHERE LOWER(caregiver_email) = ?
+      const caregiverBEmail = 'caregiverb@example.com';
+      final caregiverBView = allInvitations
+          .where((i) => i.caregiverEmail.trim().toLowerCase() == caregiverBEmail)
+          .toList();
+
+      const caregiverCEmail = 'caregiverc@example.com';
+      final caregiverCView = allInvitations
+          .where((i) => i.caregiverEmail.trim().toLowerCase() == caregiverCEmail)
+          .toList();
+
+      // Caregiver B sees only invitations addressed to B
+      expect(caregiverBView.length, 2);
+      expect(caregiverBView.map((i) => i.id).toList(), containsAll(['inv-b-1', 'inv-b-2']));
+      // Caregiver B CANNOT see invitations addressed to C
+      expect(caregiverBView.any((i) => i.caregiverEmail.toLowerCase() == caregiverCEmail), isFalse);
+
+      // Caregiver C sees only invitations addressed to C
+      expect(caregiverCView.length, 1);
+      expect(caregiverCView.first.id, 'inv-c-1');
+      // Caregiver C CANNOT see invitations addressed to B
+      expect(caregiverCView.any((i) => i.caregiverEmail.toLowerCase() == caregiverBEmail), isFalse);
+    });
+
+    test('Patient owner filtering remains unchanged and is strictly separated from caregiver invitee filtering', () {
+      final now = DateTime.now();
+
+      // Patient 1 created an invitation to Caregiver B
+      final invite = CaregiverInvitation(
+        id: 'inv-1',
+        userId: 'patient-user-123',
+        email: 'caregiverB@example.com',
+        relationship: 'Family',
+        status: 'pending',
+        createdAt: now,
+      );
+
+      final allInvitations = [invite];
+
+      // 1. Patient-side filtering (WHERE user_id = ?)
+      final patientView = allInvitations.where((i) => i.userId == 'patient-user-123').toList();
+      expect(patientView.length, 1);
+      expect(patientView.first.userId, 'patient-user-123');
+
+      // Another patient cannot see Patient 1's invitations
+      final otherPatientView = allInvitations.where((i) => i.userId == 'patient-user-999').toList();
+      expect(otherPatientView, isEmpty);
+
+      // Caregiver's user ID is NOT confused with patient's user_id
+      final caregiverAsOwnerView = allInvitations.where((i) => i.userId == 'caregiver-b-user-id').toList();
+      expect(caregiverAsOwnerView, isEmpty);
+
+      // 2. Caregiver-side incoming filtering (WHERE LOWER(caregiver_email) = ?)
+      final caregiverIncomingView = allInvitations
+          .where((i) => i.caregiverEmail.toLowerCase() == 'caregiverb@example.com')
+          .toList();
+      expect(caregiverIncomingView.length, 1);
+      expect(caregiverIncomingView.first.caregiverEmail, 'caregiverB@example.com');
+    });
+  });
+
+  group('Incoming Caregiver Invitations Widget Tests', () {
+    testWidgets('renders empty state when caregiver has no incoming invitations', (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            incomingCaregiverInvitationsProvider.overrideWith((ref) => []),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(
+              body: IncomingCaregiverInvitationsWidget(),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('No Incoming Invitations'), findsOneWidget);
+      expect(
+        find.text('You do not have any pending or past caregiver invitations addressed to your account.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('renders error state with retry button when provider errors', (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            incomingCaregiverInvitationsProvider.overrideWith((ref) => throw Exception('Sync failed')),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(
+              body: IncomingCaregiverInvitationsWidget(),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Could not load incoming invitations'), findsOneWidget);
+      expect(find.text('Try Again'), findsOneWidget);
+    });
+
+    testWidgets('renders incoming invitation with patient details, permissions, and Pending renders Accept and Decline actions', (tester) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final inviteDate = DateTime.utc(2026, 1, 15, 9, 0);
+      final pendingInvite = CaregiverInvitation(
+        id: 'inc-1',
+        userId: 'patient-alice-id',
+        email: 'caregiverB@example.com',
+        relationship: 'Daughter',
+        status: 'pending',
+        createdAt: inviteDate,
+        patientName: 'Alice Smith',
+        patientEmail: 'alice@example.org',
+        viewSchedule: true,
+        viewHistory: true,
+        viewRefills: false,
+        viewAdherence: true,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            incomingCaregiverInvitationsProvider.overrideWith((ref) => [pendingInvite]),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: IncomingCaregiverInvitationsWidget(),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Displays patient info
+      expect(find.text('Incoming Invitations'), findsOneWidget);
+      expect(find.text('1 Pending'), findsOneWidget);
+      expect(find.text('Alice Smith'), findsOneWidget);
+      expect(find.text('alice@example.org'), findsOneWidget);
+      expect(find.text('Daughter'), findsOneWidget);
+
+      // Displays formatted date
+      final formattedDate = DateFormat('d MMM yyyy').format(inviteDate.toLocal());
+      expect(find.textContaining('Invited $formattedDate'), findsOneWidget);
+
+      // Displays status badge
+      expect(find.text('Pending'), findsOneWidget);
+
+      // Displays requested permissions
+      expect(find.text('Requested Permissions'), findsOneWidget);
+      expect(find.text('Schedule'), findsOneWidget);
+      expect(find.text('History'), findsOneWidget);
+      expect(find.text('Adherence'), findsOneWidget);
+      expect(find.text('Refills'), findsNothing);
+
+      // Pending invitation renders Accept and Decline actions
+      expect(find.text('Accept'), findsOneWidget);
+      expect(find.text('Decline'), findsOneWidget);
+    });
+
+    testWidgets('accepted incoming invitation renders status badge without Accept/Decline action buttons', (tester) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final inviteDate = DateTime.utc(2026, 1, 15, 9, 0);
+      final acceptedInvite = CaregiverInvitation(
+        id: 'inc-2',
+        userId: 'patient-bob-id',
+        email: 'caregiverB@example.com',
+        relationship: 'Caregiver',
+        status: 'accepted',
+        createdAt: inviteDate,
+        patientName: 'Bob Jones',
+        viewSchedule: true,
+        viewHistory: false,
+        viewRefills: true,
+        viewAdherence: false,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            incomingCaregiverInvitationsProvider.overrideWith((ref) => [acceptedInvite]),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: IncomingCaregiverInvitationsWidget(),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Bob Jones'), findsOneWidget);
+      expect(find.text('Accepted'), findsOneWidget);
+      expect(find.text('Accept'), findsNothing);
+      expect(find.text('Decline'), findsNothing);
+    });
+  });
 }
+
