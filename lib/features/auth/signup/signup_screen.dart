@@ -2,16 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:intl/intl.dart';
+
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/app_dimensions.dart';
 import '../../../core/widgets/dd_button.dart';
 import '../../../core/widgets/dd_google_button.dart';
 import '../../../core/widgets/dd_text_field.dart';
+import '../../../core/widgets/dd_phone_input.dart';
 import '../../../core/router/route_names.dart';
+import '../../../core/services/permission_service.dart';
 import '../../../data/remote/auth_service.dart';
 import '../../../data/remote/supabase_sync_service.dart';
-import '../../../core/services/permission_service.dart';
 import '../../../main.dart';
 
 class SignUpScreen extends ConsumerStatefulWidget {
@@ -25,8 +28,13 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
+  final _birthdayController = TextEditingController();
+  CountryRegion _selectedRegion = CountryRegion.defaultRegion;
+  DateTime? _selectedBirthday;
+  String? _selectedGender;
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
   bool _isLoading = false;
@@ -37,9 +45,41 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
+    _phoneController.dispose();
     _passwordController.dispose();
     _confirmController.dispose();
+    _birthdayController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickBirthday() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedBirthday ?? DateTime(now.year - 25, 1, 1),
+      firstDate: DateTime(1900),
+      lastDate: now,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+                  primary: AppColors.primaryAction,
+                  onPrimary: Colors.white,
+                ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() {
+        _selectedBirthday = picked;
+        final age = AuthService.calculateAge(picked.toIso8601String());
+        final formattedDate = DateFormat('dd MMM yyyy').format(picked);
+        _birthdayController.text =
+            age != null ? '$formattedDate ($age yrs)' : formattedDate;
+      });
+    }
   }
 
   Future<void> _signUp() async {
@@ -49,27 +89,51 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       _error = null;
     });
     try {
+      final phoneTrimmed = _phoneController.text.trim();
+      final fullPhoneNumber = phoneTrimmed.isNotEmpty
+          ? DdPhoneInput.formatFullNumber(_selectedRegion, phoneTrimmed)
+          : null;
+
+      final email = _emailController.text.trim().toLowerCase();
       await AuthService.signUp(
-        email: _emailController.text.trim(),
+        email: email,
         password: _passwordController.text,
         fullName: _nameController.text.trim(),
+        dateOfBirth: _selectedBirthday != null
+            ? DateFormat('yyyy-MM-dd').format(_selectedBirthday!)
+            : null,
+        gender: _selectedGender,
+        phoneNumber: fullPhoneNumber,
       );
-      final prefs = ref.read(sharedPreferencesProvider);
-      await prefs.setBool('onboarding_complete', true);
+
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Account created! Please check your email to verify.'),
-        ),
+      context.push(
+        RouteNames.verifyEmail,
+        extra: {'email': email},
       );
-      context.pop();
     } catch (e) {
-      String msg = 'Sign up failed. Please try again.';
-      final s = e.toString();
-      if (s.contains('already registered') || s.contains('already been registered')) {
+      String msg = 'Could not create your account. Please try again.';
+      final s = e.toString().toLowerCase();
+      if (s.contains('already registered') ||
+          s.contains('already been registered') ||
+          s.contains('user already exists')) {
         msg = 'An account with this email already exists. Try logging in.';
-      } else if (s.contains('Password should be')) {
+      } else if (s.contains('password should be')) {
         msg = 'Password must be at least 6 characters.';
+      } else if (s.contains('email address not authorized') ||
+          s.contains('error sending confirmation email') ||
+          s.contains('smtp')) {
+        msg = 'Could not send the verification code to this address. '
+            'Configure a verified email domain in Supabase SMTP.';
+      } else if (s.contains('rate limit') ||
+          s.contains('too many requests') ||
+          s.contains('over_email_send_rate_limit')) {
+        msg = 'Too many verification emails were requested. '
+            'Please wait and try again.';
+      } else if (s.contains('invalid email')) {
+        msg = 'Enter a valid email address.';
+      } else if (s.contains('network') || s.contains('socketexception')) {
+        msg = 'No internet connection. Check your network and try again.';
       }
       setState(() => _error = msg);
     } finally {
@@ -95,10 +159,12 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       SupabaseSyncService.pullFromCloud().ignore();
 
       if (!mounted) return;
-      if (!PermissionService.hasPrompted(prefs)) {
-        context.go(RouteNames.permissions);
+      if (await AuthService.needsProfileCompletion()) {
+        if (mounted) context.go(RouteNames.completeGoogleProfile);
+      } else if (!PermissionService.hasPrompted(prefs)) {
+        if (mounted) context.go(RouteNames.permissions);
       } else {
-        context.go(RouteNames.home);
+        if (mounted) context.go(RouteNames.home);
       }
     } catch (e) {
       setState(() => _error = _friendlyGoogleError(e.toString()));
@@ -142,7 +208,8 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                 hint: 'Your name',
                 controller: _nameController,
                 textInputAction: TextInputAction.next,
-                validator: (v) => (v?.trim().isEmpty ?? true) ? 'Name is required' : null,
+                validator: (v) =>
+                    (v?.trim().isEmpty ?? true) ? 'Name is required' : null,
               ),
               const SizedBox(height: AppDimensions.stackLg),
               DdTextField(
@@ -158,6 +225,89 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                 },
               ),
               const SizedBox(height: AppDimensions.stackLg),
+              // Phone Number with Region Selector
+              DdPhoneInput(
+                label: 'Phone number',
+                hint: '77 123 4567',
+                controller: _phoneController,
+                selectedRegion: _selectedRegion,
+                onRegionChanged: (region) {
+                  setState(() => _selectedRegion = region);
+                },
+                isRequired: true,
+                textInputAction: TextInputAction.next,
+              ),
+              const SizedBox(height: AppDimensions.stackLg),
+              // Birthday Field
+              InkWell(
+                onTap: _pickBirthday,
+                borderRadius: BorderRadius.circular(10),
+                child: IgnorePointer(
+                  child: DdTextField(
+                    label: 'Birthday',
+                    hint: 'Select your date of birth',
+                    controller: _birthdayController,
+                    prefixIcon: const Icon(Icons.cake_outlined),
+                    suffixIcon: const Icon(Icons.calendar_month_rounded),
+                    validator: (v) {
+                      if (_selectedBirthday == null) {
+                        return 'Birthday is required';
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppDimensions.stackLg),
+              // Gender Field
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Gender', style: AppTextStyles.bodyBold()),
+                  const SizedBox(height: AppDimensions.stackSm),
+                  DropdownButtonFormField<String>(
+                    value: _selectedGender,
+                    decoration: InputDecoration(
+                      hintText: 'Select gender',
+                      prefixIcon: const Icon(Icons.wc_rounded),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide:
+                            const BorderSide(color: AppColors.borderLight),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide:
+                            const BorderSide(color: AppColors.borderLight),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(
+                            color: AppColors.primaryAction, width: 1.5),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 14,
+                      ),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'Female', child: Text('Female')),
+                      DropdownMenuItem(value: 'Male', child: Text('Male')),
+                      DropdownMenuItem(value: 'Other', child: Text('Other')),
+                      DropdownMenuItem(
+                          value: 'Prefer not to say',
+                          child: Text('Prefer not to say')),
+                    ],
+                    onChanged: (val) => setState(() => _selectedGender = val),
+                    validator: (val) => (val == null || val.isEmpty)
+                        ? 'Gender is required'
+                        : null,
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppDimensions.stackLg),
               DdTextField(
                 label: 'Password',
                 controller: _passwordController,
@@ -165,12 +315,17 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                 textInputAction: TextInputAction.next,
                 helperText: 'Minimum 8 characters',
                 validator: (v) {
-                  if (v == null || v.length < 8) return 'At least 8 characters required';
+                  if (v == null || v.length < 8) {
+                    return 'At least 8 characters required';
+                  }
                   return null;
                 },
                 suffixIcon: IconButton(
-                  icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                  icon: Icon(_obscurePassword
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined),
+                  onPressed: () =>
+                      setState(() => _obscurePassword = !_obscurePassword),
                 ),
               ),
               const SizedBox(height: AppDimensions.stackLg),
@@ -181,35 +336,51 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                 textInputAction: TextInputAction.done,
                 onFieldSubmitted: (_) => _signUp(),
                 validator: (v) {
-                  if (v != _passwordController.text) return 'Passwords do not match';
+                  if (v != _passwordController.text) {
+                    return 'Passwords do not match';
+                  }
                   return null;
                 },
                 suffixIcon: IconButton(
-                  icon: Icon(_obscureConfirm ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-                  onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                  icon: Icon(_obscureConfirm
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined),
+                  onPressed: () =>
+                      setState(() => _obscureConfirm = !_obscureConfirm),
                 ),
               ),
               if (_error != null) ...[
                 const SizedBox(height: AppDimensions.stackMd),
-                Text(_error!, style: AppTextStyles.bodyLg(color: AppColors.error)),
+                Text(_error!,
+                    style: AppTextStyles.bodyLg(color: AppColors.error)),
               ],
               const SizedBox(height: AppDimensions.stackXl),
-              DdButton(label: 'Create Account', onPressed: _signUp, isLoading: _isLoading),
+              DdButton(
+                  label: 'Create Account',
+                  onPressed: _signUp,
+                  isLoading: _isLoading),
               const SizedBox(height: AppDimensions.stackLg),
 
               // "OR" Divider
               Row(
                 children: [
-                  const Expanded(child: Divider(color: AppColors.borderLight, thickness: 1)),
+                  const Expanded(
+                      child:
+                          Divider(color: AppColors.borderLight, thickness: 1)),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Text(
                       'OR SIGN UP WITH',
-                      style: AppTextStyles.caption(color: AppColors.textTertiary)
-                          .copyWith(letterSpacing: 1.1, fontWeight: FontWeight.w600),
+                      style:
+                          AppTextStyles.caption(color: AppColors.textTertiary)
+                              .copyWith(
+                                  letterSpacing: 1.1,
+                                  fontWeight: FontWeight.w600),
                     ),
                   ),
-                  const Expanded(child: Divider(color: AppColors.borderLight, thickness: 1)),
+                  const Expanded(
+                      child:
+                          Divider(color: AppColors.borderLight, thickness: 1)),
                 ],
               ),
               const SizedBox(height: AppDimensions.stackLg),
@@ -225,11 +396,13 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.shield_outlined, size: 13, color: AppColors.textTertiary),
+                    const Icon(Icons.shield_outlined,
+                        size: 13, color: AppColors.textTertiary),
                     const SizedBox(width: 5),
                     Text(
                       'Instant setup • No password required',
-                      style: AppTextStyles.caption(color: AppColors.textTertiary),
+                      style:
+                          AppTextStyles.caption(color: AppColors.textTertiary),
                     ),
                   ],
                 ),
@@ -239,10 +412,13 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text('Already have an account? ', style: AppTextStyles.bodyLg()),
+                  Text('Already have an account? ',
+                      style: AppTextStyles.bodyLg()),
                   TextButton(
-                    onPressed: () => context.pop(),
-                    child: Text('Log In', style: AppTextStyles.labelLg(color: AppColors.primaryAction)),
+                    onPressed: () => context.go(RouteNames.login),
+                    child: Text('Log In',
+                        style: AppTextStyles.labelLg(
+                            color: AppColors.primaryAction)),
                   ),
                 ],
               ),

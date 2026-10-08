@@ -6,6 +6,8 @@ class RouteNames {
   static const String onboarding = '/onboarding';
   static const String login = '/login';
   static const String signup = '/signup';
+  static const String verifyEmail = '/verify-email';
+  static const String completeGoogleProfile = '/complete-google-profile';
   static const String forgotPassword = '/forgot-password';
   static const String resetPassword = '/reset-password';
   static const String permissions = '/permissions';
@@ -26,6 +28,9 @@ class RouteNames {
   // Refills
   static const String refills = '/refills';
   static const String refillConfirm = '/refills/confirm/:id';
+
+  // Adherence
+  static const String adherence = '/adherence';
 
   // Caregivers
   static const String caregivers = '/caregivers';

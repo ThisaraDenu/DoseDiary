@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimensions.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/widgets/dd_avatar.dart';
 import '../../core/widgets/dd_button.dart';
 import '../../core/widgets/dd_card.dart';
+import '../../core/widgets/dd_phone_input.dart';
 import '../../data/remote/auth_service.dart';
 import '../../data/remote/supabase_sync_service.dart';
 import '../home/home_dashboard_screen.dart';
@@ -21,8 +23,13 @@ class AccountScreen extends ConsumerStatefulWidget {
 class _AccountScreenState extends ConsumerState<AccountScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
+  late final TextEditingController _birthdayController;
+  late final TextEditingController _phoneController;
   final ImagePicker _picker = ImagePicker();
 
+  CountryRegion _selectedRegion = CountryRegion.defaultRegion;
+  DateTime? _selectedBirthday;
+  String? _selectedGender;
   bool _isLoading = true;
   bool _isUploadingPhoto = false;
   bool _isSaving = false;
@@ -35,12 +42,16 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
   void initState() {
     super.initState();
     _nameController = TextEditingController();
+    _birthdayController = TextEditingController();
+    _phoneController = TextEditingController();
     _loadProfileData();
   }
 
   @override
   void dispose() {
     _nameController.dispose();
+    _birthdayController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
@@ -58,6 +69,32 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
               user?.userMetadata?['full_name'] as String? ??
               '';
           _nameController.text = fullName;
+
+          final dobStr = profile?['date_of_birth'] as String? ??
+              user?.userMetadata?['date_of_birth'] as String?;
+          if (dobStr != null && dobStr.isNotEmpty) {
+            try {
+              _selectedBirthday = DateTime.parse(dobStr);
+              final age = AuthService.calculateAge(dobStr);
+              final formatted = DateFormat('dd MMM yyyy').format(_selectedBirthday!);
+              _birthdayController.text =
+                  age != null ? '$formatted ($age yrs)' : formatted;
+            } catch (_) {
+              _birthdayController.text = dobStr;
+            }
+          }
+
+          _selectedGender = profile?['gender'] as String? ??
+              user?.userMetadata?['gender'] as String?;
+
+          final phoneStr = profile?['phone_number'] as String? ??
+              user?.userMetadata?['phone_number'] as String?;
+          if (phoneStr != null && phoneStr.isNotEmpty) {
+            final parsed = CountryRegion.parse(phoneStr);
+            _selectedRegion = parsed.region;
+            _phoneController.text = parsed.nationalNumber;
+          }
+
           _isLoading = false;
         });
       }
@@ -223,16 +260,62 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
     );
   }
 
+  Future<void> _pickBirthday() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedBirthday ?? DateTime(now.year - 25, 1, 1),
+      firstDate: DateTime(1900),
+      lastDate: now,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+              primary: AppColors.primaryAction,
+              onPrimary: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() {
+        _selectedBirthday = picked;
+        final age = AuthService.calculateAge(picked.toIso8601String());
+        final formattedDate = DateFormat('dd MMM yyyy').format(picked);
+        _birthdayController.text =
+            age != null ? '$formattedDate ($age yrs)' : formattedDate;
+      });
+    }
+  }
+
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isSaving = true);
     final newName = _nameController.text.trim();
+    final dobStr = _selectedBirthday != null
+        ? DateFormat('yyyy-MM-dd').format(_selectedBirthday!)
+        : null;
+    final phoneTrimmed = _phoneController.text.trim();
+    final fullPhone = phoneTrimmed.isNotEmpty
+        ? DdPhoneInput.formatFullNumber(_selectedRegion, phoneTrimmed)
+        : null;
 
     try {
-      await AuthService.updateProfile({'full_name': newName});
+      await AuthService.updateProfile({
+        'full_name': newName,
+        'date_of_birth': dobStr,
+        'gender': _selectedGender,
+        'phone_number': fullPhone,
+      });
       ref.invalidate(userNameProvider);
       ref.invalidate(userAvatarUrlProvider);
+      ref.invalidate(userProfileProvider);
+      ref.invalidate(userAgeProvider);
+      ref.invalidate(userGenderProvider);
+      ref.invalidate(userPhoneProvider);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -366,6 +449,167 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                 'Tap camera icon to change picture',
                 style: AppTextStyles.caption(color: AppColors.textSecondary),
               ),
+              const SizedBox(height: 14),
+
+              // ── Header Summary: Age, Gender & Phone Badges ───────────────────
+              Builder(
+                builder: (context) {
+                  final age = _selectedBirthday != null
+                      ? AuthService.calculateAge(_selectedBirthday!.toIso8601String())
+                      : null;
+                  final gender = _selectedGender;
+                  final phoneTrimmed = _phoneController.text.trim();
+
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.borderLight),
+                    ),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          // Age Pill
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(7),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFEF2F2),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(
+                                  Icons.cake_outlined,
+                                  size: 18,
+                                  color: AppColors.primaryAction,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Age',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                      color: Color(0xFF64748B),
+                                    ),
+                                  ),
+                                  Text(
+                                    age != null ? '$age yrs' : 'Not set',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 10),
+                            width: 1,
+                            height: 28,
+                            color: const Color(0xFFEEEEEE),
+                          ),
+                          // Gender Pill
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(7),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF0FDF4),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(
+                                  Icons.wc_rounded,
+                                  size: 18,
+                                  color: Color(0xFF16A34A),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Gender',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                      color: Color(0xFF64748B),
+                                    ),
+                                  ),
+                                  Text(
+                                    (gender != null && gender.isNotEmpty)
+                                        ? gender
+                                        : 'Not set',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 10),
+                            width: 1,
+                            height: 28,
+                            color: const Color(0xFFEEEEEE),
+                          ),
+                          // Phone Pill
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(7),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEFF6FF),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  _selectedRegion.flag,
+                                  style: const TextStyle(fontSize: 16),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Phone',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                      color: Color(0xFF64748B),
+                                    ),
+                                  ),
+                                  Text(
+                                    phoneTrimmed.isNotEmpty
+                                        ? '${_selectedRegion.dialCode} $phoneTrimmed'
+                                        : 'Not set',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
               const SizedBox(height: AppDimensions.stackLg),
 
               // ── 2. Personal Information Card ────────────────────────────────
@@ -417,6 +661,90 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                       },
                     ),
                     const SizedBox(height: AppDimensions.stackMd),
+
+                    // Phone Number with Region Selector
+                    DdPhoneInput(
+                      label: 'Phone Number',
+                      hint: '77 123 4567',
+                      controller: _phoneController,
+                      selectedRegion: _selectedRegion,
+                      onRegionChanged: (region) => setState(() => _selectedRegion = region),
+                      isRequired: false,
+                    ),
+                    const SizedBox(height: AppDimensions.stackMd),
+
+                    // Birthday
+                    const Text(
+                      'Birthday',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF545F73),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    InkWell(
+                      onTap: _pickBirthday,
+                      borderRadius: BorderRadius.circular(10),
+                      child: IgnorePointer(
+                        child: TextFormField(
+                          controller: _birthdayController,
+                          decoration: InputDecoration(
+                            hintText: 'Select date of birth',
+                            prefixIcon: const Icon(Icons.cake_outlined, size: 20),
+                            suffixIcon: const Icon(Icons.calendar_month_rounded, size: 20),
+                            filled: true,
+                            fillColor: const Color(0xFFF6F6F6),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppDimensions.stackMd),
+
+                    // Gender
+                    const Text(
+                      'Gender',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF545F73),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<String>(
+                      value: _selectedGender,
+                      decoration: InputDecoration(
+                        hintText: 'Select gender',
+                        prefixIcon: const Icon(Icons.wc_rounded, size: 20),
+                        filled: true,
+                        fillColor: const Color(0xFFF6F6F6),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'Female', child: Text('Female')),
+                        DropdownMenuItem(value: 'Male', child: Text('Male')),
+                        DropdownMenuItem(value: 'Other', child: Text('Other')),
+                        DropdownMenuItem(value: 'Prefer not to say', child: Text('Prefer not to say')),
+                      ],
+                      onChanged: (val) => setState(() => _selectedGender = val),
+                    ),
+                    const SizedBox(height: AppDimensions.stackLg),
+
                     DdButton(
                       label: 'Save Profile Changes',
                       icon: const Icon(Icons.check_rounded),

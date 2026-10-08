@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../theme/app_colors.dart';
 import '../router/route_names.dart';
+import '../../features/caregivers/connection_invitation_prompt.dart';
 
 /// Navigation item definition for DdBottomNav.
 class DdNavItem {
@@ -282,8 +283,7 @@ class _DdBottomNavState extends State<DdBottomNav>
                           if (i == _toIndex) {
                             inactiveOpacity = (1.0 - (t * 2.0)).clamp(0.0, 1.0);
                           } else if (i == _fromIndex) {
-                            inactiveOpacity =
-                                ((t - 0.5) * 2.0).clamp(0.0, 1.0);
+                            inactiveOpacity = ((t - 0.5) * 2.0).clamp(0.0, 1.0);
                           }
 
                           return Positioned(
@@ -393,7 +393,9 @@ class MainShell extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.scaffoldBackground,
       extendBody: true,
-      body: child,
+      body: ConnectionInvitationPrompt(
+        child: child,
+      ),
       bottomNavigationBar: DdBottomNav(
         currentIndex: currentIndex,
         onTap: (index) {

@@ -26,7 +26,11 @@ String _extractFirstName(String name) {
   if (parts.isNotEmpty) {
     final first = parts.first;
     final lower = first.toLowerCase().replaceAll('.', '');
-    if ((lower == 'mr' || lower == 'mrs' || lower == 'ms' || lower == 'dr' || lower == 'prof') &&
+    if ((lower == 'mr' ||
+            lower == 'mrs' ||
+            lower == 'ms' ||
+            lower == 'dr' ||
+            lower == 'prof') &&
         parts.length > 1) {
       return parts[1];
     }
@@ -57,6 +61,25 @@ final userNameProvider = FutureProvider<String>((ref) async {
     }
   }
   return 'Ishara';
+});
+
+final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
+  return await AuthService.getProfile();
+});
+
+final userAgeProvider = FutureProvider<int?>((ref) async {
+  final profile = await AuthService.getProfile();
+  return AuthService.calculateAge(profile?['date_of_birth'] as String?);
+});
+
+final userGenderProvider = FutureProvider<String?>((ref) async {
+  final profile = await AuthService.getProfile();
+  return profile?['gender'] as String?;
+});
+
+final userPhoneProvider = FutureProvider<String?>((ref) async {
+  final profile = await AuthService.getProfile();
+  return profile?['phone_number'] as String?;
 });
 
 // (Providers todayOccurrencesProvider, todayMedicationsProvider, todayAdherenceProvider,
@@ -324,12 +347,16 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                       color: Color(0xFFB1002C),
                     ),
                     const SizedBox(width: 6),
-                    Text(
-                      dateStr,
-                      style: const TextStyle(
-                        color: Color(0xFF545F73),
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w500,
+                    Flexible(
+                      child: Text(
+                        dateStr,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF545F73),
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ],
@@ -444,33 +471,42 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                     ),
                   ],
                 ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFDAD9),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFB1002C),
-                          shape: BoxShape.circle,
+                Flexible(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 2.5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFDAD9),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFB1002C),
+                            shape: BoxShape.circle,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        _isPatientMode ? '$userName (Patient)' : '$userName (Caregiver)',
-                        style: const TextStyle(
-                          color: Color(0xFF40000A),
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
+                        const SizedBox(width: 5),
+                        Flexible(
+                          child: Text(
+                            _isPatientMode
+                                ? '$userName (Patient)'
+                                : '$userName (Caregiver)',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFF40000A),
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -499,7 +535,8 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                     child: Container(
                       height: 44,
                       decoration: BoxDecoration(
-                        color: _isPatientMode ? Colors.white : Colors.transparent,
+                        color:
+                            _isPatientMode ? Colors.white : Colors.transparent,
                         borderRadius: BorderRadius.circular(6),
                         border: _isPatientMode
                             ? Border.all(
@@ -515,30 +552,36 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                               ]
                             : null,
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.person_rounded,
-                            size: 19,
-                            color: _isPatientMode
-                                ? const Color(0xFFB1002C)
-                                : const Color(0xFF545F73),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.person_rounded,
+                                size: 19,
+                                color: _isPatientMode
+                                    ? const Color(0xFFB1002C)
+                                    : const Color(0xFF545F73),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Patient Mode',
+                                style: TextStyle(
+                                  color: _isPatientMode
+                                      ? const Color(0xFFB1002C)
+                                      : const Color(0xFF545F73),
+                                  fontWeight: _isPatientMode
+                                      ? FontWeight.w700
+                                      : FontWeight.w600,
+                                  fontSize: 13.5,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Patient Mode',
-                            style: TextStyle(
-                              color: _isPatientMode
-                                  ? const Color(0xFFB1002C)
-                                  : const Color(0xFF545F73),
-                              fontWeight: _isPatientMode
-                                  ? FontWeight.w700
-                                  : FontWeight.w600,
-                              fontSize: 13.5,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
@@ -557,7 +600,8 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                     child: Container(
                       height: 44,
                       decoration: BoxDecoration(
-                        color: !_isPatientMode ? Colors.white : Colors.transparent,
+                        color:
+                            !_isPatientMode ? Colors.white : Colors.transparent,
                         borderRadius: BorderRadius.circular(6),
                         border: !_isPatientMode
                             ? Border.all(
@@ -575,30 +619,36 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                               ]
                             : null,
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.volunteer_activism_rounded,
-                            size: 19,
-                            color: !_isPatientMode
-                                ? const Color(0xFFB1002C)
-                                : const Color(0xFF545F73),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.volunteer_activism_rounded,
+                                size: 19,
+                                color: !_isPatientMode
+                                    ? const Color(0xFFB1002C)
+                                    : const Color(0xFF545F73),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Caregiver Mode',
+                                style: TextStyle(
+                                  color: !_isPatientMode
+                                      ? const Color(0xFFB1002C)
+                                      : const Color(0xFF545F73),
+                                  fontWeight: !_isPatientMode
+                                      ? FontWeight.w700
+                                      : FontWeight.w600,
+                                  fontSize: 13.5,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Caregiver Mode',
-                            style: TextStyle(
-                              color: !_isPatientMode
-                                  ? const Color(0xFFB1002C)
-                                  : const Color(0xFF545F73),
-                              fontWeight: !_isPatientMode
-                                  ? FontWeight.w700
-                                  : FontWeight.w600,
-                              fontSize: 13.5,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
@@ -622,7 +672,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     final actionable = occs.where((o) => o.status.isActionable).toList()
       ..sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
 
-    // Case 1: Empty state â€” user has not added any medications to the database
+    // Case 1: Empty state - user has not added any medications to the database
     if (meds.isEmpty) {
       return Container(
         width: double.infinity,
@@ -826,12 +876,11 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
 
     // Case 3: Real upcoming dose due today (actionable is guaranteed not empty)
     final next = actionable.first;
-    final matchedMed =
-        meds.where((m) => m.id == next.medicationId).firstOrNull;
+    final matchedMed = meds.where((m) => m.id == next.medicationId).firstOrNull;
 
     final medName = matchedMed?.name ?? 'Scheduled Medication';
     final medDetails = matchedMed != null
-        ? '${matchedMed.displayStrength} â€¢ ${matchedMed.displayDose}'
+        ? '${matchedMed.displayStrength} • ${matchedMed.displayDose}'
         : '1 Dose';
     final medInstructions = (matchedMed?.instructions != null &&
             matchedMed!.instructions!.trim().isNotEmpty)
@@ -989,7 +1038,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('âœ“ Marked $medName as taken!'),
+                          content: Text('✓ Marked $medName as taken!'),
                           backgroundColor: const Color(0xFF157F5D),
                           duration: const Duration(seconds: 2),
                         ),
@@ -1042,15 +1091,20 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              "Today's Schedule",
-              style: TextStyle(
-                color: Color(0xFF1B1B1B),
-                fontSize: 19,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.2,
+            const Expanded(
+              child: Text(
+                "Today's Schedule",
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Color(0xFF1B1B1B),
+                  fontSize: 19,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.2,
+                ),
               ),
             ),
+            const SizedBox(width: 8),
             InkWell(
               onTap: () => context.go(RouteNames.medications),
               borderRadius: BorderRadius.circular(6),
@@ -1093,8 +1147,9 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                   final timeStr =
                       DateFormat('h:mm a').format(occ.scheduledAt.toLocal());
                   final strengthStr = med != null ? med.displayStrength : '';
-                  final subtitle =
-                      strengthStr.isNotEmpty ? '$strengthStr â€¢ $timeStr' : timeStr;
+                  final subtitle = strengthStr.isNotEmpty
+                      ? '$strengthStr • $timeStr'
+                      : timeStr;
                   final isTaken = occ.status == DoseStatus.taken;
 
                   return _buildScheduleItem(
@@ -1313,20 +1368,20 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     );
   }
 
-  // â”€â”€ 5. Stats Grid (Adherence & Refills) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── 5. Stats Grid (Adherence & Refills) ──────────────────────────────
   Widget _buildStatsGrid(
     AsyncValue<AdherenceSummary> adherenceAsync,
     AsyncValue<List<Medication>> lowStockAsync,
   ) {
     final adherence = adherenceAsync.asData?.value;
-    final bool hasDosesToday = adherence != null && adherence.countable > 0;
+    final bool hasDosesToday = adherence != null && adherence.total > 0;
     final String adherencePercent =
-        hasDosesToday ? adherence.percentageStr : 'â€”';
+        hasDosesToday ? adherence.percentageStr : 'No data';
     final String adherenceTakenDesc = hasDosesToday
-        ? '${adherence.taken} of ${adherence.countable} taken today'
+        ? '${adherence.taken} of ${adherence.total} taken today'
         : 'No doses today';
     final double adherenceFactor = hasDosesToday
-        ? (adherence.taken / adherence.countable).clamp(0.0, 1.0)
+        ? (adherence.taken / adherence.total).clamp(0.0, 1.0)
         : 0.0;
 
     final lowStockMeds = lowStockAsync.asData?.value ?? [];
@@ -1342,91 +1397,106 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
       children: [
         // Adherence Card
         Expanded(
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 6,
-                  offset: const Offset(0, 1),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Top row: Label + Icon
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Adherence',
-                      style: TextStyle(
-                        color: Color(0xFF545F73),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+          child: InkWell(
+            onTap: () => context.push(RouteNames.adherence),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.03),
+                    blurRadius: 6,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Top row: Label + Icon
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Adherence',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Color(0xFF545F73),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
-                    ),
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFD5E0F8),
-                        borderRadius: BorderRadius.circular(8),
+                      const SizedBox(width: 4),
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFD5E0F8),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.bar_chart_rounded,
+                          color: Color(0xFF586377),
+                          size: 18,
+                        ),
                       ),
-                      child: const Icon(
-                        Icons.bar_chart_rounded,
-                        color: Color(0xFF586377),
-                        size: 18,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
 
-                // Percentage & Count
-                Text(
-                  adherencePercent,
-                  style: const TextStyle(
-                    color: Color(0xFF1B1B1B),
-                    fontSize: 30,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                Text(
-                  adherenceTakenDesc,
-                  style: const TextStyle(
-                    color: Color(0xFF545F73),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                // Progress Bar
-                Container(
-                  width: double.infinity,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEEEEEE),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: FractionallySizedBox(
+                  // Percentage & Count
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
                     alignment: Alignment.centerLeft,
-                    widthFactor: adherenceFactor,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF157F5D),
-                        borderRadius: BorderRadius.circular(999),
+                    child: Text(
+                      adherencePercent,
+                      style: TextStyle(
+                        color: const Color(0xFF1B1B1B),
+                        fontSize: hasDosesToday ? 30 : 22,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.5,
                       ),
                     ),
                   ),
-                ),
-              ],
+                  Text(
+                    adherenceTakenDesc,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF545F73),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Progress Bar
+                  Container(
+                    width: double.infinity,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEEEEEE),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: FractionallySizedBox(
+                      alignment: Alignment.centerLeft,
+                      widthFactor: adherenceFactor,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF157F5D),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -1457,46 +1527,54 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          const Text(
-                            'Refills',
-                            style: TextStyle(
-                              color: Color(0xFF545F73),
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(width: 5),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: hasLowStock
-                                  ? const Color(0xFFFFDAD6)
-                                  : const Color(0xFF97F5CC),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              hasLowStock ? 'Urgent' : 'Good',
-                              style: TextStyle(
-                                color: hasLowStock
-                                    ? const Color(0xFF93000A)
-                                    : const Color(0xFF002115),
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w700,
+                      Expanded(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Flexible(
+                              child: Text(
+                                'Refills',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Color(0xFF545F73),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 5, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: hasLowStock
+                                    ? const Color(0xFFFFDAD6)
+                                    : const Color(0xFF97F5CC),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                hasLowStock ? 'Urgent' : 'Good',
+                                style: TextStyle(
+                                  color: hasLowStock
+                                      ? const Color(0xFF93000A)
+                                      : const Color(0xFF002115),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
+                      const SizedBox(width: 4),
                       Container(
                         width: 32,
                         height: 32,
                         decoration: BoxDecoration(
                           color: hasLowStock
                               ? const Color(0xFFFFDAD6)
-                              : const Color(0xFF97F5CC).withOpacity(0.3),
+                              : const Color(0xFF97F5CC).withAlpha(76),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Icon(
@@ -1514,17 +1592,23 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                   const SizedBox(height: 12),
 
                   // Count & Note
-                  Text(
-                    lowStockCount,
-                    style: TextStyle(
-                      color: lowStockColor,
-                      fontSize: 30,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.5,
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      lowStockCount,
+                      style: TextStyle(
+                        color: lowStockColor,
+                        fontSize: 30,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.5,
+                      ),
                     ),
                   ),
                   Text(
                     lowStockDesc,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: Color(0xFF545F73),
                       fontSize: 12,
@@ -1537,29 +1621,36 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          Text(
-                            hasLowStock ? 'Order Now' : 'View Stock',
-                            style: const TextStyle(
-                              color: Color(0xFFB1002C),
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w700,
+                      Expanded(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                hasLowStock ? 'Order Now' : 'View Stock',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Color(0xFFB1002C),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                             ),
-                          ),
-                          const Icon(
-                            Icons.arrow_forward_rounded,
-                            size: 14,
-                            color: Color(0xFFB1002C),
-                          ),
-                        ],
-                      ),
-                      const Text(
-                        'Refills â€º',
-                        style: TextStyle(
-                          color: Color(0xFF545F73),
-                          fontSize: 12,
+                            const SizedBox(width: 3),
+                            const Icon(
+                              Icons.arrow_forward_rounded,
+                              size: 13,
+                              color: Color(0xFFB1002C),
+                            ),
+                          ],
                         ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(
+                        Icons.chevron_right_rounded,
+                        size: 16,
+                        color: Color(0xFF545F73),
                       ),
                     ],
                   ),
@@ -1580,23 +1671,30 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     final header = Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Text(
-          'My Caregivers',
-          style: TextStyle(
-            color: Color(0xFF1B1B1B),
-            fontSize: 19,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.2,
+        const Expanded(
+          child: Text(
+            'My Caregivers',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Color(0xFF1B1B1B),
+              fontSize: 19,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.2,
+            ),
           ),
         ),
+        const SizedBox(width: 8),
         InkWell(
-          onTap: () => _showAddCaregiverSheet(context),
+          onTap: () => context.push(RouteNames.inviteCaregiver),
           borderRadius: BorderRadius.circular(6),
           child: const Padding(
             padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.person_add_rounded, color: Color(0xFFB1002C), size: 16),
+                Icon(Icons.person_add_rounded,
+                    color: Color(0xFFB1002C), size: 16),
                 SizedBox(width: 4),
                 Text(
                   'Add Caregiver',
@@ -1665,7 +1763,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                 ),
                 const SizedBox(height: 16),
                 ElevatedButton.icon(
-                  onPressed: () => _showAddCaregiverSheet(context),
+                  onPressed: () => context.push(RouteNames.inviteCaregiver),
                   icon: const Icon(Icons.add_rounded, size: 18),
                   label: const Text(
                     'Add First Caregiver',
@@ -1675,7 +1773,8 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                     backgroundColor: const Color(0xFFDC143C),
                     foregroundColor: Colors.white,
                     elevation: 0,
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 12),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -1736,7 +1835,8 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                               caregiver.avatarUrl!,
                               fit: BoxFit.cover,
                               errorBuilder: (_, __, ___) =>
-                                  _buildCaregiverAvatarFallback(caregiver.fullName),
+                                  _buildCaregiverAvatarFallback(
+                                      caregiver.fullName),
                             )
                           : _buildCaregiverAvatarFallback(caregiver.fullName),
                     ),
@@ -1847,16 +1947,21 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                     ),
                   ),
                   PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF545F73), size: 20),
+                    icon: const Icon(Icons.more_vert_rounded,
+                        color: Color(0xFF545F73), size: 20),
                     padding: EdgeInsets.zero,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                     onSelected: (value) async {
                       if (value == 'add') {
-                        _showAddCaregiverSheet(context);
+                        context.push(RouteNames.inviteCaregiver);
                       } else if (value == 'remove') {
-                        await ref.read(caregiverRepositoryProvider).removeCaregiver(caregiver.id);
+                        await ref
+                            .read(caregiverRepositoryProvider)
+                            .removeCaregiver(caregiver.id);
                         ref.invalidate(patientCaregiversListProvider);
-                        _showCaregiverToast('Removed ${caregiver.fullName} from caregivers.');
+                        _showCaregiverToast(
+                            'Removed ${caregiver.fullName} from caregivers.');
                       }
                     },
                     itemBuilder: (context) => [
@@ -1864,7 +1969,8 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                         value: 'add',
                         child: Row(
                           children: [
-                            Icon(Icons.person_add_rounded, size: 18, color: Color(0xFF1B1B1B)),
+                            Icon(Icons.person_add_rounded,
+                                size: 18, color: Color(0xFF1B1B1B)),
                             SizedBox(width: 8),
                             Text('Add Another Caregiver'),
                           ],
@@ -1874,9 +1980,11 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                         value: 'remove',
                         child: Row(
                           children: [
-                            Icon(Icons.person_remove_rounded, size: 18, color: Color(0xFFDC143C)),
+                            Icon(Icons.person_remove_rounded,
+                                size: 18, color: Color(0xFFDC143C)),
                             SizedBox(width: 8),
-                            Text('Remove Caregiver', style: TextStyle(color: Color(0xFFDC143C))),
+                            Text('Remove Caregiver',
+                                style: TextStyle(color: Color(0xFFDC143C))),
                           ],
                         ),
                       ),
@@ -1982,6 +2090,8 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     );
   }
 
+  // Kept for editing legacy manually allocated records.
+  // ignore: unused_element
   void _showAddCaregiverSheet(BuildContext context) {
     final nameController = TextEditingController();
     final locationController = TextEditingController(text: 'Colombo Home');
@@ -1990,6 +2100,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
 
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
@@ -2000,7 +2111,9 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                 left: 20,
                 right: 20,
                 top: 20,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+                bottom: MediaQuery.of(context).viewInsets.bottom +
+                    24 +
+                    MediaQuery.of(context).padding.bottom,
               ),
               decoration: const BoxDecoration(
                 color: Colors.white,
@@ -2024,7 +2137,8 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                     const SizedBox(height: 16),
                     const Row(
                       children: [
-                        Icon(Icons.person_add_rounded, color: Color(0xFFDC143C), size: 24),
+                        Icon(Icons.person_add_rounded,
+                            color: Color(0xFFDC143C), size: 24),
                         SizedBox(width: 8),
                         Text(
                           'Add Caregiver',
@@ -2045,7 +2159,8 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
 
                     // Full Name
                     const Text('Caregiver Full Name *',
-                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 13)),
                     const SizedBox(height: 6),
                     TextField(
                       controller: nameController,
@@ -2054,7 +2169,8 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                         hintText: 'e.g. Ishara Perera',
                         filled: true,
                         fillColor: const Color(0xFFF7F7F7),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide.none,
@@ -2065,27 +2181,38 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
 
                     // Relationship
                     const Text('Relationship',
-                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 13)),
                     const SizedBox(height: 6),
                     DropdownButtonFormField<String>(
                       value: selectedRelationship,
                       items: const [
-                        DropdownMenuItem(value: 'Daughter', child: Text('Daughter')),
+                        DropdownMenuItem(
+                            value: 'Daughter', child: Text('Daughter')),
                         DropdownMenuItem(value: 'Son', child: Text('Son')),
-                        DropdownMenuItem(value: 'Spouse', child: Text('Spouse / Partner')),
-                        DropdownMenuItem(value: 'Family Member', child: Text('Family Member')),
-                        DropdownMenuItem(value: 'Nurse', child: Text('Nurse / Home Care')),
-                        DropdownMenuItem(value: 'Doctor', child: Text('Doctor / Physician')),
-                        DropdownMenuItem(value: 'Caregiver', child: Text('Caregiver / Carer')),
+                        DropdownMenuItem(
+                            value: 'Spouse', child: Text('Spouse / Partner')),
+                        DropdownMenuItem(
+                            value: 'Family Member',
+                            child: Text('Family Member')),
+                        DropdownMenuItem(
+                            value: 'Nurse', child: Text('Nurse / Home Care')),
+                        DropdownMenuItem(
+                            value: 'Doctor', child: Text('Doctor / Physician')),
+                        DropdownMenuItem(
+                            value: 'Caregiver',
+                            child: Text('Caregiver / Carer')),
                         DropdownMenuItem(value: 'Other', child: Text('Other')),
                       ],
                       onChanged: (val) {
-                        if (val != null) setSheetState(() => selectedRelationship = val);
+                        if (val != null)
+                          setSheetState(() => selectedRelationship = val);
                       },
                       decoration: InputDecoration(
                         filled: true,
                         fillColor: const Color(0xFFF7F7F7),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide.none,
@@ -2096,7 +2223,8 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
 
                     // Location
                     const Text('Location',
-                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 13)),
                     const SizedBox(height: 6),
                     TextField(
                       controller: locationController,
@@ -2104,7 +2232,8 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                         hintText: 'e.g. Colombo Home',
                         filled: true,
                         fillColor: const Color(0xFFF7F7F7),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide.none,
@@ -2115,7 +2244,8 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
 
                     // Phone Number
                     const Text('Phone Number (Optional)',
-                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 13)),
                     const SizedBox(height: 6),
                     TextField(
                       controller: phoneController,
@@ -2124,7 +2254,8 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                         hintText: 'e.g. +94 77 123 4567',
                         filled: true,
                         fillColor: const Color(0xFFF7F7F7),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide.none,
@@ -2138,12 +2269,14 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                       onPressed: () async {
                         final fullName = nameController.text.trim();
                         if (fullName.isEmpty) {
-                          _showCaregiverToast('Please enter caregiver full name');
+                          _showCaregiverToast(
+                              'Please enter caregiver full name');
                           return;
                         }
 
                         final newCaregiver = AllocatedCaregiver.create(
-                          patientId: AuthService.currentUser?.id ?? 'default_user',
+                          patientId:
+                              AuthService.currentUser?.id ?? 'default_user',
                           fullName: fullName,
                           relationship: selectedRelationship,
                           location: locationController.text.trim().isNotEmpty
@@ -2158,19 +2291,24 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                           lastActive: 'Active 12m ago',
                         );
 
-                        await ref.read(caregiverRepositoryProvider).addCaregiver(newCaregiver);
+                        await ref
+                            .read(caregiverRepositoryProvider)
+                            .addCaregiver(newCaregiver);
                         ref.invalidate(patientCaregiversListProvider);
                         if (context.mounted) {
                           Navigator.of(ctx).pop();
                         }
-                        _showCaregiverToast('Added caregiver $fullName successfully!');
+                        _showCaregiverToast(
+                            'Added caregiver $fullName successfully!');
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFFDC143C),
                         foregroundColor: Colors.white,
                         minimumSize: const Size(double.infinity, 48),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                        textStyle: const TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w700),
                       ),
                       child: const Text('Save & Add Caregiver'),
                     ),
@@ -2195,10 +2333,10 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
       child: Text(
         initials,
         style: const TextStyle(
-            color: Color(0xFF3A5FCD), fontSize: 20, fontWeight: FontWeight.w700),
+            color: Color(0xFF3A5FCD),
+            fontSize: 20,
+            fontWeight: FontWeight.w700),
       ),
     );
   }
 }
-
-

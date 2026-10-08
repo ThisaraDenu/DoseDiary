@@ -36,8 +36,38 @@ class AppDatabase {
     await db.execute(_createAllocatedCaregiversTable);
     // Add patient_user_id column if upgrading from older schema
     try {
-      await db.execute('ALTER TABLE allocated_patients ADD COLUMN patient_user_id TEXT');
-    } catch (_) { /* column already exists — safe to ignore */ }
+      await db.execute(
+          'ALTER TABLE allocated_patients ADD COLUMN patient_user_id TEXT');
+    } catch (_) {/* column already exists — safe to ignore */}
+    // Add date_of_birth and gender to profiles
+    try {
+      await db.execute('ALTER TABLE profiles ADD COLUMN date_of_birth TEXT');
+    } catch (_) {/* column already exists — safe to ignore */}
+    try {
+      await db.execute('ALTER TABLE profiles ADD COLUMN gender TEXT');
+    } catch (_) {/* column already exists — safe to ignore */}
+    try {
+      await db.execute('ALTER TABLE profiles ADD COLUMN phone_number TEXT');
+    } catch (_) {/* column already exists — safe to ignore */}
+    try {
+      await db.execute('ALTER TABLE profiles ADD COLUMN public_id TEXT');
+    } catch (_) {/* column already exists - safe to ignore */}
+    await db.execute(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_public_id '
+      'ON profiles(public_id) WHERE public_id IS NOT NULL',
+    );
+    for (final statement in const [
+      'ALTER TABLE caregiver_invitations ADD COLUMN caregiver_user_id TEXT',
+      'ALTER TABLE caregiver_invitations ADD COLUMN sender_user_id TEXT',
+      'ALTER TABLE caregiver_invitations ADD COLUMN receiver_user_id TEXT',
+      'ALTER TABLE caregiver_invitations ADD COLUMN sender_role TEXT',
+      'ALTER TABLE caregiver_invitations ADD COLUMN sender_name TEXT',
+      'ALTER TABLE caregiver_invitations ADD COLUMN receiver_name TEXT',
+    ]) {
+      try {
+        await db.execute(statement);
+      } catch (_) {/* column already exists - safe to ignore */}
+    }
     await _clearSeedData(db);
     return db;
   }
@@ -65,7 +95,12 @@ class AppDatabase {
   /// Removes any rows that were inserted by the old seedSampleCaregiverData()
   /// helper. Safe to call repeatedly — it is a no-op once the rows are gone.
   Future<void> _clearSeedData(Database db) async {
-    const tables = ['dose_events', 'dose_occurrences', 'schedules', 'medications'];
+    const tables = [
+      'dose_events',
+      'dose_occurrences',
+      'schedules',
+      'medications'
+    ];
     for (final table in tables) {
       await db.delete(table, where: "id LIKE 'sample-%' OR id LIKE 'past_%'");
     }
@@ -78,6 +113,10 @@ class AppDatabase {
       id TEXT PRIMARY KEY,
       full_name TEXT NOT NULL DEFAULT '',
       avatar_url TEXT,
+      date_of_birth TEXT,
+      gender TEXT,
+      phone_number TEXT,
+      public_id TEXT UNIQUE,
       preferred_language TEXT NOT NULL DEFAULT 'en',
       text_scale_factor REAL NOT NULL DEFAULT 1.0,
       simple_wording INTEGER NOT NULL DEFAULT 0,
@@ -181,6 +220,12 @@ class AppDatabase {
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
       caregiver_email TEXT NOT NULL,
+      caregiver_user_id TEXT,
+      sender_user_id TEXT,
+      receiver_user_id TEXT,
+      sender_role TEXT,
+      sender_name TEXT,
+      receiver_name TEXT,
       relationship TEXT NOT NULL DEFAULT 'Family member',
       status TEXT NOT NULL DEFAULT 'pending',
       token TEXT NOT NULL UNIQUE,
@@ -290,14 +335,21 @@ class AppDatabase {
   /// Purges leftover demo-user-001 data from local storage.
   Future<void> purgeDemoData() async {
     final db = await database;
-    await db.delete('medications', where: 'user_id = ?', whereArgs: ['demo-user-001']);
-    await db.delete('schedules', where: 'user_id = ?', whereArgs: ['demo-user-001']);
-    await db.delete('dose_occurrences', where: 'user_id = ?', whereArgs: ['demo-user-001']);
-    await db.delete('dose_events', where: 'user_id = ?', whereArgs: ['demo-user-001']);
-    await db.delete('stock_events', where: 'user_id = ?', whereArgs: ['demo-user-001']);
+    await db.delete('medications',
+        where: 'user_id = ?', whereArgs: ['demo-user-001']);
+    await db.delete('schedules',
+        where: 'user_id = ?', whereArgs: ['demo-user-001']);
+    await db.delete('dose_occurrences',
+        where: 'user_id = ?', whereArgs: ['demo-user-001']);
+    await db.delete('dose_events',
+        where: 'user_id = ?', whereArgs: ['demo-user-001']);
+    await db.delete('stock_events',
+        where: 'user_id = ?', whereArgs: ['demo-user-001']);
     await db.delete('profiles', where: 'id = ?', whereArgs: ['demo-user-001']);
-    await db.delete('allocated_patients', where: 'caregiver_id = ?', whereArgs: ['demo-user-001']);
-    await db.delete('allocated_caregivers', where: 'patient_id = ?', whereArgs: ['demo-user-001']);
+    await db.delete('allocated_patients',
+        where: 'caregiver_id = ?', whereArgs: ['demo-user-001']);
+    await db.delete('allocated_caregivers',
+        where: 'patient_id = ?', whereArgs: ['demo-user-001']);
   }
 
   /// Wipes all user-specific local SQLite tables (called on sign out).
@@ -323,7 +375,8 @@ class AppDatabase {
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 
-final appDatabaseProvider = Provider<AppDatabase>((ref) => AppDatabase.instance);
+final appDatabaseProvider =
+    Provider<AppDatabase>((ref) => AppDatabase.instance);
 
 class DatabaseProvider {
   static Future<void> initialize() async {

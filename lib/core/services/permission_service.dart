@@ -4,10 +4,12 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum AppPermissionType {
+  notification,
   contacts,
+  camera,
+  microphone,
   location,
   media,
-  camera,
   calendar,
 }
 
@@ -53,12 +55,16 @@ class PermissionService {
   /// Map AppPermissionType to underlying permission_handler Permissions
   static List<Permission> _getPermissionsForType(AppPermissionType type) {
     switch (type) {
+      case AppPermissionType.notification:
+        return [Permission.notification];
       case AppPermissionType.contacts:
         return [Permission.contacts];
-      case AppPermissionType.location:
-        return [Permission.locationWhenInUse, Permission.location];
       case AppPermissionType.camera:
         return [Permission.camera];
+      case AppPermissionType.microphone:
+        return [Permission.microphone];
+      case AppPermissionType.location:
+        return [Permission.locationWhenInUse, Permission.location];
       case AppPermissionType.media:
         return [Permission.photos, Permission.storage];
       case AppPermissionType.calendar:
@@ -128,10 +134,12 @@ class PermissionsState {
     this.isLoading = false,
     this.isRequestingAll = false,
     this.statuses = const {
+      AppPermissionType.notification: false,
       AppPermissionType.contacts: false,
+      AppPermissionType.camera: false,
+      AppPermissionType.microphone: false,
       AppPermissionType.location: false,
       AppPermissionType.media: false,
-      AppPermissionType.camera: false,
       AppPermissionType.calendar: false,
     },
   });
@@ -156,10 +164,12 @@ class PermissionsController extends StateNotifier<PermissionsState> {
       : super(PermissionsState(
           statuses: initialStatuses ??
               const {
+                AppPermissionType.notification: false,
                 AppPermissionType.contacts: false,
+                AppPermissionType.camera: false,
+                AppPermissionType.microphone: false,
                 AppPermissionType.location: false,
                 AppPermissionType.media: false,
-                AppPermissionType.camera: false,
                 AppPermissionType.calendar: false,
               },
           isLoading: initialStatuses == null,

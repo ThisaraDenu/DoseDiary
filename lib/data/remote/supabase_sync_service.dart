@@ -32,7 +32,14 @@ class SupabaseSyncService {
       await _pullDoseOccurrences(db, user.id);
       await _pullStockEvents(db, user.id);
       await _pullCaregiverInvitations(db, user.id);
+      await _pullDirectConnectionInvitations(db, user.id);
       await _pullCaregiverPermissions(db, user.id);
+      await _pullPatientCaregiverLinks(db, user.id);
+      await _pullAllocatedPatients(db, user.id);
+      await _pullAllocatedCaregivers(db, user.id);
+      if (user.email != null && user.email!.isNotEmpty) {
+        await _pullIncomingCaregiverInvitations(db, user.email!);
+      }
     } catch (e) {
       // Non-fatal: local data still usable offline
       // ignore: avoid_print
@@ -111,6 +118,56 @@ class SupabaseSyncService {
       for (final row in stocks) {
         await pushStockEvent(row);
       }
+
+      // 6. Caregiver Invitations
+      final invites = await db.query(
+        'caregiver_invitations',
+        where: 'user_id = ?',
+        whereArgs: [user.id],
+      );
+      for (final row in invites) {
+        await pushCaregiverInvitation(row);
+      }
+
+      // 7. Caregiver Permissions
+      final perms = await db.query(
+        'caregiver_permissions',
+        where: 'user_id = ?',
+        whereArgs: [user.id],
+      );
+      for (final row in perms) {
+        await pushCaregiverPermission(row);
+      }
+
+      // 8. Patient-Caregiver Links
+      final links = await db.query(
+        'patient_caregiver_links',
+        where: 'patient_user_id = ? OR caregiver_user_id = ?',
+        whereArgs: [user.id, user.id],
+      );
+      for (final row in links) {
+        await pushPatientCaregiverLink(row);
+      }
+
+      // 9. Allocated Patients
+      final allocPatients = await db.query(
+        'allocated_patients',
+        where: 'caregiver_id = ?',
+        whereArgs: [user.id],
+      );
+      for (final row in allocPatients) {
+        await pushAllocatedPatient(row);
+      }
+
+      // 10. Allocated Caregivers
+      final allocCaregivers = await db.query(
+        'allocated_caregivers',
+        where: 'patient_id = ?',
+        whereArgs: [user.id],
+      );
+      for (final row in allocCaregivers) {
+        await pushAllocatedCaregiver(row);
+      }
     } catch (e) {
       // ignore: avoid_print
       print('SupabaseSyncService.pushAllLocalDataToCloud error: $e');
@@ -157,6 +214,37 @@ class SupabaseSyncService {
     await _upsert('stock_events', _toCloud(data));
   }
 
+  /// Push a caregiver invitation to Supabase.
+  static Future<void> pushCaregiverInvitation(Map<String, dynamic> data) async {
+    if (!AuthService.isLoggedIn) return;
+    await _upsert('caregiver_invitations', _toCloud(data));
+  }
+
+  /// Push caregiver permissions to Supabase.
+  static Future<void> pushCaregiverPermission(Map<String, dynamic> data) async {
+    if (!AuthService.isLoggedIn) return;
+    await _upsert('caregiver_permissions', _toCloud(data));
+  }
+
+  /// Push a patient-caregiver link to Supabase.
+  static Future<void> pushPatientCaregiverLink(
+      Map<String, dynamic> data) async {
+    if (!AuthService.isLoggedIn) return;
+    await _upsert('patient_caregiver_links', _toCloud(data));
+  }
+
+  /// Push an allocated patient to Supabase.
+  static Future<void> pushAllocatedPatient(Map<String, dynamic> data) async {
+    if (!AuthService.isLoggedIn) return;
+    await _upsert('allocated_patients', _toCloud(data));
+  }
+
+  /// Push an allocated caregiver to Supabase.
+  static Future<void> pushAllocatedCaregiver(Map<String, dynamic> data) async {
+    if (!AuthService.isLoggedIn) return;
+    await _upsert('allocated_caregivers', _toCloud(data));
+  }
+
   // ── Private pull helpers ──────────────────────────────────────────────────
 
   static Future<void> _pullMedications(AppDatabase db, String userId) async {
@@ -185,8 +273,7 @@ class SupabaseSyncService {
       final local = _fromCloud(row);
       // times_of_day is a Postgres TEXT[] — join to comma string for SQLite
       if (row['times_of_day'] is List) {
-        local['times_of_day'] =
-            (row['times_of_day'] as List).join(',');
+        local['times_of_day'] = (row['times_of_day'] as List).join(',');
       }
       await database.insert('schedules', local,
           conflictAlgorithm: ConflictAlgorithm.replace);
@@ -252,6 +339,105 @@ class SupabaseSyncService {
     }
   }
 
+  static Future<void> _pullIncomingCaregiverInvitations(
+      AppDatabase db, String email) async {
+    final rows = await _client
+        .from('caregiver_invitations')
+        .select()
+        .ilike('caregiver_email', email.trim());
+
+    final database = await db.database;
+    for (final row in rows) {
+      await database.insert('caregiver_invitations', _fromCloud(row),
+          conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+  }
+
+  static Future<void> _pullDirectConnectionInvitations(
+      AppDatabase db, String userId) async {
+    final rows = await _client
+        .from('caregiver_invitations')
+        .select()
+        .or('sender_user_id.eq.$userId,receiver_user_id.eq.$userId')
+        .order('created_at', ascending: false);
+
+    final database = await db.database;
+    for (final row in rows) {
+      await database.insert(
+        'caregiver_invitations',
+        _fromCloud(row),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+  }
+
+  static Future<void> _pullPatientCaregiverLinks(
+      AppDatabase db, String userId) async {
+    final rows = await _client
+        .from('patient_caregiver_links')
+        .select()
+        .or('patient_user_id.eq.$userId,caregiver_user_id.eq.$userId');
+
+    final database = await db.database;
+    for (final row in rows) {
+      await database.insert('patient_caregiver_links', _fromCloud(row),
+          conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+  }
+
+  static Future<void> _pullAllocatedPatients(
+      AppDatabase db, String userId) async {
+    final rows = await _client
+        .from('allocated_patients')
+        .select()
+        .eq('caregiver_id', userId);
+
+    final database = await db.database;
+    for (final row in rows) {
+      await database.insert('allocated_patients', _fromCloud(row),
+          conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+  }
+
+  static Future<void> _pullAllocatedCaregivers(
+      AppDatabase db, String userId) async {
+    final rows = await _client
+        .from('allocated_caregivers')
+        .select()
+        .eq('patient_id', userId);
+
+    final database = await db.database;
+    for (final row in rows) {
+      await database.insert('allocated_caregivers', _fromCloud(row),
+          conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+  }
+
+  /// Pulls incoming caregiver invitations addressed to the specified email (or current user's email).
+  static Future<void> pullIncomingCaregiverInvitations({String? email}) async {
+    final targetEmail = email ?? AuthService.currentUser?.email;
+    if (targetEmail == null || targetEmail.isEmpty) return;
+    try {
+      await _pullIncomingCaregiverInvitations(
+          AppDatabase.instance, targetEmail);
+    } catch (e) {
+      // ignore: avoid_print
+      print('SupabaseSyncService.pullIncomingCaregiverInvitations error: $e');
+    }
+  }
+
+  /// Pulls ID-based invitations sent by or addressed to the current user.
+  static Future<void> pullDirectConnectionInvitations() async {
+    final userId = AuthService.currentUser?.id;
+    if (userId == null) return;
+    try {
+      await _pullDirectConnectionInvitations(AppDatabase.instance, userId);
+    } catch (e) {
+      // ignore: avoid_print
+      print('SupabaseSyncService.pullDirectConnectionInvitations error: $e');
+    }
+  }
+
   // ── Utilities ─────────────────────────────────────────────────────────────
 
   static Future<void> _upsert(String table, Map<String, dynamic> data) async {
@@ -266,10 +452,18 @@ class SupabaseSyncService {
   /// Cloud → Local: convert Postgres booleans → SQLite integers (0/1).
   static Map<String, dynamic> _fromCloud(Map<String, dynamic> row) {
     final boolFields = {
-      'is_active', 'is_as_needed', 'refill_reminder_enabled',
-      'simple_wording', 'notification_sound', 'notification_vibration',
-      'privacy_safe_previews', 'perm_view_schedule', 'perm_view_history',
-      'perm_view_refills', 'perm_view_adherence', 'alert_important_only',
+      'is_active',
+      'is_as_needed',
+      'refill_reminder_enabled',
+      'simple_wording',
+      'notification_sound',
+      'notification_vibration',
+      'privacy_safe_previews',
+      'perm_view_schedule',
+      'perm_view_history',
+      'perm_view_refills',
+      'perm_view_adherence',
+      'alert_important_only',
     };
     final result = <String, dynamic>{};
     for (final entry in row.entries) {
@@ -288,10 +482,18 @@ class SupabaseSyncService {
   /// Local → Cloud: convert SQLite 0/1 integers → Postgres booleans.
   static Map<String, dynamic> _toCloud(Map<String, dynamic> data) {
     final boolFields = {
-      'is_active', 'is_as_needed', 'refill_reminder_enabled',
-      'simple_wording', 'notification_sound', 'notification_vibration',
-      'privacy_safe_previews', 'perm_view_schedule', 'perm_view_history',
-      'perm_view_refills', 'perm_view_adherence', 'alert_important_only',
+      'is_active',
+      'is_as_needed',
+      'refill_reminder_enabled',
+      'simple_wording',
+      'notification_sound',
+      'notification_vibration',
+      'privacy_safe_previews',
+      'perm_view_schedule',
+      'perm_view_history',
+      'perm_view_refills',
+      'perm_view_adherence',
+      'alert_important_only',
     };
     final result = Map<String, dynamic>.from(data);
     for (final field in boolFields) {

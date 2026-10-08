@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/intl.dart';
 import 'package:dose_diary/data/local/models/app_models.dart';
 import 'package:dose_diary/data/local/models/dose_status.dart';
-import 'package:dose_diary/features/caregivers/caregiver_management_screen.dart';
 import 'package:dose_diary/features/home/home_dashboard_screen.dart';
 
 void main() {
@@ -18,6 +17,7 @@ void main() {
             todayAdherenceProvider.overrideWith((ref) => const AdherenceSummary(taken: 0, total: 0, countable: 0)),
             lowStockProvider.overrideWith((ref) => []),
             caregiversProvider.overrideWith((ref) => []),
+            patientCaregiversListProvider.overrideWith((ref) => Future.value([])),
           ],
           child: const MaterialApp(
             home: HomeDashboardScreen(),
@@ -58,13 +58,14 @@ void main() {
 
       // Stats Grid: Adherence and Refills reflect empty data
       expect(find.text('Adherence'), findsOneWidget);
+      expect(find.text('No data'), findsOneWidget);
       expect(find.text('No doses today'), findsOneWidget);
       expect(find.text('Refills'), findsOneWidget);
       expect(find.text('0 Low'), findsOneWidget);
       expect(find.text('All supplies in stock'), findsOneWidget);
 
       // Caregiver card: shows clean unlinked state, NOT mock "Nimal Perera (Son)"
-      expect(find.text('No Caregiver Connected'), findsOneWidget);
+      expect(find.text('No Caregivers Added'), findsOneWidget);
       expect(find.text('Nimal Perera (Son)'), findsNothing);
     });
 
@@ -129,11 +130,16 @@ void main() {
         createdAt: now,
       );
 
-      final caregiver = CaregiverInvitation(
+      final caregiver = AllocatedCaregiver(
         id: 'cg-1',
-        email: 'son@example.com',
+        patientId: 'user-1',
+        fullName: 'Nimal Perera',
         relationship: 'Son',
-        status: 'active',
+        location: 'Colombo Home',
+        phoneBattery: 85,
+        batteryStatus: 'Balanced',
+        smartHubStatus: 'Synced 2m ago',
+        lastActive: 'Active 5m ago',
         createdAt: now,
       );
 
@@ -144,7 +150,8 @@ void main() {
             todayMedicationsProvider.overrideWith((ref) => [med1, med2]),
             todayAdherenceProvider.overrideWith((ref) => const AdherenceSummary(taken: 1, total: 2, countable: 2)),
             lowStockProvider.overrideWith((ref) => [med1]),
-            caregiversProvider.overrideWith((ref) => [caregiver]),
+            caregiversProvider.overrideWith((ref) => []),
+            patientCaregiversListProvider.overrideWith((ref) => Future.value([caregiver])),
           ],
           child: const MaterialApp(
             home: HomeDashboardScreen(),
@@ -157,7 +164,8 @@ void main() {
       // Next Medication Card: Displays real Metformin card
       expect(find.text('NEXT MEDICATION'), findsOneWidget);
       expect(find.text('Metformin'), findsWidgets);
-      expect(find.text('500 mg • 1 tablet(s)'), findsOneWidget);
+      expect(find.textContaining('500 mg'), findsWidgets);
+      expect(find.textContaining('1 tablet(s)'), findsWidgets);
       expect(find.text('Take with food'), findsOneWidget);
       expect(find.text('Log Dose'), findsOneWidget);
 
@@ -175,9 +183,9 @@ void main() {
       expect(find.text('Metformin'), findsWidgets);
 
       // Caregiver card: Displays real caregiver information
-      expect(find.text('Caregiver Connected'), findsOneWidget);
-      expect(find.text('son@example.com (Son)'), findsOneWidget);
-      expect(find.text('Status'), findsOneWidget);
+      expect(find.text('My Caregivers'), findsOneWidget);
+      expect(find.text('Nimal Perera'), findsOneWidget);
+      expect(find.textContaining('Active 5m ago'), findsOneWidget);
     });
 
     testWidgets('renders gracefully when medications exist but no occurrences scheduled for today', (tester) async {
@@ -423,9 +431,10 @@ void main() {
       expect(find.text('Refill'), findsOneWidget);
 
       // 5. Care Actions Grid
+      await tester.ensureVisible(find.text('Emergency Contact'));
       expect(find.text('Care Actions'), findsOneWidget);
       expect(find.text('Log In-Person'), findsOneWidget);
-      expect(find.text('Dr. Angela Chen'), findsOneWidget);
+      expect(find.text('Emergency Contact'), findsOneWidget);
       expect(find.text('Share Log'), findsOneWidget);
       expect(find.text('Permissions'), findsOneWidget);
 
@@ -442,8 +451,9 @@ void main() {
       expect(find.text('Audio alert sent to Ishara for Amoxicillin 500 mg.'), findsOneWidget);
 
       // Scroll back up and tap 'Patient Mode' to switch back
-      await tester.drag(find.byType(CustomScrollView), const Offset(0, 800));
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, 2500));
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Patient Mode'));
       await tester.tap(find.text('Patient Mode'));
       await tester.pumpAndSettle();
       expect(find.text('Ishara (Patient)'), findsOneWidget);

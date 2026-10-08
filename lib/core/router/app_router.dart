@@ -6,6 +6,8 @@ import '../../features/splash/splash_screen.dart';
 import '../../features/onboarding/onboarding_screen.dart';
 import '../../features/auth/login/login_screen.dart';
 import '../../features/auth/signup/signup_screen.dart';
+import '../../features/auth/verify_email/email_verification_screen.dart';
+import '../../features/auth/complete_profile/complete_google_profile_screen.dart';
 import '../../features/auth/forgot_password/forgot_password_screen.dart';
 import '../../features/home/home_dashboard_screen.dart';
 import '../../features/medications/medication_schedule_screen.dart';
@@ -18,6 +20,7 @@ import '../../features/caregivers/caregiver_management_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../features/settings/accessibility_screen.dart';
 import '../../features/permissions/permissions_screen.dart';
+import '../../features/adherence/medication_adherence_screen.dart';
 import '../../core/widgets/dd_bottom_nav.dart';
 import 'route_names.dart';
 
@@ -41,6 +44,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.signup,
         builder: (ctx, state) => const SignUpScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.verifyEmail,
+        builder: (ctx, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? {};
+          final email = extra['email'] as String? ?? '';
+          return EmailVerificationScreen(email: email);
+        },
+      ),
+      GoRoute(
+        path: RouteNames.completeGoogleProfile,
+        builder: (ctx, state) => const CompleteGoogleProfileScreen(),
       ),
       GoRoute(
         path: RouteNames.forgotPassword,
@@ -101,6 +116,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 },
               ),
             ],
+          ),
+          GoRoute(
+            path: RouteNames.adherence,
+            builder: (ctx, state) => const MedicationAdherenceScreen(),
           ),
           GoRoute(
             path: RouteNames.caregivers,
