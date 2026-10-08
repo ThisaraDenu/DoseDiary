@@ -11,6 +11,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/dd_button.dart';
 import '../../../core/widgets/dd_phone_input.dart';
 import '../../../core/widgets/dd_text_field.dart';
+import '../../../data/local/database_provider.dart';
 import '../../../data/remote/auth_service.dart';
 import '../../../data/remote/supabase_sync_service.dart';
 import '../../../main.dart';
@@ -170,8 +171,9 @@ class _CompleteGoogleProfileScreenState
         await widget.profileSaver!(updates);
       } else {
         await AuthService.saveCompletedProfile(updates);
-        SupabaseSyncService.pullFromCloud().ignore();
+        await SupabaseSyncService.pullFromCloud();
       }
+      ref.read(accountSessionEpochProvider.notifier).state++;
 
       final prefs = ref.read(sharedPreferencesProvider);
       await prefs.setBool('onboarding_complete', true);

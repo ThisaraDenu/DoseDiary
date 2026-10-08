@@ -19,6 +19,7 @@ import '../../features/refills/refills_screen.dart';
 import '../../features/caregivers/caregiver_management_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../features/settings/accessibility_screen.dart';
+import '../../features/settings/settings_detail_screens.dart';
 import '../../features/permissions/permissions_screen.dart';
 import '../../features/adherence/medication_adherence_screen.dart';
 import '../../core/widgets/dd_bottom_nav.dart';
@@ -172,6 +173,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: 'help',
                 builder: (ctx, state) => const HelpScreen(),
+              ),
+              GoRoute(
+                path: 'data-sync',
+                builder: (ctx, state) => const DataSyncSettingsScreen(),
+              ),
+              GoRoute(
+                path: 'security',
+                builder: (ctx, state) => const SecuritySettingsScreen(),
+              ),
+              GoRoute(
+                path: 'about',
+                builder: (ctx, state) => const AboutSettingsScreen(),
               ),
             ],
           ),

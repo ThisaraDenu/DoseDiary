@@ -1,11 +1,15 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/router/route_names.dart';
+import '../../core/services/phone_dialer_service.dart';
+import '../../core/utils/presence_formatters.dart';
 import '../../core/widgets/dd_avatar.dart';
 export '../../data/repositories/app_repositories.dart';
+import '../../data/local/database_provider.dart';
 import '../../data/repositories/app_repositories.dart';
 import '../../data/local/models/app_models.dart';
 import '../../data/local/models/dose_status.dart';
@@ -16,7 +20,7 @@ import 'caregiver_home_view.dart';
 // â”€â”€ Home Providers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 final userAvatarUrlProvider = FutureProvider<String?>((ref) async {
-  final profile = await AuthService.getProfile();
+  final profile = await ref.watch(userProfileProvider.future);
   return profile?['avatar_url'] as String?;
 });
 
@@ -42,7 +46,7 @@ String _extractFirstName(String name) {
 final userNameProvider = FutureProvider<String>((ref) async {
   final user = AuthService.currentUser;
   if (user == null) return 'Ishara';
-  final profile = await AuthService.getProfile();
+  final profile = await ref.watch(userProfileProvider.future);
   final fullName = profile?['full_name'] as String?;
   if (fullName != null && fullName.trim().isNotEmpty) {
     return _extractFirstName(fullName);
@@ -64,21 +68,22 @@ final userNameProvider = FutureProvider<String>((ref) async {
 });
 
 final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
-  return await AuthService.getProfile();
+  ref.watch(accountSessionEpochProvider);
+  return AuthService.getProfile();
 });
 
 final userAgeProvider = FutureProvider<int?>((ref) async {
-  final profile = await AuthService.getProfile();
+  final profile = await ref.watch(userProfileProvider.future);
   return AuthService.calculateAge(profile?['date_of_birth'] as String?);
 });
 
 final userGenderProvider = FutureProvider<String?>((ref) async {
-  final profile = await AuthService.getProfile();
+  final profile = await ref.watch(userProfileProvider.future);
   return profile?['gender'] as String?;
 });
 
 final userPhoneProvider = FutureProvider<String?>((ref) async {
-  final profile = await AuthService.getProfile();
+  final profile = await ref.watch(userProfileProvider.future);
   return profile?['phone_number'] as String?;
 });
 
@@ -942,7 +947,12 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          if (matchedMed?.imageUrl?.trim().isNotEmpty ?? false) ...[
+            const SizedBox(height: 16),
+            _buildNextMedicationImage(matchedMed!.imageUrl),
+            const SizedBox(height: 16),
+          ] else
+            const SizedBox(height: 8),
 
           // Medication Title & Dosage
           Text(
@@ -974,7 +984,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Scheduled Time + Log Dose Button
+          // Scheduled time
           Container(
             padding: const EdgeInsets.only(top: 14),
             decoration: const BoxDecoration(
@@ -983,90 +993,33 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
               ),
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
+                const Icon(
+                  Icons.schedule_rounded,
+                  color: Color(0xFFB1002C),
+                  size: 24,
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(
-                      Icons.schedule_rounded,
-                      color: Color(0xFFB1002C),
-                      size: 24,
+                    const Text(
+                      'Scheduled',
+                      style: TextStyle(
+                        color: Color(0xFF545F73),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                    const SizedBox(width: 8),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Scheduled',
-                          style: TextStyle(
-                            color: Color(0xFF545F73),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        Text(
-                          scheduledTime,
-                          style: const TextStyle(
-                            color: Color(0xFF1B1B1B),
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
+                    Text(
+                      scheduledTime,
+                      style: const TextStyle(
+                        color: Color(0xFF1B1B1B),
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ],
-                ),
-                ElevatedButton(
-                  onPressed: () async {
-                    await ref
-                        .read(doseRepositoryProvider)
-                        .updateOccurrenceStatus(next.id, DoseStatus.taken);
-                    if (matchedMed != null) {
-                      ref
-                          .read(refillRepositoryProvider)
-                          .recordDeduction(
-                            medicationId: matchedMed.id,
-                            userId: next.userId,
-                            amount: matchedMed.amountPerDose,
-                            doseEventId: next.id,
-                          )
-                          .ignore();
-                    }
-                    ref.invalidate(todayOccurrencesProvider);
-                    ref.invalidate(todayAdherenceProvider);
-                    ref.invalidate(lowStockProvider);
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('✓ Marked $medName as taken!'),
-                          backgroundColor: const Color(0xFF157F5D),
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFDC143C),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    minimumSize: const Size(120, 48),
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Log Dose',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
                 ),
               ],
             ),
@@ -1077,12 +1030,77 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
   }
 
   // â”€â”€ 4. Today's Schedule Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  Widget _buildNextMedicationImage(String? imageUrl) {
+    Widget fallback() => Container(
+          color: const Color(0xFFFFE8EC),
+          alignment: Alignment.center,
+          child: const Icon(
+            Icons.medication_rounded,
+            color: Color(0xFFB1002C),
+            size: 48,
+          ),
+        );
+
+    Widget image = fallback();
+    final url = imageUrl?.trim();
+    if (url != null && url.isNotEmpty) {
+      if (url.startsWith('data:image')) {
+        try {
+          final separator = url.indexOf(',');
+          if (separator >= 0) {
+            image = Image.memory(
+              base64Decode(url.substring(separator + 1)),
+              key: const ValueKey('next-medication-image'),
+              width: double.infinity,
+              height: 156,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => fallback(),
+            );
+          }
+        } catch (_) {}
+      } else if (url.startsWith('http://') || url.startsWith('https://')) {
+        image = Image.network(
+          url,
+          key: const ValueKey('next-medication-image'),
+          width: double.infinity,
+          height: 156,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => fallback(),
+        );
+      }
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        width: double.infinity,
+        height: 156,
+        child: image,
+      ),
+    );
+  }
+
   Widget _buildTodayScheduleSection(
     AsyncValue<List<DoseOccurrence>> occsAsync,
     AsyncValue<List<Medication>> medsAsync,
   ) {
-    final occs = (occsAsync.asData?.value ?? [])
-      ..sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
+    final allOccurrences = occsAsync.asData?.value ?? [];
+    final occs = allOccurrences
+        .where(
+          (occ) =>
+              occ.status == DoseStatus.pending ||
+              occ.status == DoseStatus.snoozed,
+        )
+        .toList()
+      ..sort((a, b) {
+        final aTime = a.status == DoseStatus.snoozed && a.snoozeUntil != null
+            ? a.snoozeUntil!
+            : a.scheduledAt;
+        final bTime = b.status == DoseStatus.snoozed && b.snoozeUntil != null
+            ? b.snoozeUntil!
+            : b.scheduledAt;
+        return aTime.compareTo(bTime);
+      });
     final meds = medsAsync.asData?.value ?? [];
 
     return Column(
@@ -1146,24 +1164,31 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                   final title = med?.name ?? 'Medication';
                   final timeStr =
                       DateFormat('h:mm a').format(occ.scheduledAt.toLocal());
+                  final snoozeTime = occ.snoozeUntil == null
+                      ? null
+                      : DateFormat('h:mm a').format(occ.snoozeUntil!.toLocal());
                   final strengthStr = med != null ? med.displayStrength : '';
-                  final subtitle = strengthStr.isNotEmpty
-                      ? '$strengthStr • $timeStr'
+                  final scheduleText = occ.status == DoseStatus.snoozed
+                      ? 'Snoozed until ${snoozeTime ?? timeStr}'
                       : timeStr;
-                  final isTaken = occ.status == DoseStatus.taken;
+                  final subtitle = strengthStr.isNotEmpty
+                      ? '$strengthStr • $scheduleText'
+                      : scheduleText;
 
                   return _buildScheduleItem(
                     occurrenceId: occ.id,
                     title: title,
                     subtitle: subtitle,
+                    imageUrl: med?.imageUrl,
                     status: occ.status,
-                    isTaken: isTaken,
                     onTap: () => context.push('/reminder/${occ.id}'),
                   );
                 }(),
               ],
             ],
           )
+        else if (allOccurrences.isNotEmpty)
+          _buildCompletedScheduleState()
         else
           Container(
             width: double.infinity,
@@ -1233,48 +1258,125 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     );
   }
 
+  Widget _buildCompletedScheduleState() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFEEEEEE)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: const BoxDecoration(
+              color: Color(0xFFE8F7F0),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.done_all_rounded,
+              color: Color(0xFF157F5D),
+              size: 24,
+            ),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'You are all caught up',
+            style: TextStyle(
+              color: Color(0xFF1B1B1B),
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Upcoming and snoozed medication reminders will appear here.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Color(0xFF545F73),
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScheduleMedicationImage({
+    required String? imageUrl,
+    required Color backgroundColor,
+    required Color iconColor,
+    required IconData fallbackIcon,
+  }) {
+    Widget fallback() => Container(
+          color: backgroundColor,
+          child: Icon(fallbackIcon, color: iconColor, size: 25),
+        );
+
+    Widget image = fallback();
+    final url = imageUrl?.trim();
+    if (url != null && url.isNotEmpty) {
+      if (url.startsWith('data:image')) {
+        try {
+          final separator = url.indexOf(',');
+          if (separator >= 0) {
+            image = Image.memory(
+              base64Decode(url.substring(separator + 1)),
+              key: const ValueKey('schedule-medication-image'),
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => fallback(),
+            );
+          }
+        } catch (_) {}
+      } else if (url.startsWith('http://') || url.startsWith('https://')) {
+        image = Image.network(
+          url,
+          key: const ValueKey('schedule-medication-image'),
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => fallback(),
+        );
+      }
+    }
+
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFEEEEEE)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(11),
+        child: image,
+      ),
+    );
+  }
+
   Widget _buildScheduleItem({
     required String occurrenceId,
     required String title,
     required String subtitle,
+    required String? imageUrl,
     required DoseStatus status,
-    required bool isTaken,
     VoidCallback? onTap,
   }) {
-    final isMissed = status == DoseStatus.missed;
-    final isSkipped = status == DoseStatus.skipped;
+    final isSnoozed = status == DoseStatus.snoozed;
 
-    Color iconBg = const Color(0xFFEEEEEE);
-    Color iconColor = const Color(0xFF545F73);
-    IconData iconData = Icons.radio_button_unchecked_rounded;
+    final iconBg =
+        isSnoozed ? const Color(0xFFFFF1DB) : const Color(0xFFFFE8EC);
+    final iconColor =
+        isSnoozed ? const Color(0xFF9A5A00) : const Color(0xFFB1002C);
+    final iconData = isSnoozed ? Icons.alarm_rounded : Icons.medication_rounded;
 
-    Color badgeBg = const Color(0xFFEEEEEE);
-    Color badgeColor = const Color(0xFF5C3F3F);
-    IconData badgeIcon = Icons.schedule_rounded;
-    String badgeText = 'Upcoming';
-
-    if (isTaken) {
-      iconBg = const Color(0xFF97F5CC);
-      iconColor = const Color(0xFF002115);
-      iconData = Icons.check_circle_rounded;
-
-      badgeBg = const Color(0xFF97F5CC);
-      badgeColor = const Color(0xFF002115);
-      badgeIcon = Icons.check_rounded;
-      badgeText = 'Taken';
-    } else if (isMissed) {
-      iconBg = const Color(0xFFFFDAD6);
-      iconColor = const Color(0xFF93000A);
-      iconData = Icons.error_outline_rounded;
-
-      badgeBg = const Color(0xFFFFDAD6);
-      badgeColor = const Color(0xFF93000A);
-      badgeIcon = Icons.warning_rounded;
-      badgeText = 'Missed';
-    } else if (isSkipped) {
-      badgeText = 'Skipped';
-      badgeIcon = Icons.redo_rounded;
-    }
+    final badgeBg =
+        isSnoozed ? const Color(0xFFFFF1DB) : const Color(0xFFFFE8EC);
+    final badgeColor =
+        isSnoozed ? const Color(0xFF9A5A00) : const Color(0xFFB1002C);
+    final badgeIcon = isSnoozed ? Icons.alarm_rounded : Icons.schedule_rounded;
+    final badgeText = isSnoozed ? 'Snoozed' : 'Upcoming';
 
     return InkWell(
       onTap: onTap,
@@ -1294,19 +1396,11 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
         ),
         child: Row(
           children: [
-            // Circular status icon
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: iconBg,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                iconData,
-                color: iconColor,
-                size: 24,
-              ),
+            _buildScheduleMedicationImage(
+              imageUrl: imageUrl,
+              backgroundColor: iconBg,
+              iconColor: iconColor,
+              fallbackIcon: iconData,
             ),
             const SizedBox(width: 14),
 
@@ -1883,7 +1977,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
-                            '${caregiver.lastActive} • ${caregiver.location}',
+                            '${formatLastActive(caregiver.lastActive)} • ${caregiver.location}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -1904,11 +1998,17 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   InkWell(
-                    onTap: () {
+                    onTap: () async {
                       final phone = caregiver.phoneNumber;
-                      _showCaregiverToast(phone != null && phone.isNotEmpty
-                          ? 'Calling ${caregiver.fullName} at $phone...'
-                          : 'Calling ${caregiver.fullName} via in-app audio...');
+                      if (phone == null || phone.trim().isEmpty) {
+                        _showCaregiverToast(
+                            '${caregiver.fullName} has not added a phone number.');
+                        return;
+                      }
+                      final opened = await PhoneDialerService.open(phone);
+                      if (!opened && mounted) {
+                        _showCaregiverToast('Could not open the phone app.');
+                      }
                     },
                     borderRadius: BorderRadius.circular(24),
                     child: Container(
@@ -2205,8 +2305,9 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                         DropdownMenuItem(value: 'Other', child: Text('Other')),
                       ],
                       onChanged: (val) {
-                        if (val != null)
+                        if (val != null) {
                           setSheetState(() => selectedRelationship = val);
+                        }
                       },
                       decoration: InputDecoration(
                         filled: true,

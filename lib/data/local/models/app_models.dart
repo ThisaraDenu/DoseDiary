@@ -14,6 +14,7 @@ class Medication {
     required this.strengthUnit,
     required this.amountPerDose,
     required this.doseUnit,
+    this.imageUrl,
     this.instructions,
     required this.isActive,
     this.isAsNeeded = false,
@@ -33,6 +34,7 @@ class Medication {
   final String strengthUnit; // e.g. "mg", "mcg", "IU"
   final double amountPerDose;
   final String doseUnit; // e.g. "tablet(s)", "capsule(s)", "ml"
+  final String? imageUrl;
   final String? instructions;
   final bool isActive;
   final bool isAsNeeded;
@@ -51,6 +53,7 @@ class Medication {
     required String strengthUnit,
     required double amountPerDose,
     required String doseUnit,
+    String? imageUrl,
     String? instructions,
     bool isAsNeeded = false,
     double quantityOnHand = 0,
@@ -68,6 +71,7 @@ class Medication {
       strengthUnit: strengthUnit,
       amountPerDose: amountPerDose,
       doseUnit: doseUnit,
+      imageUrl: imageUrl,
       instructions: instructions,
       isActive: true,
       isAsNeeded: isAsNeeded,
@@ -87,13 +91,17 @@ class Medication {
     String? strengthUnit,
     double? amountPerDose,
     String? doseUnit,
+    String? imageUrl,
+    bool clearImageUrl = false,
     String? instructions,
+    bool clearInstructions = false,
     bool? isActive,
     bool? isAsNeeded,
     double? quantityOnHand,
     String? quantityUnit,
     bool? refillReminderEnabled,
     double? refillThresholdQty,
+    bool clearRefillThresholdQty = false,
     DateTime? refillReminderDate,
   }) {
     return Medication(
@@ -104,14 +112,18 @@ class Medication {
       strengthUnit: strengthUnit ?? this.strengthUnit,
       amountPerDose: amountPerDose ?? this.amountPerDose,
       doseUnit: doseUnit ?? this.doseUnit,
-      instructions: instructions ?? this.instructions,
+      imageUrl: clearImageUrl ? null : imageUrl ?? this.imageUrl,
+      instructions:
+          clearInstructions ? null : instructions ?? this.instructions,
       isActive: isActive ?? this.isActive,
       isAsNeeded: isAsNeeded ?? this.isAsNeeded,
       quantityOnHand: quantityOnHand ?? this.quantityOnHand,
       quantityUnit: quantityUnit ?? this.quantityUnit,
       refillReminderEnabled:
           refillReminderEnabled ?? this.refillReminderEnabled,
-      refillThresholdQty: refillThresholdQty ?? this.refillThresholdQty,
+      refillThresholdQty: clearRefillThresholdQty
+          ? null
+          : refillThresholdQty ?? this.refillThresholdQty,
       refillReminderDate: refillReminderDate ?? this.refillReminderDate,
       createdAt: createdAt,
       updatedAt: DateTime.now().toUtc(),
@@ -126,6 +138,7 @@ class Medication {
         'strength_unit': strengthUnit,
         'amount_per_dose': amountPerDose,
         'dose_unit': doseUnit,
+        'image_url': imageUrl,
         'instructions': instructions,
         'is_active': isActive ? 1 : 0,
         'is_as_needed': isAsNeeded ? 1 : 0,
@@ -146,6 +159,7 @@ class Medication {
         strengthUnit: map['strength_unit'] as String,
         amountPerDose: (map['amount_per_dose'] as num).toDouble(),
         doseUnit: map['dose_unit'] as String,
+        imageUrl: map['image_url'] as String?,
         instructions: map['instructions'] as String?,
         isActive: (map['is_active'] as int) == 1,
         isAsNeeded: (map['is_as_needed'] as int?) == 1,

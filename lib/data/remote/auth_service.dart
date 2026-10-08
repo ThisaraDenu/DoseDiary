@@ -470,6 +470,37 @@ class AuthService {
     return avatarUrl;
   }
 
+  /// Stores an image attached to a medication. Signed-in users use Supabase
+  /// Storage; offline/guest users keep the compressed image as a data URI.
+  static Future<String> uploadMedicationImage({
+    required String medicationId,
+    required Uint8List bytes,
+    required String fileExtension,
+  }) async {
+    final ext = fileExtension.replaceAll('.', '').toLowerCase();
+    final mimeExtension = ext == 'jpg' ? 'jpeg' : ext;
+    final fallback = 'data:image/$mimeExtension;base64,${base64Encode(bytes)}';
+    final user = currentUser;
+    if (user == null) return fallback;
+
+    final fileName = '${user.id}/$medicationId.${ext.isEmpty ? 'jpg' : ext}';
+    try {
+      final client = _clientSafe;
+      if (client == null) return fallback;
+      await client.storage.from('medication-images').uploadBinary(
+            fileName,
+            bytes,
+            fileOptions: FileOptions(
+              contentType: 'image/$mimeExtension',
+              upsert: true,
+            ),
+          );
+      return client.storage.from('medication-images').getPublicUrl(fileName);
+    } catch (_) {
+      return fallback;
+    }
+  }
+
   // ── Private Helpers ───────────────────────────────────────────────────────
 
   static bool _hasRequiredProfileFields(Map<String, dynamic>? profile) {

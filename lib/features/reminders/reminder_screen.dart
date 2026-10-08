@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,7 +8,6 @@ import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/theme/app_dimensions.dart';
-import '../../core/widgets/dd_card.dart';
 import '../../core/widgets/dd_button.dart';
 import '../../core/widgets/dd_loading.dart';
 import '../../data/local/models/app_models.dart';
@@ -17,17 +18,19 @@ import '../home/home_dashboard_screen.dart';
 
 // ── Providers ─────────────────────────────────────────────────────────────────
 
-final reminderOccurrenceProvider = FutureProvider.family<DoseOccurrence?, String>((ref, id) async {
+final reminderOccurrenceProvider =
+    FutureProvider.family<DoseOccurrence?, String>((ref, id) async {
   final repo = ref.watch(doseRepositoryProvider);
   return repo.getOccurrenceById(id);
 });
 
-final reminderMedicationProvider = FutureProvider.family<Medication?, String>((ref, medicationId) async {
+final reminderMedicationProvider =
+    FutureProvider.family<Medication?, String>((ref, medicationId) async {
   final repo = ref.watch(medicationRepositoryProvider);
   return repo.getMedicationById(medicationId);
 });
 
-// ── Screen ────────────────────────────────────────────────────────────────     
+// ── Screen ────────────────────────────────────────────────────────────────
 
 class ReminderScreen extends ConsumerStatefulWidget {
   const ReminderScreen({required this.occurrenceId, super.key});
@@ -37,24 +40,8 @@ class ReminderScreen extends ConsumerStatefulWidget {
   ConsumerState<ReminderScreen> createState() => _ReminderScreenState();
 }
 
-class _ReminderScreenState extends ConsumerState<ReminderScreen> with SingleTickerProviderStateMixin {
+class _ReminderScreenState extends ConsumerState<ReminderScreen> {
   bool _isSubmitting = false;
-  late final AnimationController _pulseCtrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulseCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _pulseCtrl.dispose();
-    super.dispose();
-  }
 
   Future<void> _recordAction(
     DoseOccurrence occ,
@@ -71,7 +58,8 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> with SingleTick
       final currentUserId = AuthService.currentUser?.id ?? occ.userId;
 
       // 1. Update occurrence status
-      await doseRepo.updateOccurrenceStatus(occ.id, status, snoozeUntil: snoozeUntil);
+      await doseRepo.updateOccurrenceStatus(occ.id, status,
+          snoozeUntil: snoozeUntil);
 
       // 2. Record event
       final event = DoseEvent.create(
@@ -110,7 +98,8 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> with SingleTick
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(messages[status] ?? 'Recorded.'),
-          backgroundColor: status == DoseStatus.taken ? AppColors.takenForeground : null,
+          backgroundColor:
+              status == DoseStatus.taken ? AppColors.takenForeground : null,
           action: status == DoseStatus.taken
               ? null
               : SnackBarAction(
@@ -157,7 +146,8 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> with SingleTick
     final selected = await showModalBottomSheet<Duration>(
       context: context,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppDimensions.sheetRadius)),
+        borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppDimensions.sheetRadius)),
       ),
       builder: (ctx) => SafeArea(
         child: Padding(
@@ -179,7 +169,8 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> with SingleTick
               for (final (label, duration) in options)
                 ListTile(
                   title: Text(label, style: AppTextStyles.bodyXl()),
-                  leading: const Icon(Icons.alarm_rounded, color: AppColors.primaryAction),
+                  leading: const Icon(Icons.alarm_rounded,
+                      color: AppColors.primaryAction),
                   onTap: () => Navigator.pop(ctx, duration),
                 ),
               const SizedBox(height: AppDimensions.stackMd),
@@ -191,7 +182,8 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> with SingleTick
 
     if (selected != null) {
       final snoozeUntil = DateTime.now().add(selected);
-      await _recordAction(occ, med, DoseStatus.snoozed, snoozeUntil: snoozeUntil);
+      await _recordAction(occ, med, DoseStatus.snoozed,
+          snoozeUntil: snoozeUntil);
     }
   }
 
@@ -208,7 +200,8 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> with SingleTick
     final selected = await showModalBottomSheet<String>(
       context: context,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppDimensions.sheetRadius)),
+        borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppDimensions.sheetRadius)),
       ),
       builder: (ctx) => SafeArea(
         child: Padding(
@@ -233,7 +226,9 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> with SingleTick
                   onTap: () => Navigator.pop(ctx, reason),
                 ),
               ListTile(
-                title: Text('No reason', style: AppTextStyles.bodyXl(color: AppColors.textSecondary)),
+                title: Text('No reason',
+                    style:
+                        AppTextStyles.bodyXl(color: AppColors.textSecondary)),
                 onTap: () => Navigator.pop(ctx, ''),
               ),
               const SizedBox(height: AppDimensions.stackMd),
@@ -244,7 +239,8 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> with SingleTick
     );
 
     if (selected != null) {
-      await _recordAction(occ, med, DoseStatus.skipped, skipReason: selected.isEmpty ? null : selected);
+      await _recordAction(occ, med, DoseStatus.skipped,
+          skipReason: selected.isEmpty ? null : selected);
     }
   }
 
@@ -263,7 +259,8 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> with SingleTick
           );
         }
 
-        final medAsync = ref.watch(reminderMedicationProvider(occ.medicationId));
+        final medAsync =
+            ref.watch(reminderMedicationProvider(occ.medicationId));
 
         return medAsync.when(
           loading: () => const DdLoadingScreen(),
@@ -283,130 +280,422 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> with SingleTick
   }
 
   Widget _buildContent(DoseOccurrence occ, Medication med) {
+    return _buildModernContent(occ, med);
+  }
+
+  Widget _buildModernContent(DoseOccurrence occ, Medication med) {
     final timeStr = DateFormat('h:mm a').format(occ.scheduledAt.toLocal());
-    final now = DateTime.now();
-    final isOverdue = occ.scheduledAt.isBefore(now) && occ.status.isActionable;
+    final isOverdue = occ.status == DoseStatus.overdue ||
+        (occ.status == DoseStatus.pending &&
+            occ.scheduledAt.isBefore(DateTime.now()));
     final alreadyDone = occ.status.isTerminal;
+    final (statusLabel, statusColor, statusBackground) = switch (occ.status) {
+      DoseStatus.taken => (
+          'DOSE TAKEN',
+          AppColors.takenForeground,
+          AppColors.takenBackground,
+        ),
+      DoseStatus.skipped => (
+          'DOSE SKIPPED',
+          AppColors.skippedForeground,
+          AppColors.skippedBackground,
+        ),
+      DoseStatus.missed => (
+          'DOSE MISSED',
+          AppColors.missedForeground,
+          AppColors.missedBackground,
+        ),
+      DoseStatus.snoozed => (
+          'SNOOZED',
+          AppColors.snoozedForeground,
+          AppColors.snoozedBackground,
+        ),
+      _ when isOverdue => (
+          'OVERDUE',
+          AppColors.overdueForeground,
+          AppColors.overdueBackground,
+        ),
+      _ => (
+          'UPCOMING DOSE',
+          AppColors.primaryAction,
+          AppColors.pendingBackground,
+        ),
+    };
 
     return Scaffold(
       backgroundColor: AppColors.scaffoldBackground,
-      appBar: AppBar(title: const Text('Reminder')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppDimensions.screenMargin),
-        child: Column(
-          children: [
-            const SizedBox(height: AppDimensions.stackXl),
-
-            // Animated medication icon
-            AnimatedBuilder(
-              animation: _pulseCtrl,
-              builder: (ctx, child) => Transform.scale(
-                scale: alreadyDone ? 1.0 : (1.0 + _pulseCtrl.value * (isOverdue ? 0.06 : 0.03)),
-                child: Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    color: isOverdue
-                        ? AppColors.pendingBackground
-                        : AppColors.primaryAction.withOpacity(0.08),
-                    shape: BoxShape.circle,
+      appBar: AppBar(
+        title: const Text('Dose reminder'),
+        centerTitle: true,
+      ),
+      body: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(
+            AppDimensions.screenMargin,
+            AppDimensions.stackMd,
+            AppDimensions.screenMargin,
+            AppDimensions.stack2Xl,
+          ),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: statusBackground,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 7,
+                          height: 7,
+                          decoration: BoxDecoration(
+                            color: statusColor,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          statusLabel,
+                          style: AppTextStyles.statusBadge(color: statusColor),
+                        ),
+                      ],
+                    ),
                   ),
-                  child: Icon(
-                    Icons.medication_rounded,
-                    size: 56,
-                    color: isOverdue ? AppColors.primaryAction : AppColors.primaryAction,
+                  const SizedBox(height: AppDimensions.stackMd),
+                  _MedicationHero(
+                    imageUrl: med.imageUrl,
+                    accentColor: statusColor,
                   ),
-                ),
-              ),
-            ),
-            const SizedBox(height: AppDimensions.stackXl),
+                  const SizedBox(height: AppDimensions.stackLg),
+                  Text(
+                    med.name,
+                    style: AppTextStyles.displayMedication(),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: AppDimensions.stackXs),
+                  Text(
+                    med.displayStrength,
+                    style: AppTextStyles.bodyLg(
+                      color: AppColors.textSecondary,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: AppDimensions.stackLg),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _ReminderDetailTile(
+                          icon: isOverdue
+                              ? Icons.warning_amber_rounded
+                              : Icons.schedule_rounded,
+                          label: isOverdue ? 'Was due' : 'Scheduled',
+                          value: timeStr,
+                          color: statusColor,
+                        ),
+                      ),
+                      const SizedBox(width: AppDimensions.stackMd),
+                      Expanded(
+                        child: _ReminderDetailTile(
+                          icon: Icons.medication_liquid_rounded,
+                          label: 'Dose',
+                          value: med.displayDose,
+                          color: AppColors.primaryAction,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (med.instructions?.trim().isNotEmpty ?? false) ...[
+                    const SizedBox(height: AppDimensions.stackMd),
+                    _InstructionCard(instructions: med.instructions!.trim()),
+                  ],
+                  const SizedBox(height: AppDimensions.stackLg),
+                  if (alreadyDone)
+                    _AlreadyDoneView(status: occ.status)
+                  else
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(AppDimensions.stackMd),
+                      decoration: BoxDecoration(
+                        color: AppColors.cardSurface,
+                        borderRadius:
+                            BorderRadius.circular(AppDimensions.cardRadius),
+                        border: Border.all(color: AppColors.borderLight),
+                        boxShadow: AppColors.cardShadow,
+                      ),
+                      child: Column(
+                        children: [
+                          DdButton(
+                            label: 'Mark as taken',
+                            onPressed: _isSubmitting
+                                ? null
+                                : () => _recordAction(
+                                      occ,
+                                      med,
+                                      DoseStatus.taken,
+                                    ),
+                            isLoading: _isSubmitting,
+                            icon: const Icon(
+                              Icons.check_rounded,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: AppDimensions.stackMd),
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              final snoozeButton = DdButton(
+                                label: 'Snooze',
+                                onPressed: _isSubmitting
+                                    ? null
+                                    : () => _showSnoozeDialog(occ, med),
+                                variant: DdButtonVariant.secondary,
+                                icon: const Icon(Icons.alarm_rounded),
+                              );
+                              final skipButton = DdButton(
+                                label: 'Skip dose',
+                                onPressed: _isSubmitting
+                                    ? null
+                                    : () => _showSkipReasonDialog(occ, med),
+                                variant: DdButtonVariant.text,
+                              );
 
-            // Medication name and details
-            Text(med.name, style: AppTextStyles.displayMedication(), textAlign: TextAlign.center),
-            const SizedBox(height: AppDimensions.stackSm),
-            Text(
-              '${med.displayStrength} · ${med.displayDose}',
-              style: AppTextStyles.headlineMd(color: AppColors.textSecondary),
-              textAlign: TextAlign.center,
-            ),
-            if (med.instructions != null) ...[
-              const SizedBox(height: AppDimensions.stackMd),
-              Container(
-                padding: const EdgeInsets.all(AppDimensions.stackMd),
-                decoration: BoxDecoration(
-                  color: AppColors.snoozedBackground,
-                  borderRadius: BorderRadius.circular(AppDimensions.badgeRadius),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.info_outline, size: 18, color: AppColors.snoozedForeground),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        med.instructions!,
-                        style: AppTextStyles.bodyLg(color: AppColors.textSecondary),
+                              if (constraints.maxWidth < 300) {
+                                return Column(
+                                  children: [
+                                    snoozeButton,
+                                    const SizedBox(
+                                      height: AppDimensions.stackSm,
+                                    ),
+                                    skipButton,
+                                  ],
+                                );
+                              }
+                              return Row(
+                                children: [
+                                  Expanded(child: snoozeButton),
+                                  const SizedBox(
+                                    width: AppDimensions.stackMd,
+                                  ),
+                                  Expanded(child: skipButton),
+                                ],
+                              );
+                            },
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ],
-            const SizedBox(height: AppDimensions.stackXl),
-
-            // Scheduled time card
-            DdCard(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    isOverdue ? Icons.warning_amber_rounded : Icons.schedule_rounded,
-                    color: isOverdue ? AppColors.primaryAction : AppColors.textSecondary,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    isOverdue ? 'Overdue — was scheduled at $timeStr' : 'Scheduled at $timeStr',
-                    style: AppTextStyles.bodyBold(
-                      color: isOverdue ? AppColors.primaryAction : AppColors.textSecondary,
-                    ),
-                  ),
                 ],
               ),
             ),
-            const SizedBox(height: AppDimensions.stackXl),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
-            if (alreadyDone)
-              _AlreadyDoneView(status: occ.status)
-            else ...[
-              // Take it button
-              DdButton(
-                label: "I've Taken It",
-                onPressed: _isSubmitting ? null : () => _recordAction(occ, med, DoseStatus.taken),
-                isLoading: _isSubmitting,
-                icon: const Icon(Icons.check_rounded, color: Colors.white),
-              ),
-              const SizedBox(height: AppDimensions.stackMd),
+class _MedicationHero extends StatelessWidget {
+  const _MedicationHero({
+    required this.imageUrl,
+    required this.accentColor,
+  });
 
-              // Snooze button
-              DdButton(
-                label: 'Snooze Reminder',
-                onPressed: _isSubmitting ? null : () => _showSnoozeDialog(occ, med),
-                variant: DdButtonVariant.secondary,
-                icon: const Icon(Icons.alarm_rounded),
-              ),
-              const SizedBox(height: AppDimensions.stackMd),
+  final String? imageUrl;
+  final Color accentColor;
 
-              // Skip button
-              DdButton(
-                label: 'Skip This Dose',
-                onPressed: _isSubmitting ? null : () => _showSkipReasonDialog(occ, med),
-                variant: DdButtonVariant.text,
-              ),
-            ],
+  @override
+  Widget build(BuildContext context) {
+    return AspectRatio(
+      aspectRatio: 1.55,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.cardSurface,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: AppColors.borderLight),
+          boxShadow: AppColors.cardShadow,
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(23),
+          child: _buildImage() ?? _buildFallback(),
+        ),
+      ),
+    );
+  }
 
-            const SizedBox(height: AppDimensions.stackXl),
+  Widget? _buildImage() {
+    final url = imageUrl?.trim();
+    if (url == null || url.isEmpty) return null;
+
+    if (url.startsWith('data:image')) {
+      try {
+        final separator = url.indexOf(',');
+        if (separator < 0) return null;
+        return Image.memory(
+          base64Decode(url.substring(separator + 1)),
+          key: const ValueKey('medication-image'),
+          width: double.infinity,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _buildFallback(),
+        );
+      } catch (_) {
+        return null;
+      }
+    }
+
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return Image.network(
+        url,
+        key: const ValueKey('medication-image'),
+        width: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _buildFallback(),
+      );
+    }
+    return null;
+  }
+
+  Widget _buildFallback() {
+    return Container(
+      key: const ValueKey('medication-image-fallback'),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            accentColor.withOpacity(0.16),
+            AppColors.cardSurface,
           ],
         ),
+      ),
+      child: Center(
+        child: Container(
+          width: 96,
+          height: 96,
+          decoration: BoxDecoration(
+            color: AppColors.cardSurface.withOpacity(0.92),
+            shape: BoxShape.circle,
+            border: Border.all(color: accentColor.withOpacity(0.2)),
+          ),
+          child: Icon(
+            Icons.medication_rounded,
+            size: 52,
+            color: accentColor,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReminderDetailTile extends StatelessWidget {
+  const _ReminderDetailTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 96),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.cardSurface,
+        borderRadius: BorderRadius.circular(AppDimensions.cardRadius),
+        border: Border.all(color: AppColors.borderLight),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 18, color: color),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.caption(),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.bodyBold(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InstructionCard extends StatelessWidget {
+  const _InstructionCard({required this.instructions});
+
+  final String instructions;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppDimensions.stackMd),
+      decoration: BoxDecoration(
+        color: AppColors.cardSurface,
+        borderRadius: BorderRadius.circular(AppDimensions.cardRadius),
+        border: Border.all(color: AppColors.borderLight),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: const BoxDecoration(
+              color: AppColors.snoozedBackground,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.restaurant_rounded,
+              size: 19,
+              color: AppColors.snoozedForeground,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Instructions', style: AppTextStyles.labelMd()),
+                const SizedBox(height: 2),
+                Text(
+                  instructions,
+                  style: AppTextStyles.bodyLg(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -419,9 +708,21 @@ class _AlreadyDoneView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (icon, label, color) = switch (status) {
-      DoseStatus.taken => (Icons.check_circle_rounded, 'Dose Taken', AppColors.takenForeground),
-      DoseStatus.skipped => (Icons.skip_next_rounded, 'Dose Skipped', AppColors.skippedForeground),
-      DoseStatus.snoozed => (Icons.alarm_rounded, 'Reminder Snoozed', AppColors.snoozedForeground),
+      DoseStatus.taken => (
+          Icons.check_circle_rounded,
+          'Dose Taken',
+          AppColors.takenForeground
+        ),
+      DoseStatus.skipped => (
+          Icons.skip_next_rounded,
+          'Dose Skipped',
+          AppColors.skippedForeground
+        ),
+      DoseStatus.snoozed => (
+          Icons.alarm_rounded,
+          'Reminder Snoozed',
+          AppColors.snoozedForeground
+        ),
       _ => (Icons.info_rounded, 'Status Recorded', AppColors.textTertiary),
     };
 

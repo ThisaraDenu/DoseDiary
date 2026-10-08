@@ -8,12 +8,49 @@ import '../../core/theme/app_text_styles.dart';
 import '../../core/theme/app_dimensions.dart';
 import '../../core/widgets/dd_logo.dart';
 import '../../core/router/route_names.dart';
+import '../../data/local/database_provider.dart';
 import '../../data/remote/auth_service.dart';
 import '../home/home_dashboard_screen.dart';
+import 'settings_providers.dart';
 
 final userPublicIdProvider = FutureProvider<String?>((ref) async {
+  ref.watch(accountSessionEpochProvider);
   return AuthService.ensurePublicId();
 });
+
+String _languageName(String code) => switch (code) {
+      'si' => 'Sinhala',
+      'ta' => 'Tamil',
+      _ => 'English',
+    };
+
+Future<void> _confirmSignOut(BuildContext context, WidgetRef ref) async {
+  final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Sign out of DoseDiary?'),
+          content: const Text(
+            'Your synchronized account data will remain in the cloud. Local account data on this device will be cleared.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Sign out'),
+            ),
+          ],
+        ),
+      ) ??
+      false;
+  if (!confirmed) return;
+  await AuthService.signOut();
+  ref.read(accountSessionEpochProvider.notifier).state++;
+  if (!context.mounted) return;
+  context.go(RouteNames.login);
+}
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -21,6 +58,7 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = AuthService.currentUser;
+    final settings = ref.watch(settingsProvider);
     final userName = user?.userMetadata?['full_name'] as String? ??
         (user?.email?.split('@').first ?? 'Guest User');
     final userEmail = user?.email ?? 'Not signed in';
@@ -34,146 +72,231 @@ class SettingsScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.only(bottom: 110),
         children: [
-          // App brand header
-          Container(
+          Material(
             color: AppColors.cardSurface,
-            padding: const EdgeInsets.all(AppDimensions.cardPadding),
-            child: Row(
-              children: [
-                const DdLogo(size: 48),
-                const SizedBox(width: AppDimensions.stackMd),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('DoseDiary', style: AppTextStyles.headlineMd()),
-                      Text(userName,
-                          style: AppTextStyles.bodyLg(
-                              color: AppColors.textSecondary),
-                          overflow: TextOverflow.ellipsis),
-                      ref.watch(userAgeProvider).when(
-                            data: (age) => ref.watch(userGenderProvider).when(
-                                  data: (gender) => ref
-                                      .watch(userPhoneProvider)
-                                      .when(
-                                        data: (phone) {
-                                          final parts = <String>[];
-                                          if (age != null)
-                                            parts.add('$age yrs');
-                                          if (gender != null &&
-                                              gender.isNotEmpty)
-                                            parts.add(gender);
-                                          if (phone != null && phone.isNotEmpty)
-                                            parts.add(phone);
-                                          if (parts.isEmpty)
-                                            return const SizedBox.shrink();
-                                          return Padding(
-                                            padding: const EdgeInsets.only(
-                                                top: 2, bottom: 2),
-                                            child: Text(
-                                              parts.join(' • '),
-                                              style: const TextStyle(
-                                                fontSize: 12.5,
-                                                fontWeight: FontWeight.w600,
-                                                color: AppColors.primaryAction,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          );
-                                        },
-                                        loading: () => const SizedBox.shrink(),
-                                        error: (_, __) =>
-                                            const SizedBox.shrink(),
-                                      ),
-                                  loading: () => const SizedBox.shrink(),
-                                  error: (_, __) => const SizedBox.shrink(),
-                                ),
-                            loading: () => const SizedBox.shrink(),
-                            error: (_, __) => const SizedBox.shrink(),
+            child: InkWell(
+              onTap: () => context.push(RouteNames.settingsAccount),
+              child: Padding(
+                padding: const EdgeInsets.all(AppDimensions.cardPadding),
+                child: Row(
+                  children: [
+                    const DdLogo(size: 48),
+                    const SizedBox(width: AppDimensions.stackMd),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('DoseDiary', style: AppTextStyles.headlineMd()),
+                          Text(userName,
+                              style: AppTextStyles.bodyLg(
+                                  color: AppColors.textSecondary),
+                              overflow: TextOverflow.ellipsis),
+                          ref.watch(userAgeProvider).when(
+                                data: (age) => ref
+                                    .watch(userGenderProvider)
+                                    .when(
+                                      data: (gender) => ref
+                                          .watch(userPhoneProvider)
+                                          .when(
+                                            data: (phone) {
+                                              final parts = <String>[];
+                                              if (age != null) {
+                                                parts.add('$age yrs');
+                                              }
+                                              if (gender != null &&
+                                                  gender.isNotEmpty) {
+                                                parts.add(gender);
+                                              }
+                                              if (phone != null &&
+                                                  phone.isNotEmpty) {
+                                                parts.add(phone);
+                                              }
+                                              if (parts.isEmpty) {
+                                                return const SizedBox.shrink();
+                                              }
+                                              return Padding(
+                                                padding: const EdgeInsets.only(
+                                                    top: 2, bottom: 2),
+                                                child: Text(
+                                                  parts.join(' • '),
+                                                  style: const TextStyle(
+                                                    fontSize: 12.5,
+                                                    fontWeight: FontWeight.w600,
+                                                    color:
+                                                        AppColors.primaryAction,
+                                                  ),
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              );
+                                            },
+                                            loading: () =>
+                                                const SizedBox.shrink(),
+                                            error: (_, __) =>
+                                                const SizedBox.shrink(),
+                                          ),
+                                      loading: () => const SizedBox.shrink(),
+                                      error: (_, __) => const SizedBox.shrink(),
+                                    ),
+                                loading: () => const SizedBox.shrink(),
+                                error: (_, __) => const SizedBox.shrink(),
+                              ),
+                          Text(
+                            user != null ? userEmail : 'Offline / Guest Mode',
+                            style: AppTextStyles.caption(),
+                            overflow: TextOverflow.ellipsis,
                           ),
-                      Text(
-                        user != null ? userEmail : 'Offline / Guest Mode',
-                        style: AppTextStyles.caption(),
-                        overflow: TextOverflow.ellipsis,
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                    const Icon(Icons.chevron_right_rounded,
+                        color: AppColors.textTertiary),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
           const Divider(height: 1),
-
           const _PublicIdCard(),
-
-          const _SectionHeader(title: 'Personalisation'),
-          _SettingTile(
-            icon: Icons.accessibility_new_rounded,
-            label: 'Accessibility',
-            subtitle: 'Text size, simple wording',
-            onTap: () => context.push(RouteNames.settingsAccessibility),
+          const _SectionHeader(title: 'Medication & Tracking'),
+          _SettingsGroup(
+            children: [
+              _SettingTile(
+                icon: Icons.medication_outlined,
+                label: 'My medications',
+                subtitle: 'Schedules, doses, stock, and prescription details',
+                onTap: () => context.push(RouteNames.medications),
+              ),
+              _SettingTile(
+                icon: Icons.history_rounded,
+                label: 'Medication history',
+                subtitle: 'Dose records, weekly charts, and PDF downloads',
+                onTap: () => context.push(RouteNames.history),
+              ),
+              _SettingTile(
+                icon: Icons.insights_outlined,
+                label: 'Adherence insights',
+                subtitle: 'Review medication-taking patterns',
+                onTap: () => context.push(RouteNames.adherence),
+              ),
+              _SettingTile(
+                icon: Icons.inventory_2_outlined,
+                label: 'Refills & stock',
+                subtitle: 'Inventory levels and refill reminders',
+                onTap: () => context.push(RouteNames.refills),
+              ),
+            ],
           ),
-          _SettingTile(
-            icon: Icons.notifications_outlined,
-            label: 'Notifications',
-            subtitle: 'Reminders, alerts, sounds',
-            onTap: () => context.push(RouteNames.settingsNotifications),
+          const _SectionHeader(title: 'Care Network'),
+          _SettingsGroup(
+            children: [
+              _SettingTile(
+                icon: Icons.people_alt_outlined,
+                label: 'Caregivers & patients',
+                subtitle: 'Connections, invitations, and access permissions',
+                onTap: () => context.push(RouteNames.caregivers),
+              ),
+              _SettingTile(
+                icon: Icons.notifications_active_outlined,
+                label: 'Notification centre',
+                subtitle: 'Recent reminders and caregiver alerts',
+                onTap: () => context.push(RouteNames.notificationCentre),
+              ),
+            ],
           ),
-          _SettingTile(
-            icon: Icons.people_rounded,
-            label: 'Caregivers',
-            subtitle: 'Manage who can view your schedule',
-            onTap: () => context.push(RouteNames.caregivers),
+          const _SectionHeader(title: 'Preferences'),
+          _SettingsGroup(
+            children: [
+              _SettingTile(
+                icon: Icons.notifications_outlined,
+                label: 'Reminders & notifications',
+                subtitle: 'Sound, vibration, retries, and grace period',
+                trailingText:
+                    settings.notificationRemindersEnabled ? 'On' : 'Off',
+                onTap: () => context.push(RouteNames.settingsNotifications),
+              ),
+              _SettingTile(
+                icon: Icons.accessibility_new_rounded,
+                label: 'Accessibility & language',
+                subtitle: 'Text size, simpler wording, and language',
+                trailingText: _languageName(settings.locale.languageCode),
+                onTap: () => context.push(RouteNames.settingsAccessibility),
+              ),
+              _SettingTile(
+                icon: Icons.admin_panel_settings_outlined,
+                label: 'App permissions',
+                subtitle: 'Manage device access used by DoseDiary',
+                onTap: () => context.push(RouteNames.permissions),
+              ),
+            ],
           ),
-
-          const _SectionHeader(title: 'Account & Privacy'),
-          _SettingTile(
-            icon: Icons.account_circle_outlined,
-            label: 'Account',
-            subtitle: 'Profile, phone, age, gender, email',
-            onTap: () => context.push(RouteNames.settingsAccount),
+          const _SectionHeader(title: 'Data & Security'),
+          _SettingsGroup(
+            children: [
+              _SettingTile(
+                icon: Icons.account_circle_outlined,
+                label: 'Profile & account',
+                subtitle: 'Photo, phone, birthday, gender, and email',
+                onTap: () => context.push(RouteNames.settingsAccount),
+              ),
+              _SettingTile(
+                icon: Icons.sync_rounded,
+                label: 'Data & sync',
+                subtitle: 'Cloud sync, local records, and PDF exports',
+                trailingText: user == null ? 'Local' : 'Connected',
+                onTap: () => context.push(RouteNames.settingsDataSync),
+              ),
+              _SettingTile(
+                icon: Icons.privacy_tip_outlined,
+                label: 'Privacy',
+                subtitle: 'Notification previews and data storage',
+                trailingText:
+                    settings.privacySafePreviews ? 'Protected' : 'Detailed',
+                onTap: () => context.push(RouteNames.settingsPrivacy),
+              ),
+              _SettingTile(
+                icon: Icons.shield_outlined,
+                label: 'Security & permissions',
+                subtitle: 'Password, device access, and preference reset',
+                onTap: () => context.push(RouteNames.settingsSecurity),
+              ),
+            ],
           ),
-          _SettingTile(
-            icon: Icons.lock_outline,
-            label: 'Privacy',
-            subtitle: 'Data sharing, notification previews',
-            onTap: () => context.push(RouteNames.settingsPrivacy),
+          const _SectionHeader(title: 'Help & Information'),
+          _SettingsGroup(
+            children: [
+              _SettingTile(
+                icon: Icons.help_outline_rounded,
+                label: 'Help & support',
+                subtitle: 'Answers to common DoseDiary questions',
+                onTap: () => context.push(RouteNames.settingsHelp),
+              ),
+              _SettingTile(
+                icon: Icons.health_and_safety_outlined,
+                label: 'Medical safety notice',
+                subtitle: 'Important information about using this app',
+                onTap: () => context.push(RouteNames.settingsSafety),
+              ),
+              _SettingTile(
+                icon: Icons.info_outline_rounded,
+                label: 'About DoseDiary',
+                subtitle: 'Version, licences, and app information',
+                onTap: () => context.push(RouteNames.settingsAbout),
+              ),
+            ],
           ),
-
-          const _SectionHeader(title: 'Help & Legal'),
-          _SettingTile(
-            icon: Icons.health_and_safety_outlined,
-            label: 'Medical Safety Notice',
-            subtitle: 'Important information about this app',
-            onTap: () => context.push(RouteNames.settingsSafety),
-          ),
-          _SettingTile(
-            icon: Icons.help_outline,
-            label: 'Help & Support',
-            subtitle: 'FAQ, contact us',
-            onTap: () => context.push(RouteNames.settingsHelp),
-          ),
-          _SettingTile(
-            icon: Icons.notifications_active_outlined,
-            label: 'Notification Centre',
-            subtitle: 'View all recent alerts',
-            onTap: () => context.push(RouteNames.notificationCentre),
-          ),
-
           const _SectionHeader(title: 'Session'),
-          _SettingTile(
-            icon: Icons.logout,
-            label: 'Sign Out',
-            subtitle: 'Return to the login screen',
-            destructive: true,
-            onTap: () async {
-              await AuthService.signOut();
-              ref.invalidate(todayOccurrencesProvider);
-              ref.invalidate(todayMedicationsProvider);
-              ref.invalidate(allActiveMedsProvider);
-              if (!context.mounted) return;
-              context.go(RouteNames.login);
-            },
+          _SettingsGroup(
+            children: [
+              _SettingTile(
+                icon: Icons.logout_rounded,
+                label: 'Sign out',
+                subtitle:
+                    'Securely clear local account data and return to login',
+                destructive: true,
+                onTap: () => _confirmSignOut(context, ref),
+              ),
+            ],
           ),
           const SizedBox(height: AppDimensions.stack2Xl),
         ],
@@ -295,17 +418,50 @@ class _SectionHeader extends StatelessWidget {
       );
 }
 
+class _SettingsGroup extends StatelessWidget {
+  const _SettingsGroup({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding:
+            const EdgeInsets.symmetric(horizontal: AppDimensions.screenMargin),
+        child: Material(
+          color: AppColors.cardSurface,
+          elevation: 1,
+          shadowColor: Colors.black.withOpacity(0.08),
+          clipBehavior: Clip.antiAlias,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppDimensions.cardRadius),
+            side: const BorderSide(color: AppColors.borderLight),
+          ),
+          child: Column(
+            children: [
+              for (var index = 0; index < children.length; index++) ...[
+                children[index],
+                if (index < children.length - 1)
+                  const Divider(height: 1, indent: 64),
+              ],
+            ],
+          ),
+        ),
+      );
+}
+
 class _SettingTile extends StatelessWidget {
   const _SettingTile({
     required this.icon,
     required this.label,
     required this.onTap,
     this.subtitle,
+    this.trailingText,
     this.destructive = false,
   });
   final IconData icon;
   final String label;
   final String? subtitle;
+  final String? trailingText;
   final VoidCallback onTap;
   final bool destructive;
 
@@ -319,8 +475,27 @@ class _SettingTile extends StatelessWidget {
         subtitle: subtitle != null
             ? Text(subtitle!, style: AppTextStyles.caption())
             : null,
-        trailing:
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (trailingText != null) ...[
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 78),
+                child: Text(
+                  trailingText!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.caption(
+                    color:
+                        destructive ? AppColors.error : AppColors.textSecondary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+            ],
             const Icon(Icons.chevron_right, color: AppColors.textTertiary),
+          ],
+        ),
         onTap: onTap,
       );
 }

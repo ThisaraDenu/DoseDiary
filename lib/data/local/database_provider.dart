@@ -52,6 +52,9 @@ class AppDatabase {
     try {
       await db.execute('ALTER TABLE profiles ADD COLUMN public_id TEXT');
     } catch (_) {/* column already exists - safe to ignore */}
+    try {
+      await db.execute('ALTER TABLE medications ADD COLUMN image_url TEXT');
+    } catch (_) {/* column already exists - safe to ignore */}
     await db.execute(
       'CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_public_id '
       'ON profiles(public_id) WHERE public_id IS NOT NULL',
@@ -137,6 +140,7 @@ class AppDatabase {
       strength_unit TEXT NOT NULL DEFAULT 'mg',
       amount_per_dose REAL NOT NULL DEFAULT 1,
       dose_unit TEXT NOT NULL DEFAULT 'tablet(s)',
+      image_url TEXT,
       instructions TEXT,
       is_active INTEGER NOT NULL DEFAULT 1,
       is_as_needed INTEGER NOT NULL DEFAULT 0,
@@ -375,8 +379,15 @@ class AppDatabase {
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 
-final appDatabaseProvider =
-    Provider<AppDatabase>((ref) => AppDatabase.instance);
+/// Changes whenever authentication moves to a different account. All
+/// account-scoped repositories depend on this value through
+/// [appDatabaseProvider], so advancing it clears their Riverpod caches.
+final accountSessionEpochProvider = StateProvider<int>((ref) => 0);
+
+final appDatabaseProvider = Provider<AppDatabase>((ref) {
+  ref.watch(accountSessionEpochProvider);
+  return AppDatabase.instance;
+});
 
 class DatabaseProvider {
   static Future<void> initialize() async {

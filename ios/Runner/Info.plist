@@ -48,7 +48,7 @@
 	<key>NSContactsUsageDescription</key>
 	<string>DoseDiary needs access to your contacts to let you quickly invite and link trusted caregivers and emergency contacts.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>DoseDiary uses your location to show nearby 24/7 pharmacies and medical clinics for urgent prescription refills.</string>
+	<string>DoseDiary uses your location for nearby care services and, when you choose to connect accounts, to share your current area with your trusted patient or caregiver.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>DoseDiary accesses your photos to let you upload prescription labels, medicine packages, and profile photos.</string>
 	<key>NSCameraUsageDescription</key>

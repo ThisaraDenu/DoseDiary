@@ -6,6 +6,8 @@ import '../../core/theme/app_text_styles.dart';
 import '../../core/theme/app_dimensions.dart';
 import '../../core/widgets/dd_card.dart';
 import '../../core/widgets/dd_empty_state.dart';
+import '../../core/services/permission_service.dart';
+import '../../services/notification_service.dart';
 import 'settings_providers.dart';
 
 export 'account_screen.dart' show AccountScreen;
@@ -71,7 +73,8 @@ class AccessibilityScreen extends ConsumerWidget {
                       const SizedBox(height: 4),
                       Text(
                         'Use shorter, plainer words throughout the app.',
-                        style: AppTextStyles.bodyLg(color: AppColors.textSecondary),
+                        style: AppTextStyles.bodyLg(
+                            color: AppColors.textSecondary),
                       ),
                     ],
                   ),
@@ -92,7 +95,11 @@ class AccessibilityScreen extends ConsumerWidget {
               children: [
                 Text('Language', style: AppTextStyles.bodyBold()),
                 const SizedBox(height: AppDimensions.stackSm),
-                for (final lang in [('en', 'English'), ('si', 'Sinhala (සිංහල)'), ('ta', 'Tamil (தமிழ்)')])
+                for (final lang in [
+                  ('en', 'English'),
+                  ('si', 'Sinhala (සිංහල)'),
+                  ('ta', 'Tamil (தமிழ்)')
+                ])
                   RadioListTile<String>(
                     title: Text(lang.$2, style: AppTextStyles.bodyXl()),
                     value: lang.$1,
@@ -142,7 +149,27 @@ class NotificationSettingsScreen extends ConsumerWidget {
                   label: 'Medication Reminders',
                   subtitle: 'Notify me when a dose is due',
                   value: settings.notificationRemindersEnabled,
-                  onChanged: (v) => notifier.setNotificationReminders(v),
+                  onChanged: (value) async {
+                    if (value) {
+                      final granted = await PermissionService.request(
+                        AppPermissionType.notification,
+                      );
+                      if (!granted) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Enable notifications in device settings to receive reminders.',
+                            ),
+                          ),
+                        );
+                        return;
+                      }
+                    } else {
+                      await NotificationService.cancelAll();
+                    }
+                    await notifier.setNotificationReminders(value);
+                  },
                 ),
                 const Divider(),
                 _SwitchRow(
@@ -162,7 +189,6 @@ class NotificationSettingsScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: AppDimensions.stackXl),
-
           Text('Retry & Grace Period', style: AppTextStyles.headlineMd()),
           const SizedBox(height: AppDimensions.stackSm),
           Text(
@@ -170,12 +196,12 @@ class NotificationSettingsScreen extends ConsumerWidget {
             style: AppTextStyles.bodyLg(color: AppColors.textSecondary),
           ),
           const SizedBox(height: AppDimensions.stackLg),
-
           DdCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Follow-up reminders: ${settings.retryCount}', style: AppTextStyles.bodyBold()),
+                Text('Follow-up reminders: ${settings.retryCount}',
+                    style: AppTextStyles.bodyBold()),
                 Slider(
                   value: settings.retryCount.toDouble(),
                   min: 0,
@@ -189,12 +215,13 @@ class NotificationSettingsScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: AppDimensions.stackLg),
-
           DdCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Caregiver alert after: ${settings.gracePeriodMinutes} min', style: AppTextStyles.bodyBold()),
+                Text(
+                    'Caregiver alert after: ${settings.gracePeriodMinutes} min',
+                    style: AppTextStyles.bodyBold()),
                 Slider(
                   value: settings.gracePeriodMinutes.toDouble(),
                   min: 15,
@@ -228,7 +255,9 @@ class _SwitchRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SwitchListTile(
         title: Text(label, style: AppTextStyles.bodyBold()),
-        subtitle: subtitle != null ? Text(subtitle!, style: AppTextStyles.caption()) : null,
+        subtitle: subtitle != null
+            ? Text(subtitle!, style: AppTextStyles.caption())
+            : null,
         value: value,
         onChanged: onChanged,
         activeColor: AppColors.primaryAction,
@@ -255,7 +284,8 @@ class PrivacyScreen extends ConsumerWidget {
           DdCard(
             child: _SwitchRow(
               label: 'Safe Notification Previews',
-              subtitle: 'Show only "Dose reminder" in lock-screen notifications instead of medicine names.',
+              subtitle:
+                  'Show only "Dose reminder" in lock-screen notifications instead of medicine names.',
               value: settings.privacySafePreviews,
               onChanged: (v) => notifier.setPrivacySafePreviews(v),
             ),
@@ -280,7 +310,6 @@ class PrivacyScreen extends ConsumerWidget {
   }
 }
 
-
 // ── Safety Info ────────────────────────────────────────────────────────────────
 
 class SafetyInfoScreen extends StatelessWidget {
@@ -300,9 +329,12 @@ class SafetyInfoScreen extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.health_and_safety_rounded, color: AppColors.primaryAction),
+                      const Icon(Icons.health_and_safety_rounded,
+                          color: AppColors.primaryAction),
                       const SizedBox(width: 8),
-                      Text('Important Notice', style: AppTextStyles.bodyBold(color: AppColors.primaryAction)),
+                      Text('Important Notice',
+                          style: AppTextStyles.bodyBold(
+                              color: AppColors.primaryAction)),
                     ],
                   ),
                   const SizedBox(height: AppDimensions.stackMd),
@@ -340,23 +372,28 @@ class HelpScreen extends StatelessWidget {
           children: const [
             _FaqItem(
               question: 'How do I add a medication?',
-              answer: 'Go to the Medications tab and tap the "+" button. Fill in the medicine name, strength, dose, and set reminder times.',
+              answer:
+                  'Go to the Medications tab and tap the "+" button. Fill in the medicine name, strength, dose, and set reminder times.',
             ),
             _FaqItem(
               question: 'What happens if I miss a dose?',
-              answer: 'DoseDiary marks the dose as missed in your history. Your caregiver (if set up) will receive an alert if you don\'t respond within the grace period.',
+              answer:
+                  'DoseDiary marks the dose as missed in your history. Your caregiver (if set up) will receive an alert if you don\'t respond within the grace period.',
             ),
             _FaqItem(
               question: 'How do caregivers access my schedule?',
-              answer: 'Go to Settings → Caregivers and invite someone by email. You choose exactly what they can see.',
+              answer:
+                  'Go to Settings → Caregivers and invite someone by email. You choose exactly what they can see.',
             ),
             _FaqItem(
               question: 'Does the app tell me what dose to take?',
-              answer: 'No. DoseDiary only reminds you of the schedule you set up yourself. It does not give medical advice or calculate doses.',
+              answer:
+                  'No. DoseDiary only reminds you of the schedule you set up yourself. It does not give medical advice or calculate doses.',
             ),
             _FaqItem(
               question: 'Is my data private?',
-              answer: 'Your data is stored locally on this device. You can optionally sync to a secure cloud account. Medication names are never shared with caregivers.',
+              answer:
+                  'Your data is stored locally on this device and can sync to your secure account. Approved caregivers only receive the information allowed by the connection permissions you choose.',
             ),
           ],
         ),
@@ -376,7 +413,10 @@ class _FaqItem extends StatelessWidget {
             tilePadding: EdgeInsets.zero,
             childrenPadding: const EdgeInsets.only(top: AppDimensions.stackSm),
             title: Text(question, style: AppTextStyles.bodyBold()),
-            children: [Text(answer, style: AppTextStyles.bodyLg(color: AppColors.textSecondary))],
+            children: [
+              Text(answer,
+                  style: AppTextStyles.bodyLg(color: AppColors.textSecondary))
+            ],
           ),
         ),
       );
@@ -398,4 +438,3 @@ class NotificationCentreScreen extends StatelessWidget {
         ),
       );
 }
-

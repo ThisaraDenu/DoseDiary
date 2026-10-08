@@ -13,8 +13,8 @@ import '../../../core/widgets/dd_text_field.dart';
 import '../../../core/widgets/dd_phone_input.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/services/permission_service.dart';
+import '../../../data/local/database_provider.dart';
 import '../../../data/remote/auth_service.dart';
-import '../../../data/remote/supabase_sync_service.dart';
 import '../../../main.dart';
 
 class SignUpScreen extends ConsumerStatefulWidget {
@@ -105,6 +105,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         gender: _selectedGender,
         phoneNumber: fullPhoneNumber,
       );
+      ref.read(accountSessionEpochProvider.notifier).state++;
 
       if (!mounted) return;
       context.push(
@@ -154,9 +155,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         return;
       }
 
+      ref.read(accountSessionEpochProvider.notifier).state++;
       final prefs = ref.read(sharedPreferencesProvider);
       await prefs.setBool('onboarding_complete', true);
-      SupabaseSyncService.pullFromCloud().ignore();
 
       if (!mounted) return;
       if (await AuthService.needsProfileCompletion()) {

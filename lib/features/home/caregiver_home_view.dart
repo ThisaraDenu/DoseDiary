@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/router/route_names.dart';
+import '../../core/services/phone_dialer_service.dart';
+import '../../core/utils/presence_formatters.dart';
 import '../../data/remote/auth_service.dart';
 import '../../data/local/models/app_models.dart';
 import '../../data/local/models/dose_status.dart';
@@ -38,16 +40,58 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
     final now = DateTime.now();
     final dateStr = DateFormat('EEEE, d MMMM yyyy').format(now);
 
-    final occsAsync = ref.watch(todayOccurrencesProvider);
-    final medsAsync = ref.watch(todayMedicationsProvider);
-    final weeklyAdherenceAsync = ref.watch(weeklyAdherenceProvider);
-    final lowStockAsync = ref.watch(lowStockProvider);
-    final lowestStockAsync = ref.watch(lowestStockMedicationProvider);
+    final allocatedPatientsAsync = ref.watch(allocatedPatientsProvider);
+    final allocatedPatients = allocatedPatientsAsync.valueOrNull ?? [];
+    final activePatient =
+        allocatedPatients.isNotEmpty ? allocatedPatients.first : null;
+
+    // A caregiver without a patient must not see their own medication data.
+    // Keep the dashboard limited to invitations and the add-patient state.
+    if (activePatient == null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const IncomingCaregiverInvitationsWidget(),
+          const SizedBox(height: 20),
+          _buildNoPatientAllocatedCard(context),
+        ],
+      );
+    }
+
+    final patientUserId = activePatient.patientUserId;
+    if (patientUserId == null || patientUserId.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const IncomingCaregiverInvitationsWidget(),
+          const SizedBox(height: 20),
+          _buildAllocatedPatientCard(context, activePatient),
+          const SizedBox(height: 20),
+          _buildPermissionRestrictedCard(
+            title: 'Patient Account Not Linked',
+            message:
+                'Connect this patient\'s DoseDiary account to view their medication details.',
+            icon: Icons.link_off_rounded,
+          ),
+        ],
+      );
+    }
+
+    final occsAsync =
+        ref.watch(caregiverPatientOccurrencesProvider(patientUserId));
+    final medsAsync =
+        ref.watch(caregiverPatientMedicationsProvider(patientUserId));
+    final weeklyAdherenceAsync =
+        ref.watch(caregiverPatientWeeklyAdherenceProvider(patientUserId));
+    final lowStockAsync =
+        ref.watch(caregiverPatientLowStockProvider(patientUserId));
+    final lowestStockAsync =
+        ref.watch(caregiverPatientLowestStockMedicationProvider(patientUserId));
 
     final occs = occsAsync.valueOrNull ?? [];
     final meds = medsAsync.valueOrNull ?? [];
 
-    // Find real actionable doses for today
+    // Find real actionable doses for the selected patient only.
     final actionable = occs
         .where((o) =>
             o.status.isActionable && !_snoozedOccurrenceIds.contains(o.id))
@@ -58,24 +102,14 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
     final nextMed =
         nextOcc != null ? _findMedication(meds, nextOcc.medicationId) : null;
 
-    final allocatedPatientsAsync = ref.watch(allocatedPatientsProvider);
-    final allocatedPatients = allocatedPatientsAsync.valueOrNull ?? [];
-    final activePatient =
-        allocatedPatients.isNotEmpty ? allocatedPatients.first : null;
-
-    final permsAsync = activePatient?.patientUserId != null
-        ? ref.watch(patientPermissionsProvider(activePatient!.patientUserId!))
-        : null;
-    final perms = permsAsync?.valueOrNull;
+    final permsAsync = ref.watch(patientPermissionsProvider(patientUserId));
+    final perms = permsAsync.valueOrNull;
     final canViewSchedule = perms?.permViewSchedule ?? true;
     final canViewAdherence = perms?.permViewAdherence ?? true;
     final canViewRefills = perms?.permViewRefills ?? true;
 
-    final patientDisplayName = activePatient?.fullName ??
-        (widget.userName.trim().isNotEmpty ? widget.userName : 'Patient');
-    final patientFirstName = activePatient != null
-        ? activePatient.fullName.split(' ').first
-        : (widget.userName.trim().isNotEmpty ? widget.userName : 'Patient');
+    final patientDisplayName = activePatient.fullName;
+    final patientFirstName = activePatient.fullName.split(' ').first;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -131,6 +165,15 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
       if (m.id == medicationId) return m;
     }
     return null;
+  }
+
+  void _invalidatePatientMedicationData(String patientUserId) {
+    ref.invalidate(caregiverPatientOccurrencesProvider(patientUserId));
+    ref.invalidate(caregiverPatientMedicationsProvider(patientUserId));
+    ref.invalidate(caregiverPatientWeeklyAdherenceProvider(patientUserId));
+    ref.invalidate(caregiverPatientLowStockProvider(patientUserId));
+    ref.invalidate(
+        caregiverPatientLowestStockMedicationProvider(patientUserId));
   }
 
   // ── 1. Patient Quick Telemetry & Status Card ──────────────────────────────
@@ -321,7 +364,7 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
-                            '${patient.lastActive} • ${patient.relationship} • ${patient.location}',
+                            '${formatLastActive(patient.lastActive)} • ${patient.relationship} • ${patient.location}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -342,8 +385,19 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   InkWell(
-                    onTap: () => widget.onShowToast(
-                        'Connecting audio call to ${patient.fullName}...'),
+                    onTap: () async {
+                      if (patient.phoneNumber == null ||
+                          patient.phoneNumber!.trim().isEmpty) {
+                        widget.onShowToast(
+                            '${patient.fullName} has not added a phone number.');
+                        return;
+                      }
+                      final opened =
+                          await PhoneDialerService.open(patient.phoneNumber);
+                      if (!opened && mounted) {
+                        widget.onShowToast('Could not open the phone app.');
+                      }
+                    },
                     borderRadius: BorderRadius.circular(24),
                     child: Container(
                       width: 44,
@@ -670,8 +724,9 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                         DropdownMenuItem(value: 'Other', child: Text('Other')),
                       ],
                       onChanged: (val) {
-                        if (val != null)
+                        if (val != null) {
                           setSheetState(() => selectedRelationship = val);
+                        }
                       },
                       decoration: InputDecoration(
                         filled: true,
@@ -884,8 +939,9 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                         DropdownMenuItem(value: 'Other', child: Text('Other')),
                       ],
                       onChanged: (val) {
-                        if (val != null)
+                        if (val != null) {
                           setSheetState(() => selectedRelationship = val);
+                        }
                       },
                       decoration: InputDecoration(
                         filled: true,
@@ -1207,7 +1263,8 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                           snoozeUntil:
                               DateTime.now().add(const Duration(minutes: 15)),
                         );
-                    ref.invalidate(todayOccurrencesProvider);
+                    ref.invalidate(
+                        caregiverPatientOccurrencesProvider(nextOcc.userId));
                   } catch (_) {}
                   widget.onShowToast('Alert postponed for 15 minutes.');
                 },
@@ -1732,12 +1789,7 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                             amount: med.amountPerDose,
                           );
                     }
-                    ref.invalidate(todayOccurrencesProvider);
-                    ref.invalidate(todayAdherenceProvider);
-                    ref.invalidate(weeklyAdherenceProvider);
-                    ref.invalidate(todayMedicationsProvider);
-                    ref.invalidate(lowStockProvider);
-                    ref.invalidate(lowestStockMedicationProvider);
+                    _invalidatePatientMedicationData(occ.userId);
                     widget.onShowToast(
                         '$medName dose recorded as taken manually.');
                   },
@@ -2276,9 +2328,8 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                                 quantityAdded: 30,
                                 note: 'Refill requested by caregiver',
                               );
-                          ref.invalidate(lowStockProvider);
-                          ref.invalidate(lowestStockMedicationProvider);
-                          ref.invalidate(todayMedicationsProvider);
+                          _invalidatePatientMedicationData(
+                              targetRefillMed.userId);
                           widget.onShowToast(
                               'Refill request sent for ${targetRefillMed.name} (+30 ${targetRefillMed.quantityUnit}).');
                         },
@@ -2691,12 +2742,7 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                                 userId: med.userId,
                                 amount: med.amountPerDose,
                               );
-                          ref.invalidate(todayOccurrencesProvider);
-                          ref.invalidate(todayAdherenceProvider);
-                          ref.invalidate(weeklyAdherenceProvider);
-                          ref.invalidate(todayMedicationsProvider);
-                          ref.invalidate(lowStockProvider);
-                          ref.invalidate(lowestStockMedicationProvider);
+                          _invalidatePatientMedicationData(med.userId);
                           widget.onShowToast(
                               '${med.name} marked as administered in person.');
                         },

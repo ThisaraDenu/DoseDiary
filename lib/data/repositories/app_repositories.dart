@@ -252,8 +252,9 @@ class DoseRepository {
     final updates = <String, dynamic>{
       'status': status.toDbString(),
     };
-    if (snoozeUntil != null)
+    if (snoozeUntil != null) {
       updates['snooze_until'] = snoozeUntil.toIso8601String();
+    }
     await db
         .update('dose_occurrences', updates, where: 'id = ?', whereArgs: [id]);
     final occ = await getOccurrenceById(id);
@@ -832,7 +833,9 @@ final todayOccurrencesProvider =
 
 final todayMedicationsProvider = FutureProvider<List<Medication>>((ref) async {
   final repo = ref.watch(medicationRepositoryProvider);
-  return repo.getMedications();
+  // Keep medication names available for today's occurrences even if a
+  // medication was archived after its schedule was generated.
+  return repo.getMedications(activeOnly: false);
 });
 
 final todayAdherenceProvider = FutureProvider<AdherenceSummary>((ref) async {
@@ -865,6 +868,45 @@ final comprehensiveAdherenceProvider =
 final lowestStockMedicationProvider = FutureProvider<Medication?>((ref) async {
   final repo = ref.watch(refillRepositoryProvider);
   return repo.getLowestStockMedication();
+});
+
+/// Caregiver Mode data is always scoped to the linked patient's user ID.
+/// These providers must never fall back to the currently signed-in caregiver.
+final caregiverPatientMedicationsProvider =
+    FutureProvider.family<List<Medication>, String>((ref, patientUserId) async {
+  final repo = ref.watch(medicationRepositoryProvider);
+  return repo.getMedications(activeOnly: false, userId: patientUserId);
+});
+
+final caregiverPatientOccurrencesProvider =
+    FutureProvider.family<List<DoseOccurrence>, String>(
+        (ref, patientUserId) async {
+  final repo = ref.watch(patientRepositoryProvider);
+  final caregiverUserId = AuthService.currentUser?.id ?? 'guest-user';
+  return repo.getPatientOccurrencesForCaregiver(
+    patientUserId: patientUserId,
+    caregiverUserId: caregiverUserId,
+    date: DateTime.now(),
+  );
+});
+
+final caregiverPatientWeeklyAdherenceProvider =
+    FutureProvider.family<WeeklyAdherenceReport, String>(
+        (ref, patientUserId) async {
+  final repo = ref.watch(doseRepositoryProvider);
+  return repo.getWeeklyAdherenceReport(userId: patientUserId);
+});
+
+final caregiverPatientLowStockProvider =
+    FutureProvider.family<List<Medication>, String>((ref, patientUserId) async {
+  final repo = ref.watch(refillRepositoryProvider);
+  return repo.getLowStockMedications(userId: patientUserId);
+});
+
+final caregiverPatientLowestStockMedicationProvider =
+    FutureProvider.family<Medication?, String>((ref, patientUserId) async {
+  final repo = ref.watch(refillRepositoryProvider);
+  return repo.getLowestStockMedication(userId: patientUserId);
 });
 
 // ── Patient / Allocation Repository ──────────────────────────────────────────

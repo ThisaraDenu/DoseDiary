@@ -1,6 +1,9 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:uuid/uuid.dart';
@@ -24,7 +27,8 @@ class AddMedicationScreen extends ConsumerStatefulWidget {
   const AddMedicationScreen({super.key});
 
   @override
-  ConsumerState<AddMedicationScreen> createState() => _AddMedicationScreenState();
+  ConsumerState<AddMedicationScreen> createState() =>
+      _AddMedicationScreenState();
 }
 
 class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
@@ -36,6 +40,7 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
   final _instructionsCtrl = TextEditingController();
   final _quantityCtrl = TextEditingController();
   final _refillThresholdCtrl = TextEditingController();
+  final ImagePicker _imagePicker = ImagePicker();
 
   // State
   String _strengthUnit = 'mg';
@@ -45,9 +50,27 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
   List<String> _timesOfDay = ['08:00'];
   bool _refillReminderEnabled = false;
   bool _isLoading = false;
+  Uint8List? _medicationImageBytes;
+  String _medicationImageExtension = 'jpg';
 
-  static const _strengthUnits = ['mg', 'mcg', 'g', 'IU', 'mmol', 'mEq', '%', 'ml'];
-  static const _doseUnits = ['tablet(s)', 'capsule(s)', 'ml', 'drop(s)', 'patch(es)', 'unit(s)'];
+  static const _strengthUnits = [
+    'mg',
+    'mcg',
+    'g',
+    'IU',
+    'mmol',
+    'mEq',
+    '%',
+    'ml'
+  ];
+  static const _doseUnits = [
+    'tablet(s)',
+    'capsule(s)',
+    'ml',
+    'drop(s)',
+    'patch(es)',
+    'unit(s)'
+  ];
 
   @override
   void dispose() {
@@ -68,21 +91,33 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
       final medRepo = ref.read(medicationRepositoryProvider);
       final userId = AuthService.currentUser?.id ?? 'guest-user';
 
-      final med = Medication.create(
+      var med = Medication.create(
         userId: userId,
         name: _nameCtrl.text.trim(),
         strength: double.tryParse(_strengthCtrl.text) ?? 0,
         strengthUnit: _strengthUnit,
         amountPerDose: _amountPerDose,
         doseUnit: _doseUnit,
-        instructions: _instructionsCtrl.text.trim().isEmpty ? null : _instructionsCtrl.text.trim(),
+        instructions: _instructionsCtrl.text.trim().isEmpty
+            ? null
+            : _instructionsCtrl.text.trim(),
         quantityOnHand: double.tryParse(_quantityCtrl.text) ?? 0,
         quantityUnit: _doseUnit,
         refillReminderEnabled: _refillReminderEnabled,
-        refillThresholdQty: _refillReminderEnabled && _refillThresholdCtrl.text.isNotEmpty
-            ? double.tryParse(_refillThresholdCtrl.text)
-            : null,
+        refillThresholdQty:
+            _refillReminderEnabled && _refillThresholdCtrl.text.isNotEmpty
+                ? double.tryParse(_refillThresholdCtrl.text)
+                : null,
       );
+
+      if (_medicationImageBytes != null) {
+        final imageUrl = await AuthService.uploadMedicationImage(
+          medicationId: med.id,
+          bytes: _medicationImageBytes!,
+          fileExtension: _medicationImageExtension,
+        );
+        med = med.copyWith(imageUrl: imageUrl);
+      }
 
       await medRepo.insertMedication(med);
 
@@ -110,12 +145,14 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
       }).ignore();
 
       // Generate today's occurrences
-      final todayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+      final todayStr =
+          '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
       for (final timeStr in _timesOfDay) {
         final parts = timeStr.split(':');
         final h = int.parse(parts[0]);
         final m = int.parse(parts[1]);
-        final scheduled = DateTime(today.year, today.month, today.day, h, m).toUtc();
+        final scheduled =
+            DateTime(today.year, today.month, today.day, h, m).toUtc();
 
         final occData = {
           'id': _uuid.v4(),
@@ -128,13 +165,15 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
           'status': 'pending',
           'created_at': now.toIso8601String(),
         };
-        await db.insert('dose_occurrences', occData, conflictAlgorithm: ConflictAlgorithm.ignore);
+        await db.insert('dose_occurrences', occData,
+            conflictAlgorithm: ConflictAlgorithm.ignore);
         SupabaseSyncService.pushDoseOccurrence(occData).ignore();
       }
 
       // Invalidate providers
       ref.invalidate(todayOccurrencesProvider);
       ref.invalidate(allActiveMedsProvider);
+      ref.invalidate(todayMedicationsProvider);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -143,7 +182,9 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
       context.pop();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to save: $e'), backgroundColor: AppColors.error),
+        SnackBar(
+            content: Text('Failed to save: $e'),
+            backgroundColor: AppColors.error),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -152,15 +193,93 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
 
   Future<void> _pickTime(int index) async {
     final parts = _timesOfDay[index].split(':');
-    final initial = TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+    final initial =
+        TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
     final picked = await showTimePicker(context: context, initialTime: initial);
     if (picked != null) {
       setState(() {
         final list = List<String>.from(_timesOfDay);
-        list[index] = '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+        list[index] =
+            '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
         _timesOfDay = list;
       });
     }
+  }
+
+  Future<void> _pickMedicationImage(ImageSource source) async {
+    try {
+      final file = await _imagePicker.pickImage(
+        source: source,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 82,
+      );
+      if (file == null || !mounted) return;
+
+      final bytes = await file.readAsBytes();
+      if (!mounted) return;
+      setState(() {
+        _medicationImageBytes = bytes;
+        _medicationImageExtension = file.name.contains('.')
+            ? file.name.split('.').last.toLowerCase()
+            : 'jpg';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not add image: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
+  void _showMedicationImageOptions() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Medication image', style: AppTextStyles.headlineMd()),
+              const SizedBox(height: AppDimensions.stackSm),
+              ListTile(
+                leading: const Icon(Icons.camera_alt_rounded),
+                title: const Text('Take a photo'),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _pickMedicationImage(ImageSource.camera);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_rounded),
+                title: const Text('Choose from gallery'),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _pickMedicationImage(ImageSource.gallery);
+                },
+              ),
+              if (_medicationImageBytes != null)
+                ListTile(
+                  leading: const Icon(
+                    Icons.delete_outline_rounded,
+                    color: AppColors.error,
+                  ),
+                  title: const Text('Remove image'),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    setState(() => _medicationImageBytes = null);
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -171,7 +290,15 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
       body: Form(
         key: _formKey,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(AppDimensions.screenMargin),
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: EdgeInsets.fromLTRB(
+            AppDimensions.screenMargin,
+            AppDimensions.screenMargin,
+            AppDimensions.screenMargin,
+            AppDimensions.navBarHeight +
+                MediaQuery.paddingOf(context).bottom +
+                AppDimensions.stackXl,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -179,12 +306,84 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
               Text('Medication Details', style: AppTextStyles.headlineMd()),
               const SizedBox(height: AppDimensions.stackLg),
 
+              Semantics(
+                button: true,
+                label: _medicationImageBytes == null
+                    ? 'Add medication image'
+                    : 'Change medication image',
+                child: InkWell(
+                  onTap: _showMedicationImageOptions,
+                  borderRadius: BorderRadius.circular(AppDimensions.cardRadius),
+                  child: Ink(
+                    height: 160,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: AppColors.cardSurface,
+                      borderRadius:
+                          BorderRadius.circular(AppDimensions.cardRadius),
+                      border: Border.all(color: AppColors.borderLight),
+                    ),
+                    child: _medicationImageBytes == null
+                        ? Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.add_photo_alternate_outlined,
+                                size: 40,
+                                color: AppColors.primaryAction,
+                              ),
+                              const SizedBox(height: AppDimensions.stackSm),
+                              Text(
+                                'Add medication image',
+                                style: AppTextStyles.bodyBold(),
+                              ),
+                              Text(
+                                'Take a photo or choose from gallery',
+                                style: AppTextStyles.caption(),
+                              ),
+                            ],
+                          )
+                        : ClipRRect(
+                            borderRadius: BorderRadius.circular(
+                              AppDimensions.cardRadius - 1,
+                            ),
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                Image.memory(
+                                  _medicationImageBytes!,
+                                  fit: BoxFit.cover,
+                                ),
+                                Align(
+                                  alignment: Alignment.bottomCenter,
+                                  child: Container(
+                                    width: double.infinity,
+                                    padding:
+                                        const EdgeInsets.symmetric(vertical: 8),
+                                    color: Colors.black54,
+                                    child: const Text(
+                                      'Tap to change image',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(color: Colors.white),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppDimensions.stackLg),
+
               DdTextField(
                 label: 'Medicine name *',
                 hint: 'e.g. Metformin',
                 controller: _nameCtrl,
                 textInputAction: TextInputAction.next,
-                validator: (v) => (v?.trim().isEmpty ?? true) ? 'Medicine name is required' : null,
+                validator: (v) => (v?.trim().isEmpty ?? true)
+                    ? 'Medicine name is required'
+                    : null,
               ),
               const SizedBox(height: AppDimensions.stackLg),
 
@@ -198,11 +397,14 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
                       label: 'Strength *',
                       hint: 'e.g. 500',
                       controller: _strengthCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
                       textInputAction: TextInputAction.next,
                       validator: (v) {
                         if (v?.trim().isEmpty ?? true) return 'Required';
-                        if (double.tryParse(v!) == null) return 'Enter a number';
+                        if (double.tryParse(v!) == null) {
+                          return 'Enter a number';
+                        }
                         return null;
                       },
                     ),
@@ -218,11 +420,13 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
                         DropdownButtonFormField<String>(
                           value: _strengthUnit,
                           items: _strengthUnits
-                              .map((u) => DropdownMenuItem(value: u, child: Text(u)))
+                              .map((u) =>
+                                  DropdownMenuItem(value: u, child: Text(u)))
                               .toList(),
                           onChanged: (v) => setState(() => _strengthUnit = v!),
                           decoration: const InputDecoration(
-                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 14),
                           ),
                         ),
                       ],
@@ -240,40 +444,54 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
                   const SizedBox(height: AppDimensions.stackSm),
                   Row(
                     children: [
-                      IconButton(
-                        onPressed: _amountPerDose > 0.5
-                            ? () => setState(() => _amountPerDose -= 0.5)
-                            : null,
-                        icon: const Icon(Icons.remove_circle_outline),
-                        iconSize: 32,
-                        color: AppColors.primaryAction,
-                        tooltip: 'Decrease',
-                      ),
                       Expanded(
-                        child: Text(
-                          _amountPerDose.toStringAsFixed(_amountPerDose.truncateToDouble() == _amountPerDose ? 0 : 1),
-                          style: AppTextStyles.headlineMd(),
-                          textAlign: TextAlign.center,
+                        child: Row(
+                          children: [
+                            IconButton(
+                              onPressed: _amountPerDose > 0.5
+                                  ? () => setState(() => _amountPerDose -= 0.5)
+                                  : null,
+                              icon: const Icon(Icons.remove_circle_outline),
+                              iconSize: 32,
+                              color: AppColors.primaryAction,
+                              tooltip: 'Decrease',
+                            ),
+                            Expanded(
+                              child: Text(
+                                _amountPerDose.toStringAsFixed(
+                                  _amountPerDose.truncateToDouble() ==
+                                          _amountPerDose
+                                      ? 0
+                                      : 1,
+                                ),
+                                style: AppTextStyles.headlineMd(),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: () =>
+                                  setState(() => _amountPerDose += 0.5),
+                              icon: const Icon(Icons.add_circle_outline),
+                              iconSize: 32,
+                              color: AppColors.primaryAction,
+                              tooltip: 'Increase',
+                            ),
+                          ],
                         ),
                       ),
-                      IconButton(
-                        onPressed: () => setState(() => _amountPerDose += 0.5),
-                        icon: const Icon(Icons.add_circle_outline),
-                        iconSize: 32,
-                        color: AppColors.primaryAction,
-                        tooltip: 'Increase',
-                      ),
                       const SizedBox(width: AppDimensions.stackMd),
-                      SizedBox(
-                        width: 140,
+                      Expanded(
                         child: DropdownButtonFormField<String>(
                           value: _doseUnit,
+                          isExpanded: true,
                           items: _doseUnits
-                              .map((u) => DropdownMenuItem(value: u, child: Text(u)))
+                              .map((u) =>
+                                  DropdownMenuItem(value: u, child: Text(u)))
                               .toList(),
                           onChanged: (v) => setState(() => _doseUnit = v!),
                           decoration: const InputDecoration(
-                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 14),
                           ),
                         ),
                       ),
@@ -304,11 +522,14 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
                     segments: const [
                       ButtonSegment(value: 'daily', label: Text('Daily')),
                       ButtonSegment(value: 'weekly', label: Text('Weekly')),
-                      ButtonSegment(value: 'specific_days', label: Text('Specific')),
+                      ButtonSegment(
+                          value: 'specific_days', label: Text('Specific')),
                     ],
                     selected: {_frequencyType},
-                    onSelectionChanged: (s) => setState(() => _frequencyType = s.first),
-                    style: SegmentedButton.styleFrom(selectedBackgroundColor: AppColors.primaryAction),
+                    onSelectionChanged: (s) =>
+                        setState(() => _frequencyType = s.first),
+                    style: SegmentedButton.styleFrom(
+                        selectedBackgroundColor: AppColors.primaryAction),
                   ),
                 ],
               ),
@@ -322,7 +543,8 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
                   const SizedBox(height: AppDimensions.stackSm),
                   for (int i = 0; i < _timesOfDay.length; i++)
                     Padding(
-                      padding: const EdgeInsets.only(bottom: AppDimensions.stackSm),
+                      padding:
+                          const EdgeInsets.only(bottom: AppDimensions.stackSm),
                       child: Row(
                         children: [
                           Expanded(
@@ -339,9 +561,11 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
                           if (_timesOfDay.length > 1) ...[
                             const SizedBox(width: 8),
                             IconButton(
-                              icon: const Icon(Icons.remove_circle_outline, color: AppColors.error),
+                              icon: const Icon(Icons.remove_circle_outline,
+                                  color: AppColors.error),
                               onPressed: () {
-                                final list = List<String>.from(_timesOfDay)..removeAt(i);
+                                final list = List<String>.from(_timesOfDay)
+                                  ..removeAt(i);
                                 setState(() => _timesOfDay = list);
                               },
                               tooltip: 'Remove time',
@@ -351,7 +575,8 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
                       ),
                     ),
                   TextButton.icon(
-                    onPressed: () => setState(() => _timesOfDay = [..._timesOfDay, '12:00']),
+                    onPressed: () =>
+                        setState(() => _timesOfDay = [..._timesOfDay, '12:00']),
                     icon: const Icon(Icons.add),
                     label: const Text('Add another time'),
                   ),
@@ -367,7 +592,8 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
                 label: 'Starting quantity',
                 hint: 'e.g. 30',
                 controller: _quantityCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
                 textInputAction: TextInputAction.next,
               ),
               const SizedBox(height: AppDimensions.stackLg),
@@ -380,7 +606,8 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Refill reminder', style: AppTextStyles.bodyBold()),
+                          Text('Refill reminder',
+                              style: AppTextStyles.bodyBold()),
                           Text(
                             'Get notified when stock runs low',
                             style: AppTextStyles.caption(),
@@ -390,7 +617,8 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
                     ),
                     Switch(
                       value: _refillReminderEnabled,
-                      onChanged: (v) => setState(() => _refillReminderEnabled = v),
+                      onChanged: (v) =>
+                          setState(() => _refillReminderEnabled = v),
                     ),
                   ],
                 ),
@@ -401,7 +629,8 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
                   label: 'Low-stock threshold (units)',
                   hint: 'e.g. 7',
                   controller: _refillThresholdCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
                   helperText: 'Remind me when I have this many left',
                 ),
               ],
@@ -420,7 +649,10 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
                   const SizedBox(width: AppDimensions.stackMd),
                   Expanded(
                     flex: 2,
-                    child: DdButton(label: 'Save Medication', onPressed: _save, isLoading: _isLoading),
+                    child: DdButton(
+                        label: 'Save Medication',
+                        onPressed: _save,
+                        isLoading: _isLoading),
                   ),
                 ],
               ),

@@ -36,7 +36,7 @@ bucket_definitions:
 
       # Patient medications (if schedule or refills permission granted)
       - select id, user_id, name, strength, strength_unit, amount_per_dose, dose_unit,
-               instructions, is_active, quantity_on_hand, quantity_unit, refill_threshold_qty
+               image_url, instructions, is_active, quantity_on_hand, quantity_unit, refill_threshold_qty
         from medications
         where user_id = bucket.patient_id
           and (bucket.perm_view_schedule = true or bucket.perm_view_refills = true)

@@ -1,5 +1,8 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
+
+import '../data/remote/auth_service.dart';
 
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _plugin =
@@ -10,7 +13,8 @@ class NotificationService {
   static const _channelDesc = 'Medication dose reminder notifications';
 
   static Future<void> initialize() async {
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -24,7 +28,8 @@ class NotificationService {
 
     // Request Android 13+ notification permission
     await _plugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
         ?.requestNotificationsPermission();
   }
 
@@ -41,12 +46,24 @@ class NotificationService {
     required String body,
     required DateTime scheduledAt,
     String? payload,
-    bool safePreviews = false,
+    bool? safePreviews,
   }) async {
+    final preferences = await SharedPreferences.getInstance();
+    final owner = AuthService.currentUser?.id ?? 'guest';
+    T setting<T>(String name, T fallback) =>
+        preferences.get('settings.$owner.$name') as T? ??
+        preferences.get(name) as T? ??
+        fallback;
+    final remindersEnabled = setting<bool>('notif_reminders', true);
+    if (!remindersEnabled) return;
+    final useSafePreviews =
+        safePreviews ?? setting<bool>('privacy_previews', true);
+    final playSound = setting<bool>('notif_sound', true);
+    final vibrate = setting<bool>('notif_vibration', true);
     final tz.TZDateTime tzTime = tz.TZDateTime.from(scheduledAt, tz.local);
 
-    final displayTitle = safePreviews ? 'DoseDiary' : title;
-    final displayBody = safePreviews ? 'Time to take your medication' : body;
+    final displayTitle = useSafePreviews ? 'DoseDiary' : title;
+    final displayBody = useSafePreviews ? 'Time to take your medication' : body;
 
     await _plugin.zonedSchedule(
       notificationId,
@@ -61,13 +78,16 @@ class NotificationService {
           importance: Importance.high,
           priority: Priority.high,
           category: AndroidNotificationCategory.reminder,
-          visibility: safePreviews
+          playSound: playSound,
+          enableVibration: vibrate,
+          visibility: useSafePreviews
               ? NotificationVisibility.private
               : NotificationVisibility.public,
         ),
-        iOS: const DarwinNotificationDetails(
+        iOS: DarwinNotificationDetails(
           categoryIdentifier: 'dose_reminder',
           interruptionLevel: InterruptionLevel.timeSensitive,
+          presentSound: playSound,
         ),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,

@@ -34,9 +34,11 @@ class SupabaseSyncService {
       await _pullCaregiverInvitations(db, user.id);
       await _pullDirectConnectionInvitations(db, user.id);
       await _pullCaregiverPermissions(db, user.id);
+      await _pullPermissionsGrantedToCaregiver(db, user.id);
       await _pullPatientCaregiverLinks(db, user.id);
       await _pullAllocatedPatients(db, user.id);
       await _pullAllocatedCaregivers(db, user.id);
+      await _pullAuthorizedPatientData(db, user.id);
       if (user.email != null && user.email!.isNotEmpty) {
         await _pullIncomingCaregiverInvitations(db, user.email!);
       }
@@ -196,6 +198,21 @@ class SupabaseSyncService {
     await _upsert('schedules', cloud);
   }
 
+  /// Removes open reminders after a medication schedule is edited. Completed
+  /// history is preserved.
+  static Future<void> deleteOpenOccurrencesForSchedule({
+    required String scheduleId,
+    required String fromLocalDate,
+  }) async {
+    if (!AuthService.isLoggedIn) return;
+    await _client
+        .from('dose_occurrences')
+        .delete()
+        .eq('schedule_id', scheduleId)
+        .gte('local_date', fromLocalDate)
+        .inFilter('status', ['pending', 'snoozed', 'overdue']);
+  }
+
   /// Push a dose occurrence status update.
   static Future<void> pushDoseOccurrence(Map<String, dynamic> data) async {
     if (!AuthService.isLoggedIn) return;
@@ -339,6 +356,71 @@ class SupabaseSyncService {
     }
   }
 
+  /// Downloads the permission rows where the signed-in user is the caregiver.
+  /// The existing pull above is intentionally patient-side (`user_id`).
+  static Future<void> _pullPermissionsGrantedToCaregiver(
+      AppDatabase db, String caregiverUserId) async {
+    final rows = await _client
+        .from('caregiver_permissions')
+        .select()
+        .eq('caregiver_id', caregiverUserId);
+
+    final database = await db.database;
+    for (final row in rows) {
+      await database.insert('caregiver_permissions', _fromCloud(row),
+          conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+  }
+
+  /// Pulls medication records only for patients allocated to this caregiver and
+  /// only for the data categories the patient has granted permission to view.
+  static Future<void> _pullAuthorizedPatientData(
+      AppDatabase db, String caregiverUserId) async {
+    final database = await db.database;
+    final patients = await database.query(
+      'allocated_patients',
+      columns: ['patient_user_id'],
+      where: 'caregiver_id = ? AND patient_user_id IS NOT NULL',
+      whereArgs: [caregiverUserId],
+    );
+
+    bool isEnabled(Object? value) => value == true || value == 1;
+
+    for (final patient in patients) {
+      final patientUserId = patient['patient_user_id'] as String?;
+      if (patientUserId == null || patientUserId.isEmpty) continue;
+
+      final permissionRows = await database.query(
+        'caregiver_permissions',
+        where: 'user_id = ? AND caregiver_id = ?',
+        whereArgs: [patientUserId, caregiverUserId],
+        limit: 1,
+      );
+      if (permissionRows.isEmpty) continue;
+
+      final permissions = permissionRows.first;
+      final canViewSchedule = isEnabled(permissions['perm_view_schedule']);
+      final canViewHistory = isEnabled(permissions['perm_view_history']);
+      final canViewRefills = isEnabled(permissions['perm_view_refills']);
+
+      try {
+        if (canViewSchedule || canViewRefills) {
+          await _pullMedications(db, patientUserId);
+        }
+        if (canViewSchedule) {
+          await _pullSchedules(db, patientUserId);
+        }
+        if (canViewSchedule || canViewHistory) {
+          await _pullDoseOccurrences(db, patientUserId);
+        }
+      } catch (e) {
+        // One patient's permission/data issue must not stop the user's sync.
+        // ignore: avoid_print
+        print('SupabaseSyncService patient data pull error: $e');
+      }
+    }
+  }
+
   static Future<void> _pullIncomingCaregiverInvitations(
       AppDatabase db, String email) async {
     final rows = await _client
@@ -439,6 +521,32 @@ class SupabaseSyncService {
   }
 
   // ── Utilities ─────────────────────────────────────────────────────────────
+
+  /// Refreshes both sides of accepted patient/caregiver relationships so
+  /// profile presence changes are reflected in the local cards.
+  static Future<void> pullConnectedPeople() async {
+    final userId = AuthService.currentUser?.id;
+    if (userId == null) return;
+
+    try {
+      await _pullPatientCaregiverLinks(AppDatabase.instance, userId);
+    } catch (e) {
+      // ignore: avoid_print
+      print('SupabaseSyncService.pullConnectedPeople links error: $e');
+    }
+    try {
+      await _pullAllocatedPatients(AppDatabase.instance, userId);
+    } catch (e) {
+      // ignore: avoid_print
+      print('SupabaseSyncService.pullConnectedPeople patients error: $e');
+    }
+    try {
+      await _pullAllocatedCaregivers(AppDatabase.instance, userId);
+    } catch (e) {
+      // ignore: avoid_print
+      print('SupabaseSyncService.pullConnectedPeople caregivers error: $e');
+    }
+  }
 
   static Future<void> _upsert(String table, Map<String, dynamic> data) async {
     try {
