@@ -143,6 +143,7 @@ Future<CountryRegion?> showCountryRegionPicker(
 }) {
   return showModalBottomSheet<CountryRegion>(
     context: context,
+    useRootNavigator: true,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     builder: (context) => _CountryPickerSheet(currentRegion: currentRegion),
