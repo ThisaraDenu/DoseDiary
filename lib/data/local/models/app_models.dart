@@ -587,6 +587,8 @@ class AllocatedPatient {
     this.batteryStatus = 'Balanced',
     this.smartHubStatus = 'Synced 2m ago',
     this.phoneNumber,
+    this.patientEmail,
+    this.gender,
     required this.createdAt,
   });
 
@@ -604,6 +606,8 @@ class AllocatedPatient {
   final String batteryStatus;
   final String smartHubStatus;
   final String? phoneNumber;
+  final String? patientEmail;
+  final String? gender;
   final DateTime createdAt;
 
   factory AllocatedPatient.create({
@@ -618,6 +622,8 @@ class AllocatedPatient {
     String batteryStatus = 'Balanced',
     String smartHubStatus = 'Synced 2m ago',
     String? phoneNumber,
+    String? patientEmail,
+    String? gender,
   }) {
     return AllocatedPatient(
       id: _uuid.v4(),
@@ -632,6 +638,8 @@ class AllocatedPatient {
       batteryStatus: batteryStatus,
       smartHubStatus: smartHubStatus,
       phoneNumber: phoneNumber,
+      patientEmail: patientEmail,
+      gender: gender,
       createdAt: DateTime.now().toUtc(),
     );
   }
@@ -647,6 +655,8 @@ class AllocatedPatient {
     String? batteryStatus,
     String? smartHubStatus,
     String? phoneNumber,
+    String? patientEmail,
+    String? gender,
   }) {
     return AllocatedPatient(
       id: id,
@@ -661,6 +671,8 @@ class AllocatedPatient {
       batteryStatus: batteryStatus ?? this.batteryStatus,
       smartHubStatus: smartHubStatus ?? this.smartHubStatus,
       phoneNumber: phoneNumber ?? this.phoneNumber,
+      patientEmail: patientEmail ?? this.patientEmail,
+      gender: gender ?? this.gender,
       createdAt: createdAt,
     );
   }
@@ -678,6 +690,8 @@ class AllocatedPatient {
         'battery_status': batteryStatus,
         'smart_hub_status': smartHubStatus,
         'phone_number': phoneNumber,
+        'patient_email': patientEmail,
+        'gender': gender,
         'created_at': createdAt.toIso8601String(),
       };
 
@@ -695,6 +709,8 @@ class AllocatedPatient {
         batteryStatus: map['battery_status'] as String? ?? 'Balanced',
         smartHubStatus: map['smart_hub_status'] as String? ?? 'Synced 2m ago',
         phoneNumber: map['phone_number'] as String?,
+        patientEmail: map['patient_email'] as String?,
+        gender: map['gender'] as String?,
         createdAt: DateTime.parse(map['created_at'] as String),
       );
 }
@@ -717,6 +733,7 @@ class AllocatedCaregiver {
     this.batteryStatus = 'Balanced',
     this.smartHubStatus = 'Synced 2m ago',
     this.phoneNumber,
+    this.email,
     required this.createdAt,
   });
 
@@ -732,6 +749,7 @@ class AllocatedCaregiver {
   final String batteryStatus;
   final String smartHubStatus;
   final String? phoneNumber;
+  final String? email;
   final DateTime createdAt;
 
   factory AllocatedCaregiver.create({
@@ -746,6 +764,7 @@ class AllocatedCaregiver {
     String batteryStatus = 'Balanced',
     String smartHubStatus = 'Synced 2m ago',
     String? phoneNumber,
+    String? email,
   }) {
     return AllocatedCaregiver(
       id: _uuid.v4(),
@@ -760,6 +779,7 @@ class AllocatedCaregiver {
       batteryStatus: batteryStatus,
       smartHubStatus: smartHubStatus,
       phoneNumber: phoneNumber,
+      email: email,
       createdAt: DateTime.now().toUtc(),
     );
   }
@@ -794,6 +814,7 @@ class AllocatedCaregiver {
         batteryStatus: map['battery_status'] as String? ?? 'Balanced',
         smartHubStatus: map['smart_hub_status'] as String? ?? 'Synced 2m ago',
         phoneNumber: map['phone_number'] as String?,
+        email: map['caregiver_email'] as String?,
         createdAt: DateTime.parse(map['created_at'] as String),
       );
 }

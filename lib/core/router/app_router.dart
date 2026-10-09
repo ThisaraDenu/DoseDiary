@@ -70,7 +70,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: RouteNames.reminder,
         builder: (ctx, state) {
           final id = state.pathParameters['id'] ?? '';
-          return ReminderScreen(occurrenceId: id);
+          return ReminderScreen(
+            occurrenceId: id,
+            initialAction: state.uri.queryParameters['action'],
+          );
         },
       ),
       GoRoute(

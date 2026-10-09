@@ -8,12 +8,16 @@ import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/theme/app_dimensions.dart';
+import '../../core/router/route_names.dart';
 import '../../core/widgets/dd_button.dart';
 import '../../core/widgets/dd_loading.dart';
 import '../../data/local/models/app_models.dart';
 import '../../data/local/models/dose_status.dart';
 import '../../data/repositories/app_repositories.dart';
+import '../../data/repositories/notification_repository.dart';
 import '../../data/remote/auth_service.dart';
+import '../../services/dose_alarm_scheduler.dart';
+import '../../services/notification_service.dart';
 import '../home/home_dashboard_screen.dart';
 
 // ── Providers ─────────────────────────────────────────────────────────────────
@@ -33,8 +37,13 @@ final reminderMedicationProvider =
 // ── Screen ────────────────────────────────────────────────────────────────
 
 class ReminderScreen extends ConsumerStatefulWidget {
-  const ReminderScreen({required this.occurrenceId, super.key});
+  const ReminderScreen({
+    required this.occurrenceId,
+    this.initialAction,
+    super.key,
+  });
   final String occurrenceId;
+  final String? initialAction;
 
   @override
   ConsumerState<ReminderScreen> createState() => _ReminderScreenState();
@@ -42,6 +51,7 @@ class ReminderScreen extends ConsumerStatefulWidget {
 
 class _ReminderScreenState extends ConsumerState<ReminderScreen> {
   bool _isSubmitting = false;
+  bool _initialActionHandled = false;
 
   Future<void> _recordAction(
     DoseOccurrence occ,
@@ -53,6 +63,9 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> {
     setState(() => _isSubmitting = true);
 
     try {
+      // Stops the insistent sound/vibration as soon as the user responds.
+      await NotificationService.cancelDoseAlarm(occ.id);
+
       final doseRepo = ref.read(doseRepositoryProvider);
       final refillRepo = ref.read(refillRepositoryProvider);
       final currentUserId = AuthService.currentUser?.id ?? occ.userId;
@@ -81,10 +94,24 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> {
         );
       }
 
+      if (status == DoseStatus.snoozed && snoozeUntil != null) {
+        await NotificationService.scheduleDoseAlarm(
+          occurrenceId: occ.id,
+          medicationName: med.name,
+          doseDescription: '${med.displayDose} • ${med.displayStrength}',
+          scheduledAt: snoozeUntil,
+        );
+      }
+      // Each response rolls the future alarm queue forward, so normal use
+      // keeps alarms scheduled without requiring a manual app launch.
+      DoseAlarmScheduler.syncUpcomingAlarms().ignore();
+
       // 4. Invalidate providers
       ref.invalidate(todayOccurrencesProvider);
       ref.invalidate(todayAdherenceProvider);
       ref.invalidate(lowStockProvider);
+      ref.invalidate(notificationsProvider);
+      ref.invalidate(unreadNotificationCountProvider);
 
       if (!mounted) return;
 
@@ -110,7 +137,11 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> {
         ),
       );
 
-      context.pop();
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go(RouteNames.home);
+      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
@@ -133,58 +164,40 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> {
     await doseRepo.insertDoseEvent(event);
     ref.invalidate(todayOccurrencesProvider);
     ref.invalidate(todayAdherenceProvider);
+    ref.invalidate(notificationsProvider);
+    ref.invalidate(unreadNotificationCountProvider);
   }
 
-  Future<void> _showSnoozeDialog(DoseOccurrence occ, Medication med) async {
-    final options = [
-      ('10 minutes', const Duration(minutes: 10)),
-      ('30 minutes', const Duration(minutes: 30)),
-      ('1 hour', const Duration(hours: 1)),
-      ('2 hours', const Duration(hours: 2)),
-    ];
-
-    final selected = await showModalBottomSheet<Duration>(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-            top: Radius.circular(AppDimensions.sheetRadius)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: AppDimensions.stackMd),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.borderMedium,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: AppDimensions.stackMd),
-              Text('Snooze for...', style: AppTextStyles.headlineMd()),
-              const SizedBox(height: AppDimensions.stackMd),
-              for (final (label, duration) in options)
-                ListTile(
-                  title: Text(label, style: AppTextStyles.bodyXl()),
-                  leading: const Icon(Icons.alarm_rounded,
-                      color: AppColors.primaryAction),
-                  onTap: () => Navigator.pop(ctx, duration),
-                ),
-              const SizedBox(height: AppDimensions.stackMd),
-            ],
-          ),
-        ),
-      ),
+  Future<void> _snoozeFiveMinutes(
+    DoseOccurrence occ,
+    Medication med,
+  ) async {
+    await _recordAction(
+      occ,
+      med,
+      DoseStatus.snoozed,
+      snoozeUntil: DateTime.now().add(const Duration(minutes: 5)),
     );
+  }
 
-    if (selected != null) {
-      final snoozeUntil = DateTime.now().add(selected);
-      await _recordAction(occ, med, DoseStatus.snoozed,
-          snoozeUntil: snoozeUntil);
-    }
+  void _handleInitialAction(DoseOccurrence occ, Medication med) {
+    final action = widget.initialAction;
+    if (_initialActionHandled || action == null || action.isEmpty) return;
+    _initialActionHandled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      switch (action) {
+        case 'taken':
+          _recordAction(occ, med, DoseStatus.taken).ignore();
+          return;
+        case 'snooze':
+          _snoozeFiveMinutes(occ, med).ignore();
+          return;
+        case 'skip':
+          _showSkipReasonDialog(occ, med).ignore();
+          return;
+      }
+    });
   }
 
   Future<void> _showSkipReasonDialog(DoseOccurrence occ, Medication med) async {
@@ -272,6 +285,7 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> {
                 body: const Center(child: Text('Medication not found')),
               );
             }
+            _handleInitialAction(occ, med);
             return _buildContent(occ, med);
           },
         );
@@ -284,10 +298,15 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> {
   }
 
   Widget _buildModernContent(DoseOccurrence occ, Medication med) {
-    final timeStr = DateFormat('h:mm a').format(occ.scheduledAt.toLocal());
+    final alarmTime = occ.status == DoseStatus.snoozed
+        ? occ.snoozeUntil ?? occ.scheduledAt
+        : occ.scheduledAt;
+    final timeStr = DateFormat('h:mm a').format(alarmTime.toLocal());
     final isOverdue = occ.status == DoseStatus.overdue ||
         (occ.status == DoseStatus.pending &&
-            occ.scheduledAt.isBefore(DateTime.now()));
+            occ.scheduledAt.isBefore(DateTime.now())) ||
+        (occ.status == DoseStatus.snoozed &&
+            alarmTime.isBefore(DateTime.now()));
     final alreadyDone = occ.status.isTerminal;
     final (statusLabel, statusColor, statusBackground) = switch (occ.status) {
       DoseStatus.taken => (
@@ -323,13 +342,8 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> {
     };
 
     return Scaffold(
-      backgroundColor: AppColors.scaffoldBackground,
-      appBar: AppBar(
-        title: const Text('Dose reminder'),
-        centerTitle: true,
-      ),
+      backgroundColor: const Color(0xFFF7F3F1),
       body: SafeArea(
-        top: false,
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(
             AppDimensions.screenMargin,
@@ -342,6 +356,12 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> {
               constraints: const BoxConstraints(maxWidth: 560),
               child: Column(
                 children: [
+                  _AlarmHeroHeader(
+                    time: timeStr,
+                    isActive: !alreadyDone,
+                    isOverdue: isOverdue,
+                  ),
+                  const SizedBox(height: AppDimensions.stackLg),
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
@@ -455,7 +475,7 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> {
                                 label: 'Snooze',
                                 onPressed: _isSubmitting
                                     ? null
-                                    : () => _showSnoozeDialog(occ, med),
+                                    : () => _snoozeFiveMinutes(occ, med),
                                 variant: DdButtonVariant.secondary,
                                 icon: const Icon(Icons.alarm_rounded),
                               );
@@ -489,6 +509,14 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> {
                               );
                             },
                           ),
+                          const SizedBox(height: AppDimensions.stackSm),
+                          Text(
+                            'Snooze rings this alarm again in 5 minutes',
+                            style: AppTextStyles.caption(
+                              color: AppColors.textSecondary,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
                         ],
                       ),
                     ),
@@ -500,6 +528,167 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> {
       ),
     );
   }
+}
+
+class _AlarmHeroHeader extends StatelessWidget {
+  const _AlarmHeroHeader({
+    required this.time,
+    required this.isActive,
+    required this.isOverdue,
+  });
+
+  final String time;
+  final bool isActive;
+  final bool isOverdue;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      constraints: const BoxConstraints(minHeight: 228),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(32),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF52101E),
+            Color(0xFF9F1239),
+            Color(0xFFDC143C),
+          ],
+          stops: [0, 0.58, 1],
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x3DDC143C),
+            blurRadius: 28,
+            offset: Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          const Positioned(
+            right: -44,
+            top: -58,
+            child: _AlarmRing(size: 178, opacity: 0.09),
+          ),
+          const Positioned(
+            left: -54,
+            bottom: -76,
+            child: _AlarmRing(size: 160, opacity: 0.07),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(22, 18, 22, 22),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.14),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.2),
+                        ),
+                      ),
+                      child: Text(
+                        isActive ? 'MEDICATION ALARM' : 'DOSE UPDATED',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.1,
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    Icon(
+                      isActive
+                          ? Icons.notifications_active_rounded
+                          : Icons.check_circle_rounded,
+                      color: Colors.white,
+                      size: 26,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.65),
+                      width: 6,
+                    ),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x4D000000),
+                        blurRadius: 18,
+                        offset: Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.alarm_rounded,
+                    color: AppColors.primaryAction,
+                    size: 36,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  time,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 36,
+                    height: 1,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -1.2,
+                  ),
+                ),
+                const SizedBox(height: 7),
+                Text(
+                  isOverdue ? 'Your dose is ready now' : 'Your next dose',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.84),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AlarmRing extends StatelessWidget {
+  const _AlarmRing({required this.size, required this.opacity});
+
+  final double size;
+  final double opacity;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: Colors.white.withOpacity(opacity),
+            width: 30,
+          ),
+        ),
+      );
 }
 
 class _MedicationHero extends StatelessWidget {

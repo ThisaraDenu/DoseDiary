@@ -19,6 +19,7 @@ import '../../data/local/models/app_models.dart';
 import '../../data/repositories/app_repositories.dart';
 import '../../data/remote/auth_service.dart';
 import '../../data/remote/supabase_sync_service.dart';
+import '../../services/dose_alarm_scheduler.dart';
 import '../home/home_dashboard_screen.dart';
 
 const _uuid = Uuid();
@@ -169,6 +170,7 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
             conflictAlgorithm: ConflictAlgorithm.ignore);
         SupabaseSyncService.pushDoseOccurrence(occData).ignore();
       }
+      await DoseAlarmScheduler.syncUpcomingAlarms();
 
       // Invalidate providers
       ref.invalidate(todayOccurrencesProvider);

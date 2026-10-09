@@ -21,6 +21,8 @@ import '../../data/local/models/app_models.dart';
 import '../../data/remote/auth_service.dart';
 import '../../data/remote/supabase_sync_service.dart';
 import '../../data/repositories/app_repositories.dart';
+import '../../services/dose_alarm_scheduler.dart';
+import '../../services/notification_service.dart';
 import '../home/home_dashboard_screen.dart';
 
 final editMedicationProvider =
@@ -185,6 +187,7 @@ class _EditMedicationScreenState extends ConsumerState<EditMedicationScreen> {
       );
       await repo.updateMedication(updated);
       await _saveSchedule(updated);
+      await DoseAlarmScheduler.syncUpcomingAlarms();
       ref.invalidate(allActiveMedsProvider);
       ref.invalidate(todayOccurrencesProvider);
       ref.invalidate(todayMedicationsProvider);
@@ -226,6 +229,21 @@ class _EditMedicationScreenState extends ConsumerState<EditMedicationScreen> {
       );
     } catch (_) {
       // The local edit remains available offline; the next sync can retry.
+    }
+    final obsoleteOccurrences = await database.query(
+      'dose_occurrences',
+      columns: ['id'],
+      where: 'schedule_id = ? AND local_date >= ? AND status IN (?, ?, ?)',
+      whereArgs: [
+        scheduleId,
+        localDate,
+        'pending',
+        'snoozed',
+        'overdue',
+      ],
+    );
+    for (final occurrence in obsoleteOccurrences) {
+      await NotificationService.cancelDoseAlarm(occurrence['id'] as String);
     }
     await database.delete(
       'dose_occurrences',
@@ -431,6 +449,21 @@ class _EditMedicationScreenState extends ConsumerState<EditMedicationScreen> {
 
     setState(() => _isLoading = true);
     try {
+      final database = await ref.read(appDatabaseProvider).database;
+      final openOccurrences = await database.query(
+        'dose_occurrences',
+        columns: ['id'],
+        where: 'medication_id = ? AND status IN (?, ?, ?)',
+        whereArgs: [
+          widget.medicationId,
+          'pending',
+          'snoozed',
+          'overdue',
+        ],
+      );
+      for (final occurrence in openOccurrences) {
+        await NotificationService.cancelDoseAlarm(occurrence['id'] as String);
+      }
       await ref
           .read(medicationRepositoryProvider)
           .archiveMedication(widget.medicationId);

@@ -9,6 +9,7 @@ import '../../core/widgets/dd_card.dart';
 import '../../core/widgets/dd_loading.dart';
 import '../../data/local/models/app_models.dart';
 import '../../data/repositories/app_repositories.dart';
+import '../../data/repositories/notification_repository.dart';
 
 /// Caregiver-side incoming invitations component.
 /// Displays invitations addressed to the currently logged-in caregiver.
@@ -364,6 +365,8 @@ class _IncomingInvitationCardState
       ref.invalidate(patientCaregiversProvider);
       ref.invalidate(caregiverPatientsProvider);
       ref.invalidate(caregiversProvider);
+      ref.invalidate(notificationsProvider);
+      ref.invalidate(unreadNotificationCountProvider);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -426,6 +429,8 @@ class _IncomingInvitationCardState
         ref.invalidate(directIncomingInvitationsProvider);
         ref.invalidate(incomingCaregiverInvitationsProvider);
         ref.invalidate(caregiversProvider);
+        ref.invalidate(notificationsProvider);
+        ref.invalidate(unreadNotificationCountProvider);
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(

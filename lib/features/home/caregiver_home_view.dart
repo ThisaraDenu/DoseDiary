@@ -11,7 +11,7 @@ import '../../data/remote/auth_service.dart';
 import '../../data/local/models/app_models.dart';
 import '../../data/local/models/dose_status.dart';
 import '../../data/repositories/app_repositories.dart';
-import '../caregivers/incoming_invitations_widget.dart';
+import '../../data/repositories/notification_repository.dart';
 
 /// Caregiver Mode dashboard view matching the high-fidelity DoseDiary design.
 /// All telemetry, next dose banners, regimen schedules, weekly adherence analytics,
@@ -46,13 +46,11 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
         allocatedPatients.isNotEmpty ? allocatedPatients.first : null;
 
     // A caregiver without a patient must not see their own medication data.
-    // Keep the dashboard limited to invitations and the add-patient state.
+    // Keep the dashboard limited to the add-patient state.
     if (activePatient == null) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const IncomingCaregiverInvitationsWidget(),
-          const SizedBox(height: 20),
           _buildNoPatientAllocatedCard(context),
         ],
       );
@@ -63,8 +61,6 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const IncomingCaregiverInvitationsWidget(),
-          const SizedBox(height: 20),
           _buildAllocatedPatientCard(context, activePatient),
           const SizedBox(height: 20),
           _buildPermissionRestrictedCard(
@@ -106,44 +102,51 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
     final perms = permsAsync.valueOrNull;
     final canViewSchedule = perms?.permViewSchedule ?? true;
     final canViewAdherence = perms?.permViewAdherence ?? true;
-    final canViewRefills = perms?.permViewRefills ?? true;
-
-    final patientDisplayName = activePatient.fullName;
     final patientFirstName = activePatient.fullName.split(' ').first;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 0. Incoming Invitations Section (addressed to this caregiver)
-        const IncomingCaregiverInvitationsWidget(),
-        const SizedBox(height: 20),
-
         // 1. Patient Quick Telemetry & Status Card (or Add Patient option if not allocated)
         _buildPatientTelemetryCard(context, activePatient),
         const SizedBox(height: 20),
 
-        // 2. Urgent Reminder Banner Card (Real Next Dose) — only if schedule permitted
+        // 2. Patient medications and today's doses in one read-only section.
+        if (canViewSchedule)
+          _buildMedicationAndTodayScheduleSection(
+            meds,
+            occs,
+            dateStr,
+            now,
+            patientFirstName,
+            isMedicationsLoading: medsAsync is AsyncLoading,
+            isScheduleLoading: occsAsync is AsyncLoading,
+          )
+        else
+          _buildPermissionRestrictedCard(
+            title: 'Medication Access Restricted',
+            message:
+                '$patientFirstName has not granted permission to view medication details.',
+            icon: Icons.medication_outlined,
+          ),
+        const SizedBox(height: 20),
+
+        // 3. Urgent Reminder Banner Card (Real Next Dose) — only if schedule permitted
         if (canViewSchedule && nextOcc != null) ...[
           _buildUrgentReminderCard(nextOcc, nextMed, now, patientFirstName),
           const SizedBox(height: 20),
         ],
 
-        // 3. Today's Regimen (Caregiver View)
-        if (canViewSchedule)
-          _buildRegimenSection(dateStr, occs, meds, now, patientFirstName)
-        else
-          _buildPermissionRestrictedCard(
-            title: 'Schedule Access Restricted',
-            message:
-                '$patientFirstName has not granted permission to view their daily schedule.',
-            icon: Icons.calendar_today_outlined,
-          ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 4),
 
-        // 4. Caregiver Insights & Weekly Adherence Hub
+        // 5. Caregiver Insights & Weekly Adherence Hub
         if (canViewAdherence)
           _buildAdherenceCard(
-              weeklyAdherenceAsync, lowStockAsync, lowestStockAsync)
+            weeklyAdherenceAsync,
+            lowStockAsync,
+            lowestStockAsync,
+            patientFirstName,
+          )
         else
           _buildPermissionRestrictedCard(
             title: 'Adherence Access Restricted',
@@ -151,11 +154,6 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                 '$patientFirstName has not granted permission to view adherence reports.',
             icon: Icons.insights_outlined,
           ),
-        const SizedBox(height: 24),
-
-        // 5. Fast Caregiver Utility Grid (Care Actions)
-        _buildCareActionsGrid(
-            context, canViewRefills ? meds : [], patientDisplayName),
       ],
     );
   }
@@ -174,6 +172,8 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
     ref.invalidate(caregiverPatientLowStockProvider(patientUserId));
     ref.invalidate(
         caregiverPatientLowestStockMedicationProvider(patientUserId));
+    ref.invalidate(notificationsProvider);
+    ref.invalidate(unreadNotificationCountProvider);
   }
 
   // ── 1. Patient Quick Telemetry & Status Card ──────────────────────────────
@@ -439,17 +439,15 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12)),
                     onSelected: (value) async {
-                      if (value == 'edit') {
-                        _showEditPatientSheet(context, patient);
-                      } else if (value == 'add') {
+                      if (value == 'add') {
                         context.push(RouteNames.inviteCaregiver);
-                      } else if (value == 'disconnect') {
+                      } else if (value == 'remove') {
                         final confirmed = await showDialog<bool>(
                           context: context,
                           builder: (ctx) => AlertDialog(
-                            title: const Text('Disconnect Patient'),
+                            title: const Text('Remove Patient'),
                             content: Text(
-                              'Are you sure you want to disconnect from ${patient.fullName}? You will no longer be able to monitor their regimen.',
+                              'Remove ${patient.fullName}? This connection will be removed from both your app and the patient’s app.',
                             ),
                             actions: [
                               TextButton(
@@ -458,35 +456,32 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                               ),
                               TextButton(
                                 onPressed: () => Navigator.pop(ctx, true),
-                                child: const Text('Disconnect',
+                                child: const Text('Remove',
                                     style: TextStyle(color: Color(0xFFDC143C))),
                               ),
                             ],
                           ),
                         );
                         if (confirmed == true) {
-                          await ref
-                              .read(patientRepositoryProvider)
-                              .disconnectPatient(patientId: patient.id);
-                          ref.invalidate(allocatedPatientsProvider);
-                          ref.invalidate(caregiverPatientsProvider);
-                          widget.onShowToast(
-                              'Disconnected from ${patient.fullName}.');
+                          try {
+                            final removedFromCloud = await ref
+                                .read(patientRepositoryProvider)
+                                .disconnectPatient(patientId: patient.id);
+                            ref.invalidate(allocatedPatientsProvider);
+                            ref.invalidate(caregiverPatientsProvider);
+                            ref.invalidate(notificationsProvider);
+                            ref.invalidate(unreadNotificationCountProvider);
+                            widget.onShowToast(removedFromCloud
+                                ? 'Removed ${patient.fullName} from both accounts.'
+                                : 'Removed ${patient.fullName} here. Cloud removal is pending.');
+                          } catch (_) {
+                            widget.onShowToast(
+                                'Could not remove ${patient.fullName}. Please try again.');
+                          }
                         }
                       }
                     },
                     itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'edit',
-                        child: Row(
-                          children: [
-                            Icon(Icons.edit_rounded,
-                                size: 18, color: Color(0xFF1B1B1B)),
-                            SizedBox(width: 8),
-                            Text('Edit Patient Details'),
-                          ],
-                        ),
-                      ),
                       const PopupMenuItem(
                         value: 'add',
                         child: Row(
@@ -494,19 +489,21 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                             Icon(Icons.person_add_rounded,
                                 size: 18, color: Color(0xFF1B1B1B)),
                             SizedBox(width: 8),
-                            Text('Add Another Patient'),
+                            Flexible(child: Text('Add Another Patient')),
                           ],
                         ),
                       ),
                       const PopupMenuItem(
-                        value: 'disconnect',
+                        value: 'remove',
                         child: Row(
                           children: [
-                            Icon(Icons.link_off_rounded,
+                            Icon(Icons.person_remove_rounded,
                                 size: 18, color: Color(0xFFDC143C)),
                             SizedBox(width: 8),
-                            Text('Disconnect Patient',
-                                style: TextStyle(color: Color(0xFFDC143C))),
+                            Flexible(
+                              child: Text('Remove Patient',
+                                  style: TextStyle(color: Color(0xFFDC143C))),
+                            ),
                           ],
                         ),
                       ),
@@ -518,91 +515,55 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
           ),
           const SizedBox(height: 14),
 
-          // Live Telemetry Pill Bar
+          // Patient account details
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: const Color(0xFFF3F3F3),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Phone Battery
-                Expanded(
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.battery_5_bar_rounded,
-                        color: Color(0xFF545F73),
-                        size: 22,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Phone Battery',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Color(0xFF545F73),
-                              ),
-                            ),
-                            Text(
-                              '${patient.phoneBattery}% • ${patient.batteryStatus}',
-                              style: const TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF1B1B1B),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                const Text(
+                  'Patient account',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF545F73),
+                    letterSpacing: 0.2,
                   ),
                 ),
-                Container(
-                  width: 1,
-                  height: 28,
-                  color: const Color(0xFFE2E2E2),
+                const SizedBox(height: 10),
+                _buildPatientAccountDetail(
+                  icon: Icons.family_restroom_rounded,
+                  label: 'Relationship',
+                  value: patient.relationship.trim().isEmpty
+                      ? 'Patient'
+                      : patient.relationship,
                 ),
-                const SizedBox(width: 12),
-
-                // Smart Hub & Band
-                Expanded(
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.wifi_rounded,
-                        color: Color(0xFF006448),
-                        size: 22,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Smart Hub & Band',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Color(0xFF545F73),
-                              ),
-                            ),
-                            Text(
-                              patient.smartHubStatus,
-                              style: const TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF1B1B1B),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                const SizedBox(height: 9),
+                _buildPatientAccountDetail(
+                  icon: Icons.email_outlined,
+                  label: 'Email',
+                  value: patient.patientEmail?.trim().isNotEmpty == true
+                      ? patient.patientEmail!.trim()
+                      : 'Not provided',
+                ),
+                const SizedBox(height: 9),
+                _buildPatientAccountDetail(
+                  icon: Icons.person_outline_rounded,
+                  label: 'Gender',
+                  value: _formatAccountGender(patient.gender),
+                ),
+                const SizedBox(height: 9),
+                _buildPatientAccountDetail(
+                  icon: Icons.phone_outlined,
+                  label: 'Phone',
+                  value: patient.phoneNumber?.trim().isNotEmpty == true
+                      ? patient.phoneNumber!.trim()
+                      : 'Not provided',
                 ),
               ],
             ),
@@ -610,6 +571,50 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
         ],
       ),
     );
+  }
+
+  Widget _buildPatientAccountDetail({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 19, color: const Color(0xFF006448)),
+        const SizedBox(width: 9),
+        SizedBox(
+          width: 88,
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12.5,
+              color: Color(0xFF545F73),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+            style: const TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF1B1B1B),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _formatAccountGender(String? gender) {
+    final value = gender?.trim();
+    if (value == null || value.isEmpty) return 'Not provided';
+    return value[0].toUpperCase() + value.substring(1).toLowerCase();
   }
 
   // Kept for editing legacy manually allocated records.
@@ -840,210 +845,6 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
     );
   }
 
-  void _showEditPatientSheet(BuildContext context, AllocatedPatient patient) {
-    final phoneController =
-        TextEditingController(text: patient.phoneNumber ?? '');
-    final locationController = TextEditingController(text: patient.location);
-    String selectedRelationship = patient.relationship;
-
-    showModalBottomSheet(
-      context: context,
-      useRootNavigator: true,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return Container(
-              padding: EdgeInsets.only(
-                left: 20,
-                right: 20,
-                top: 20,
-                bottom: MediaQuery.of(context).viewInsets.bottom +
-                    24 +
-                    MediaQuery.of(context).padding.bottom,
-              ),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-              ),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE2E2E2),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        const Icon(Icons.edit_rounded,
-                            color: Color(0xFFDC143C), size: 24),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Edit ${patient.fullName}',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF1B1B1B),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      'Update relationship and contact details. Account credentials and privacy settings are managed by the patient.',
-                      style:
-                          TextStyle(fontSize: 12.5, color: Color(0xFF545F73)),
-                    ),
-                    const SizedBox(height: 18),
-
-                    // Relationship
-                    const Text('Relationship',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 13)),
-                    const SizedBox(height: 6),
-                    DropdownButtonFormField<String>(
-                      value: [
-                        'Mother',
-                        'Father',
-                        'Spouse',
-                        'Child',
-                        'Grandparent',
-                        'Patient',
-                        'Other',
-                      ].contains(selectedRelationship)
-                          ? selectedRelationship
-                          : 'Other',
-                      items: const [
-                        DropdownMenuItem(
-                            value: 'Mother', child: Text('Mother')),
-                        DropdownMenuItem(
-                            value: 'Father', child: Text('Father')),
-                        DropdownMenuItem(
-                            value: 'Spouse', child: Text('Spouse')),
-                        DropdownMenuItem(
-                            value: 'Child', child: Text('Child / Dependent')),
-                        DropdownMenuItem(
-                            value: 'Grandparent', child: Text('Grandparent')),
-                        DropdownMenuItem(
-                            value: 'Patient', child: Text('Patient / Client')),
-                        DropdownMenuItem(value: 'Other', child: Text('Other')),
-                      ],
-                      onChanged: (val) {
-                        if (val != null) {
-                          setSheetState(() => selectedRelationship = val);
-                        }
-                      },
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: const Color(0xFFF7F7F7),
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 12),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-
-                    // Location
-                    const Text('Location',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 13)),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: locationController,
-                      decoration: InputDecoration(
-                        hintText: 'e.g. Colombo Home',
-                        filled: true,
-                        fillColor: const Color(0xFFF7F7F7),
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 12),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-
-                    // Phone Number
-                    const Text('Phone Number (Optional)',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 13)),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: phoneController,
-                      keyboardType: TextInputType.phone,
-                      decoration: InputDecoration(
-                        hintText: 'e.g. +94 77 123 4567',
-                        filled: true,
-                        fillColor: const Color(0xFFF7F7F7),
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 12),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 22),
-
-                    // Submit button
-                    ElevatedButton(
-                      onPressed: () async {
-                        await ref
-                            .read(patientRepositoryProvider)
-                            .updateAllocatedPatient(
-                              patientId: patient.id,
-                              relationship: selectedRelationship,
-                              location:
-                                  locationController.text.trim().isNotEmpty
-                                      ? locationController.text.trim()
-                                      : patient.location,
-                              phoneNumber:
-                                  phoneController.text.trim().isNotEmpty
-                                      ? phoneController.text.trim()
-                                      : null,
-                            );
-                        ref.invalidate(allocatedPatientsProvider);
-                        if (context.mounted) {
-                          Navigator.of(ctx).pop();
-                        }
-                        widget.onShowToast(
-                            'Updated details for ${patient.fullName}.');
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFDC143C),
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size(double.infinity, 48),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
-                        textStyle: const TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.w700),
-                      ),
-                      child: const Text('Save Changes'),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
   Widget _buildPermissionRestrictedCard({
     required String title,
     required String message,
@@ -1108,6 +909,432 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
       ),
     );
   }
+
+  Widget _buildMedicationAndTodayScheduleSection(
+    List<Medication> medications,
+    List<DoseOccurrence> occurrences,
+    String dateStr,
+    DateTime now,
+    String patientFirstName, {
+    required bool isMedicationsLoading,
+    required bool isScheduleLoading,
+  }) {
+    final visibleMedications = medications.where((med) => med.isActive).toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    final sortedOccurrences = List<DoseOccurrence>.from(occurrences)
+      ..sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Medication & Today’s Schedule',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF1B1B1B),
+                  letterSpacing: -0.3,
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFD5E0F8),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.visibility_outlined,
+                      size: 14, color: Color(0xFF111C2D)),
+                  SizedBox(width: 4),
+                  Text(
+                    'View only',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF111C2D),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 3),
+        Text(
+          '$dateStr • Medication details and today’s doses for $patientFirstName.',
+          style: const TextStyle(fontSize: 12.5, color: Color(0xFF545F73)),
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          'Active medications',
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF1B1B1B),
+          ),
+        ),
+        const SizedBox(height: 10),
+        if (isMedicationsLoading && visibleMedications.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE2E2E2)),
+            ),
+            child: const Row(
+              children: [
+                SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Color(0xFF006448),
+                  ),
+                ),
+                SizedBox(width: 12),
+                Text(
+                  'Syncing patient medications…',
+                  style: TextStyle(fontSize: 13.5, color: Color(0xFF545F73)),
+                ),
+              ],
+            ),
+          )
+        else if (visibleMedications.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE2E2E2)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.medication_outlined,
+                    color: Color(0xFF545F73), size: 24),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'No active medications are available to view.',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      color: Color(0xFF545F73),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          ...visibleMedications.map(
+            (medication) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Material(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                child: InkWell(
+                  key: ValueKey('caregiver-medication-${medication.id}'),
+                  onTap: () => _showReadOnlyMedicationDetails(medication),
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2E2E2)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFDAD9),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(
+                            Icons.medication_rounded,
+                            color: Color(0xFFB1002C),
+                            size: 25,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                medication.name,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF1B1B1B),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${medication.displayStrength} • ${medication.displayDose}',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF545F73),
+                                ),
+                              ),
+                              if (medication.instructions?.trim().isNotEmpty ==
+                                  true) ...[
+                                const SizedBox(height: 3),
+                                Text(
+                                  medication.instructions!.trim(),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 12.5,
+                                    color: Color(0xFF545F73),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Column(
+                          children: [
+                            Icon(Icons.chevron_right_rounded,
+                                color: Color(0xFF545F73), size: 22),
+                            SizedBox(height: 4),
+                            Text(
+                              'Details',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                color: Color(0xFF545F73),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        const SizedBox(height: 8),
+        const Divider(color: Color(0xFFE2E2E2)),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Today’s doses',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF1B1B1B),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFD2FFE8).withOpacity(0.7),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.cloud_done_rounded,
+                      size: 14, color: Color(0xFF006448)),
+                  SizedBox(width: 4),
+                  Text(
+                    'Updated',
+                    style: TextStyle(
+                      color: Color(0xFF006448),
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        if (isScheduleLoading && sortedOccurrences.isEmpty)
+          _buildScheduleLoadingCard()
+        else if (sortedOccurrences.isEmpty)
+          _buildEmptyRegimenCard()
+        else
+          ...sortedOccurrences.map((occurrence) {
+            final medication =
+                _findMedication(medications, occurrence.medicationId);
+            final isNext = occurrence.status.isActionable &&
+                sortedOccurrences
+                        .where((item) => item.status.isActionable)
+                        .firstOrNull
+                        ?.id ==
+                    occurrence.id;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _buildOccurrenceCard(
+                occurrence,
+                medication,
+                now,
+                isNext,
+                patientFirstName,
+              ),
+            );
+          }),
+      ],
+    );
+  }
+
+  void _showReadOnlyMedicationDetails(Medication medication) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.medication_rounded, color: Color(0xFFB1002C), size: 24),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Medication details',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD5E0F8).withOpacity(0.55),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.lock_outline_rounded,
+                        size: 16, color: Color(0xFF111C2D)),
+                    SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Read-only access — only the patient can make changes.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF111C2D),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                medication.name,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF1B1B1B),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _buildMedicationDetailRow('Strength', medication.displayStrength),
+              _buildMedicationDetailRow('Dose', medication.displayDose),
+              _buildMedicationDetailRow(
+                'Instructions',
+                medication.instructions?.trim().isNotEmpty == true
+                    ? medication.instructions!.trim()
+                    : 'No instructions provided',
+              ),
+              _buildMedicationDetailRow(
+                'Supply',
+                '${_formatMedicationAmount(medication.quantityOnHand)} ${medication.quantityUnit}',
+              ),
+              _buildMedicationDetailRow(
+                'Schedule',
+                medication.isAsNeeded ? 'As needed' : 'Scheduled',
+              ),
+              _buildMedicationDetailRow(
+                'Refill reminder',
+                medication.refillReminderEnabled
+                    ? 'Enabled at ${_formatMedicationAmount(medication.refillThresholdQty ?? 0)} ${medication.quantityUnit}'
+                    : 'Not enabled',
+                isLast: true,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text(
+              'Close',
+              style: TextStyle(
+                color: Color(0xFFDC143C),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMedicationDetailRow(
+    String label,
+    String value, {
+    bool isLast = false,
+  }) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: isLast ? 0 : 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 92,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12.5,
+                color: Color(0xFF545F73),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1B1B1B),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatMedicationAmount(double value) => value.toStringAsFixed(
+        value.truncateToDouble() == value ? 0 : 1,
+      );
 
   // ── 2. Urgent Reminder Banner Card ────────────────────────────────────────
   Widget _buildUrgentReminderCard(
@@ -1229,8 +1456,22 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
             children: [
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () => widget.onShowToast(
-                      "Gentle chime sent to $patientFirstName's phone & smart speaker."),
+                  onPressed: () async {
+                    await ref
+                        .read(notificationRepositoryProvider)
+                        .sendNotificationToUser(
+                          recipientUserId: nextOcc.userId,
+                          type: 'caregiver_prompt',
+                          priority: 'high',
+                          title: 'Medication reminder from your caregiver',
+                          body:
+                              'It is time to take $fullMedTitle at $scheduledTime.',
+                          sourceId: nextOcc.id,
+                          route: RouteNames.home,
+                        );
+                    widget.onShowToast(
+                        "Gentle reminder sent to $patientFirstName's phone.");
+                  },
                   icon: const Icon(Icons.send_to_mobile_rounded, size: 19),
                   label: const Text(
                     'Send Gentle Ping',
@@ -1292,100 +1533,32 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
     );
   }
 
-  // ── 3. Today's Regimen (Schedule Section) ──────────────────────────────────
-  Widget _buildRegimenSection(
-    String dateStr,
-    List<DoseOccurrence> occs,
-    List<Medication> meds,
-    DateTime now,
-    String patientFirstName,
-  ) {
-    final sortedOccs = List<DoseOccurrence>.from(occs)
-      ..sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Section Header
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Today's Regimen",
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF1B1B1B),
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '$dateStr • Live Synchronization',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12.5,
-                      color: Color(0xFF545F73),
-                    ),
-                  ),
-                ],
-              ),
+  Widget _buildScheduleLoadingCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E2E2)),
+      ),
+      child: const Row(
+        children: [
+          SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Color(0xFF006448),
             ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: const Color(0xFFD2FFE8).withOpacity(0.7),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.cloud_done_rounded,
-                    size: 16,
-                    color: Color(0xFF006448),
-                  ),
-                  SizedBox(width: 4),
-                  Text(
-                    'Updated',
-                    style: TextStyle(
-                      color: Color(0xFF006448),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
-
-        // If no doses scheduled for today in SQLite
-        if (sortedOccs.isEmpty)
-          _buildEmptyRegimenCard()
-        else
-          ...sortedOccs.map((occ) {
-            final med = _findMedication(meds, occ.medicationId);
-            final isNext = occ.status.isActionable &&
-                sortedOccs
-                        .where((o) => o.status.isActionable)
-                        .firstOrNull
-                        ?.id ==
-                    occ.id;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child:
-                  _buildOccurrenceCard(occ, med, now, isNext, patientFirstName),
-            );
-          }),
-      ],
+          ),
+          SizedBox(width: 12),
+          Text(
+            'Syncing today’s doses…',
+            style: TextStyle(fontSize: 13.5, color: Color(0xFF545F73)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1437,24 +1610,10 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
           ),
           const SizedBox(height: 8),
           const Text(
-            'No doses were found in the database for today. Add a new medication to get started.',
+            'No doses were found in the patient\'s schedule for today.',
             style: TextStyle(
               fontSize: 13.5,
               color: Color(0xFF545F73),
-            ),
-          ),
-          const SizedBox(height: 16),
-          OutlinedButton.icon(
-            onPressed: () => context.push(RouteNames.addMedication),
-            icon: const Icon(Icons.add_rounded, size: 18),
-            label: const Text('Add Medication'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFFDC143C),
-              side: const BorderSide(color: Color(0xFFDC143C)),
-              minimumSize: const Size(double.infinity, 44),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
             ),
           ),
         ],
@@ -1820,8 +1979,22 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
               const SizedBox(width: 10),
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () => widget.onShowToast(
-                      'Audio alert sent to $patientFirstName for $fullMedTitle.'),
+                  onPressed: () async {
+                    await ref
+                        .read(notificationRepositoryProvider)
+                        .sendNotificationToUser(
+                          recipientUserId: occ.userId,
+                          type: 'caregiver_prompt',
+                          priority: 'high',
+                          title: 'Medication reminder from your caregiver',
+                          body:
+                              'Please take $fullMedTitle. It was scheduled for $scheduledTime.',
+                          sourceId: occ.id,
+                          route: RouteNames.home,
+                        );
+                    widget.onShowToast(
+                        'Medication reminder sent to $patientFirstName for $fullMedTitle.');
+                  },
                   icon: const Icon(Icons.ring_volume_rounded, size: 18),
                   label: Text(
                     'Prompt $patientFirstName',
@@ -1959,6 +2132,7 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
     AsyncValue<WeeklyAdherenceReport> weeklyAdherenceAsync,
     AsyncValue<List<Medication>> lowStockAsync,
     AsyncValue<Medication?> lowestStockAsync,
+    String patientFirstName,
   ) {
     final report = weeklyAdherenceAsync.valueOrNull;
     final overallPct = report != null ? report.overallPercentage : 0.0;
@@ -2046,35 +2220,42 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              InkWell(
-                onTap: () => context.push(RouteNames.adherence),
-                borderRadius: BorderRadius.circular(8),
-                child: const Row(
+              Expanded(
+                child: Row(
                   children: [
-                    Icon(
+                    const Icon(
                       Icons.insights_rounded,
                       color: Color(0xFF006448),
                       size: 24,
                     ),
-                    SizedBox(width: 8),
-                    Text(
-                      'Weekly Adherence',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF1B1B1B),
-                        letterSpacing: -0.2,
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Weekly Adherence',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF1B1B1B),
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                          Text(
+                            '$patientFirstName • Last 7 days',
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              color: Color(0xFF545F73),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                    SizedBox(width: 4),
-                    Icon(
-                      Icons.chevron_right_rounded,
-                      size: 20,
-                      color: Color(0xFF667085),
                     ),
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -2455,155 +2636,6 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
     );
   }
 
-  // ── 5. Care Actions Grid ──────────────────────────────────────────────────
-  Widget _buildCareActionsGrid(
-    BuildContext context,
-    List<Medication> meds,
-    String patientName,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Care Actions',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF1B1B1B),
-            letterSpacing: -0.2,
-          ),
-        ),
-        const SizedBox(height: 12),
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 1.15,
-          children: [
-            // 1. Log In-Person
-            _buildActionCard(
-              icon: Icons.fact_check_rounded,
-              iconBg: const Color(0xFFD5E0F8),
-              iconColor: const Color(0xFF111C2D),
-              title: 'Log In-Person',
-              subtitle: 'Record a dose handed to $patientName',
-              onTap: () {
-                _showLogInPersonDialog(meds, patientName);
-              },
-            ),
-
-            // 2. Emergency Contact
-            _buildActionCard(
-              icon: Icons.health_and_safety_rounded,
-              iconBg: const Color(0xFFFFDAD9),
-              iconColor: const Color(0xFF920022),
-              title: 'Emergency Contact',
-              subtitle: 'Set up a doctor or emergency contact',
-              onTap: () {
-                widget.onShowToast(
-                    'No emergency contact set. Add one in Settings.');
-              },
-            ),
-
-            // 3. Share Log PDF
-            _buildActionCard(
-              icon: Icons.share_rounded,
-              iconBg: const Color(0xFFEEEEEE),
-              iconColor: const Color(0xFF545F73),
-              title: 'Share Log',
-              subtitle: 'Export 30-day adherence report',
-              onTap: () {
-                widget.onShowToast(
-                    'Generating 30-day adherence report for $patientName...');
-              },
-            ),
-
-            // 4. Care Circle Permissions
-            _buildActionCard(
-              icon: Icons.admin_panel_settings_rounded,
-              iconBg: const Color(0xFFEEEEEE),
-              iconColor: const Color(0xFF545F73),
-              title: 'Permissions',
-              subtitle: 'Manage care circle members',
-              onTap: () {
-                context.push(RouteNames.caregivers);
-              },
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActionCard({
-    required IconData icon,
-    required Color iconBg,
-    required Color iconColor,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 6,
-              offset: const Offset(0, 1),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: iconBg,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: iconColor, size: 22),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF1B1B1B),
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 11.5,
-                    color: Color(0xFF545F73),
-                    height: 1.25,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   // ── Helper Dialogs ────────────────────────────────────────────────────────
   void _showLogDialog({required String title, required String details}) {
     showDialog(
@@ -2635,132 +2667,6 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                     color: Color(0xFFDC143C), fontWeight: FontWeight.w600)),
           ),
         ],
-      ),
-    );
-  }
-
-  void _showLogInPersonDialog(List<Medication> meds, String patientName) {
-    showModalBottomSheet(
-      context: context,
-      useRootNavigator: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Log In-Person Dose',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF1B1B1B),
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded),
-                  onPressed: () => Navigator.of(ctx).pop(),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Select medication administered in person to $patientName:',
-              style: const TextStyle(fontSize: 13.5, color: Color(0xFF545F73)),
-            ),
-            const SizedBox(height: 16),
-            if (meds.isEmpty) ...[
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: Text(
-                  'No active medications found in the database. Please add a medication first.',
-                  style: TextStyle(color: Color(0xFF545F73), fontSize: 14),
-                ),
-              ),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.of(ctx).pop();
-                    context.push(RouteNames.addMedication);
-                  },
-                  icon: const Icon(Icons.add_rounded),
-                  label: const Text('Add Medication'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFDC143C),
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              ),
-            ] else ...[
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 280),
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: meds.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (_, index) {
-                    final med = meds[index];
-                    final strength =
-                        med.strength > 0 ? ' ${med.displayStrength}' : '';
-                    return ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFDAD9),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(Icons.medication_rounded,
-                            color: Color(0xFFB1002C)),
-                      ),
-                      title: Text('${med.name}$strength',
-                          style: const TextStyle(fontWeight: FontWeight.w700)),
-                      subtitle: Text(
-                          '${med.displayDose}${med.instructions != null ? ' • ${med.instructions}' : ''}'),
-                      trailing: ElevatedButton(
-                        onPressed: () async {
-                          Navigator.of(ctx).pop();
-                          await ref
-                              .read(doseRepositoryProvider)
-                              .recordInPersonDose(
-                                medicationId: med.id,
-                                userId: med.userId,
-                              );
-                          await ref
-                              .read(refillRepositoryProvider)
-                              .recordDeduction(
-                                medicationId: med.id,
-                                userId: med.userId,
-                                amount: med.amountPerDose,
-                              );
-                          _invalidatePatientMedicationData(med.userId);
-                          widget.onShowToast(
-                              '${med.name} marked as administered in person.');
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFDC143C),
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8)),
-                        ),
-                        child: const Text('Confirm'),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ],
-        ),
       ),
     );
   }

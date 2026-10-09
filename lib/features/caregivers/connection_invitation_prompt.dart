@@ -9,6 +9,7 @@ import '../../data/local/models/app_models.dart';
 import '../../data/remote/auth_service.dart';
 import '../../data/remote/supabase_sync_service.dart';
 import '../../data/repositories/app_repositories.dart';
+import '../../data/repositories/notification_repository.dart';
 
 /// Checks for invitations addressed to the current account and presents the
 /// newest one as an in-app popup from any main app tab.
@@ -60,6 +61,8 @@ class _ConnectionInvitationPromptState
   void _refresh() {
     if (!mounted || !AuthService.isLoggedIn) return;
     ref.invalidate(directIncomingInvitationsProvider);
+    ref.invalidate(notificationsProvider);
+    ref.invalidate(unreadNotificationCountProvider);
   }
 
   @override
@@ -81,6 +84,8 @@ class _ConnectionInvitationPromptState
       ref.invalidate(patientCaregiversListProvider);
       ref.invalidate(patientCaregiversProvider);
       ref.invalidate(caregiverPatientsProvider);
+      ref.invalidate(notificationsProvider);
+      ref.invalidate(unreadNotificationCountProvider);
     } finally {
       _presenceSyncRunning = false;
     }
@@ -152,6 +157,8 @@ class _ConnectionInvitationPromptState
       ref.invalidate(patientCaregiversProvider);
       ref.invalidate(caregiverPatientsProvider);
       ref.invalidate(caregiversProvider);
+      ref.invalidate(notificationsProvider);
+      ref.invalidate(unreadNotificationCountProvider);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

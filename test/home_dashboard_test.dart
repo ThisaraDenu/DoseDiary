@@ -148,6 +148,8 @@ void main() {
         phoneBattery: 85,
         batteryStatus: 'Balanced',
         smartHubStatus: 'Synced 2m ago',
+        phoneNumber: '+94 77 123 4567',
+        email: 'nimal@example.com',
         lastActive: 'Active 5m ago',
         createdAt: now,
       );
@@ -201,6 +203,13 @@ void main() {
       expect(find.text('My Caregivers'), findsOneWidget);
       expect(find.text('Nimal Perera'), findsOneWidget);
       expect(find.textContaining('Active 5m ago'), findsOneWidget);
+      expect(find.text('Caregiver account'), findsOneWidget);
+      expect(find.text('Relationship'), findsOneWidget);
+      expect(find.text('Son'), findsOneWidget);
+      expect(find.text('nimal@example.com'), findsOneWidget);
+      expect(find.text('+94 77 123 4567'), findsOneWidget);
+      expect(find.text('Phone Battery'), findsNothing);
+      expect(find.text('Smart Hub & Band'), findsNothing);
     });
 
     testWidgets(
@@ -420,6 +429,9 @@ void main() {
                     phoneBattery: 84,
                     batteryStatus: 'Balanced',
                     smartHubStatus: 'Synced 2m ago',
+                    phoneNumber: '+94 71 987 6543',
+                    patientEmail: 'ishara@example.com',
+                    gender: 'male',
                     createdAt: now,
                   ),
                 ]),
@@ -438,54 +450,101 @@ void main() {
 
       // Active View pill updates
       expect(find.text('Ishara (Caregiver)'), findsOneWidget);
+      expect(find.text('Incoming Invitations'), findsNothing);
 
-      // 1. Patient Quick Telemetry & Status Card (shows real allocated patient details)
+      // 1. Patient account card (shows real allocated patient details)
       expect(find.text('Ishara Perera'), findsOneWidget);
       expect(find.textContaining('Active 12m ago'), findsOneWidget);
-      expect(find.text('Phone Battery'), findsOneWidget);
-      expect(find.text('84% • Balanced'), findsOneWidget);
-      expect(find.text('Smart Hub & Band'), findsOneWidget);
-      expect(find.text('Synced 2m ago'), findsOneWidget);
+      expect(find.text('Patient account'), findsOneWidget);
+      expect(find.text('Relationship'), findsOneWidget);
+      expect(find.text('Mother'), findsOneWidget);
+      expect(find.text('Email'), findsOneWidget);
+      expect(find.text('ishara@example.com'), findsOneWidget);
+      expect(find.text('Gender'), findsOneWidget);
+      expect(find.text('Male'), findsOneWidget);
+      expect(find.text('+94 71 987 6543'), findsOneWidget);
+      expect(find.text('Phone Battery'), findsNothing);
+      expect(find.text('Smart Hub & Band'), findsNothing);
 
-      // 2. Urgent Reminder Banner Card (Real Next Dose: Amoxicillin 500mg)
+      // Patient account details are read-only; only removal is available.
+      await tester.tap(find.byIcon(Icons.more_vert_rounded).first);
+      await tester.pumpAndSettle();
+      expect(find.text('Edit Patient Details'), findsNothing);
+      expect(find.text('Remove Patient'), findsOneWidget);
+      await tester.tap(find.text('Remove Patient'));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('removed from both your app and the patient’s app'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      // 2. Medication details and today's doses share one read-only section.
+      expect(find.text('Medication & Today’s Schedule'), findsOneWidget);
+      expect(find.text('Active medications'), findsOneWidget);
+      expect(find.text('Today’s doses'), findsOneWidget);
+      expect(find.text('Patient Medications'), findsNothing);
+      expect(find.text('View only'), findsOneWidget);
+      expect(
+        find.textContaining('Medication details and today’s doses for Ishara'),
+        findsOneWidget,
+      );
+      expect(find.text('Edit Medication'), findsNothing);
+      expect(find.text('Delete Medication'), findsNothing);
+
+      final medicationCard =
+          find.byKey(const ValueKey('caregiver-medication-med-vit-d'));
+      await tester.ensureVisible(medicationCard);
+      await tester.tap(medicationCard);
+      await tester.pumpAndSettle();
+      expect(find.text('Medication details'), findsOneWidget);
+      expect(find.textContaining('Read-only access'), findsOneWidget);
+      expect(find.text('Edit Medication'), findsNothing);
+      expect(find.text('Delete Medication'), findsNothing);
+      await tester.tap(find.text('Close'));
+      await tester.pumpAndSettle();
+
+      // 3. Urgent Reminder Banner Card (Real Next Dose: Amoxicillin 500mg)
       expect(find.text('NEXT MEDICATION SOON'), findsOneWidget);
       expect(find.text('Amoxicillin 500 mg'), findsNWidgets(2));
       expect(find.text('Send Gentle Ping'), findsOneWidget);
       expect(find.text('Later'), findsOneWidget);
 
-      // 3. Today's Regimen Section
-      expect(find.text("Today's Regimen"), findsOneWidget);
+      // The previous standalone regimen section was merged above.
+      expect(find.text("Today's Regimen"), findsNothing);
       expect(find.text('Vitamin D 1000 IU'), findsOneWidget);
       expect(find.text('Aspirin 75 mg'), findsOneWidget);
       expect(find.text('Mark as Taken'), findsOneWidget);
       expect(find.text('Prompt Ishara'), findsOneWidget);
 
-      // 4. Caregiver Adherence Card
+      // 5. Patient-scoped weekly adherence card
       expect(find.text('Weekly Adherence'), findsOneWidget);
+      expect(find.text('Ishara • Last 7 days'), findsOneWidget);
       expect(find.text('94% On Track'), findsOneWidget);
       expect(find.text('Amoxicillin (10 Days Left)'), findsOneWidget);
       expect(find.text('Refill'), findsOneWidget);
 
-      // 5. Care Actions Grid
-      await tester.ensureVisible(find.text('Emergency Contact'));
-      expect(find.text('Care Actions'), findsOneWidget);
-      expect(find.text('Log In-Person'), findsOneWidget);
-      expect(find.text('Emergency Contact'), findsOneWidget);
-      expect(find.text('Share Log'), findsOneWidget);
-      expect(find.text('Permissions'), findsOneWidget);
+      // The legacy Care Actions grid is not shown in Caregiver Mode.
+      expect(find.text('Care Actions'), findsNothing);
+      expect(find.text('Log In-Person'), findsNothing);
+      expect(find.text('Emergency Contact'), findsNothing);
+      expect(find.text('Share Log'), findsNothing);
 
       // Test Interactivity: Tap 'Send Gentle Ping' triggers toast
       await tester.ensureVisible(find.text('Send Gentle Ping'));
       await tester.tap(find.text('Send Gentle Ping'));
       await tester.pump();
-      expect(find.text("Gentle chime sent to Ishara's phone & smart speaker."),
-          findsOneWidget);
+      expect(
+          find.text("Gentle reminder sent to Ishara's phone."), findsOneWidget);
 
       // Tap 'Prompt Ishara' triggers prompt toast
       await tester.ensureVisible(find.text('Prompt Ishara'));
       await tester.tap(find.text('Prompt Ishara'));
       await tester.pump();
-      expect(find.text('Audio alert sent to Ishara for Amoxicillin 500 mg.'),
+      expect(
+          find.text(
+              'Medication reminder sent to Ishara for Amoxicillin 500 mg.'),
           findsOneWidget);
 
       // Scroll back up and tap 'Patient Mode' to switch back
