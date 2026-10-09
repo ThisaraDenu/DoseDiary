@@ -7,7 +7,12 @@ import 'app_dimensions.dart';
 class AppTheme {
   AppTheme._();
 
-  static ThemeData lightTheme({double textScaleFactor = 1.0}) {
+  static ThemeData lightTheme({
+    double textScaleFactor = 1.0,
+    AppThemeColor themeColor = AppThemeColor.crimson,
+  }) {
+    AppColors.applyThemeColor(themeColor);
+    final accent = themeColor.color;
     final base = ThemeData.light(useMaterial3: true);
     final textTheme = GoogleFonts.interTextTheme(base.textTheme).copyWith(
       bodyLarge: GoogleFonts.inter(
@@ -53,8 +58,8 @@ class AppTheme {
 
     return base.copyWith(
       colorScheme: ColorScheme.fromSeed(
-        seedColor: AppColors.primaryAction,
-        primary: AppColors.primaryAction,
+        seedColor: accent,
+        primary: accent,
         onPrimary: AppColors.textOnPrimary,
         secondary: AppColors.textSecondary,
         surface: AppColors.cardSurface,
@@ -82,7 +87,7 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primaryAction,
+          backgroundColor: accent,
           foregroundColor: AppColors.textOnPrimary,
           minimumSize: const Size(double.infinity, AppDimensions.buttonHeight),
           shape: RoundedRectangleBorder(
@@ -113,7 +118,7 @@ class AppTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: AppColors.primaryAction,
+          foregroundColor: accent,
           minimumSize: const Size(0, AppDimensions.touchMin),
           textStyle: GoogleFonts.inter(
             fontSize: 16 * textScaleFactor,
@@ -130,11 +135,13 @@ class AppTheme {
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppDimensions.inputRadius),
-          borderSide: const BorderSide(color: AppColors.borderMedium, width: 1.5),
+          borderSide:
+              const BorderSide(color: AppColors.borderMedium, width: 1.5),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppDimensions.inputRadius),
-          borderSide: const BorderSide(color: AppColors.borderMedium, width: 1.5),
+          borderSide:
+              const BorderSide(color: AppColors.borderMedium, width: 1.5),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppDimensions.inputRadius),
@@ -172,9 +179,9 @@ class AppTheme {
         thickness: 1,
         space: 0,
       ),
-      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+      bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: AppColors.navBarBackground,
-        selectedItemColor: AppColors.navBarActive,
+        selectedItemColor: accent,
         unselectedItemColor: AppColors.navBarInactive,
         showUnselectedLabels: true,
         type: BottomNavigationBarType.fixed,
@@ -225,7 +232,7 @@ class AppTheme {
         }),
         trackColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return AppColors.primaryAction;
+            return accent;
           }
           return AppColors.borderLight;
         }),
@@ -233,7 +240,7 @@ class AppTheme {
       checkboxTheme: CheckboxThemeData(
         fillColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return AppColors.primaryAction;
+            return accent;
           }
           return Colors.transparent;
         }),

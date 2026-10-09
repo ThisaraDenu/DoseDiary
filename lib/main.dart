@@ -1,4 +1,4 @@
- //  +  DoseDiary App Entry Point
+//  +  DoseDiary App Entry Point
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +9,7 @@ import 'package:timezone/data/latest_all.dart' as tz;
 import 'app.dart';
 import 'core/supabase_config.dart';
 import 'services/notification_service.dart';
+import 'services/dose_alarm_scheduler.dart';
 import 'data/local/database_provider.dart';
 import 'data/remote/auth_service.dart';
 
@@ -33,6 +34,7 @@ void main() async {
     await NotificationService.initialize();
 
     await DatabaseProvider.initialize();
+    DoseAlarmScheduler.syncUpcomingAlarms().ignore();
 
     final prefs = await SharedPreferences.getInstance();
 

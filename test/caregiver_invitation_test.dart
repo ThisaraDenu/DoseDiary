@@ -804,6 +804,8 @@ void main() {
         patientUserId: 'patient-alice',
         fullName: 'Alice Smith',
         relationship: 'Daughter',
+        patientEmail: 'alice@example.com',
+        gender: 'female',
       );
 
       expect(allocPatient.id, isNotEmpty);
@@ -811,6 +813,12 @@ void main() {
       expect(allocPatient.patientUserId, 'patient-alice');
       expect(allocPatient.fullName, 'Alice Smith');
       expect(allocPatient.relationship, 'Daughter');
+      expect(allocPatient.patientEmail, 'alice@example.com');
+      expect(allocPatient.gender, 'female');
+
+      final patientRoundTrip = AllocatedPatient.fromMap(allocPatient.toMap());
+      expect(patientRoundTrip.patientEmail, 'alice@example.com');
+      expect(patientRoundTrip.gender, 'female');
 
       // Patient A receives Caregiver B in allocated_caregivers
       final allocCaregiver = AllocatedCaregiver.create(
@@ -1223,7 +1231,7 @@ void main() {
           bobPatients.any((p) => p.patientUserId == 'patient-carol'), isFalse);
     });
 
-    test('UPDATE: Authorized relationship fields can be edited', () {
+    test('MODEL: Patient account fields remain unchanged when only copied', () {
       final patientA = AllocatedPatient.create(
         caregiverId: 'caregiver-bob',
         patientUserId: 'patient-alice',
@@ -1232,18 +1240,13 @@ void main() {
         location: 'Colombo Home',
       );
 
-      // Caregiver updates relationship label and location
-      final updatedPatient = patientA.copyWith(
-        relationship: 'Spouse',
-        location: 'Kandy Residence',
-      );
+      final copiedPatient = patientA.copyWith();
 
-      expect(updatedPatient.relationship, 'Spouse');
-      expect(updatedPatient.location, 'Kandy Residence');
-      // ID and caregiver binding remain preserved
-      expect(updatedPatient.id, patientA.id);
-      expect(updatedPatient.caregiverId, 'caregiver-bob');
-      expect(updatedPatient.patientUserId, 'patient-alice');
+      expect(copiedPatient.relationship, 'Mother');
+      expect(copiedPatient.location, 'Colombo Home');
+      expect(copiedPatient.id, patientA.id);
+      expect(copiedPatient.caregiverId, 'caregiver-bob');
+      expect(copiedPatient.patientUserId, 'patient-alice');
     });
 
     test('UPDATE: Unauthorized caregiver cannot edit patient', () {
@@ -1286,14 +1289,32 @@ void main() {
       );
 
       final patientList = [patientAForBob, patientAForCharlie];
+      final caregiverCards = [
+        AllocatedCaregiver.create(
+          patientId: 'patient-alice',
+          caregiverUserId: 'caregiver-bob',
+          fullName: 'Bob Builder',
+        ),
+        AllocatedCaregiver.create(
+          patientId: 'patient-alice',
+          caregiverUserId: 'caregiver-charlie',
+          fullName: 'Charlie Brown',
+        ),
+      ];
 
       // Bob disconnects Patient A
       final remainingAfterBobDisconnect = patientList
           .where((p) => !(p.caregiverId == 'caregiver-bob' &&
               p.patientUserId == 'patient-alice'))
           .toList();
+      final remainingCaregiverCards = caregiverCards
+          .where((caregiver) => caregiver.caregiverUserId != 'caregiver-bob')
+          .toList();
 
       expect(remainingAfterBobDisconnect.length, 1);
+      expect(remainingCaregiverCards.length, 1);
+      expect(
+          remainingCaregiverCards.first.caregiverUserId, 'caregiver-charlie');
       // Charlie still has Patient A!
       expect(
           remainingAfterBobDisconnect.first.caregiverId, 'caregiver-charlie');

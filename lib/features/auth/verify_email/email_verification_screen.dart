@@ -392,8 +392,9 @@ class _EmailVerificationScreenState
                   const SizedBox(width: 4),
                   InkWell(
                     onTap: () => context.pop(),
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4, vertical: 2),
                       child: Text(
                         'Change',
                         style: TextStyle(

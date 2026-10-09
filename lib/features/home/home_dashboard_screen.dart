@@ -1,12 +1,19 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/router/route_names.dart';
+import '../../core/theme/app_colors.dart';
+import '../../l10n/app_localizations.dart';
+import '../../core/services/phone_dialer_service.dart';
+import '../../core/utils/presence_formatters.dart';
 import '../../core/widgets/dd_avatar.dart';
 export '../../data/repositories/app_repositories.dart';
+import '../../data/local/database_provider.dart';
 import '../../data/repositories/app_repositories.dart';
+import '../../data/repositories/notification_repository.dart';
 import '../../data/local/models/app_models.dart';
 import '../../data/local/models/dose_status.dart';
 import '../../data/remote/supabase_sync_service.dart';
@@ -16,7 +23,7 @@ import 'caregiver_home_view.dart';
 // â”€â”€ Home Providers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 final userAvatarUrlProvider = FutureProvider<String?>((ref) async {
-  final profile = await AuthService.getProfile();
+  final profile = await ref.watch(userProfileProvider.future);
   return profile?['avatar_url'] as String?;
 });
 
@@ -42,7 +49,7 @@ String _extractFirstName(String name) {
 final userNameProvider = FutureProvider<String>((ref) async {
   final user = AuthService.currentUser;
   if (user == null) return 'Ishara';
-  final profile = await AuthService.getProfile();
+  final profile = await ref.watch(userProfileProvider.future);
   final fullName = profile?['full_name'] as String?;
   if (fullName != null && fullName.trim().isNotEmpty) {
     return _extractFirstName(fullName);
@@ -64,21 +71,22 @@ final userNameProvider = FutureProvider<String>((ref) async {
 });
 
 final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
-  return await AuthService.getProfile();
+  ref.watch(accountSessionEpochProvider);
+  return AuthService.getProfile();
 });
 
 final userAgeProvider = FutureProvider<int?>((ref) async {
-  final profile = await AuthService.getProfile();
+  final profile = await ref.watch(userProfileProvider.future);
   return AuthService.calculateAge(profile?['date_of_birth'] as String?);
 });
 
 final userGenderProvider = FutureProvider<String?>((ref) async {
-  final profile = await AuthService.getProfile();
+  final profile = await ref.watch(userProfileProvider.future);
   return profile?['gender'] as String?;
 });
 
 final userPhoneProvider = FutureProvider<String?>((ref) async {
-  final profile = await AuthService.getProfile();
+  final profile = await ref.watch(userProfileProvider.future);
   return profile?['phone_number'] as String?;
 });
 
@@ -189,6 +197,8 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     final userName = userNameAsync.valueOrNull ?? 'Ishara';
     final avatarUrlAsync = ref.watch(userAvatarUrlProvider);
     final avatarUrl = avatarUrlAsync.valueOrNull;
+    final unreadNotifications =
+        ref.watch(unreadNotificationCountProvider).valueOrNull ?? 0;
 
     final now = DateTime.now();
     final dateStr = DateFormat('EEEE, d MMMM yyyy').format(now);
@@ -206,7 +216,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
       body: Stack(
         children: [
           RefreshIndicator(
-            color: const Color(0xFFB1002C),
+            color: AppColors.primaryActionDark,
             onRefresh: () async {
               await SupabaseSyncService.syncAll();
               ref.invalidate(userNameProvider);
@@ -218,6 +228,16 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
               ref.invalidate(weeklyAdherenceProvider);
               ref.invalidate(lowestStockMedicationProvider);
               ref.invalidate(patientCaregiversListProvider);
+              ref.invalidate(allocatedPatientsProvider);
+              ref.invalidate(patientPermissionsProvider);
+              ref.invalidate(caregiverPatientDataSyncProvider);
+              ref.invalidate(caregiverPatientMedicationsProvider);
+              ref.invalidate(caregiverPatientOccurrencesProvider);
+              ref.invalidate(caregiverPatientWeeklyAdherenceProvider);
+              ref.invalidate(caregiverPatientLowStockProvider);
+              ref.invalidate(caregiverPatientLowestStockMedicationProvider);
+              ref.invalidate(notificationsProvider);
+              ref.invalidate(unreadNotificationCountProvider);
             },
             child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
@@ -230,17 +250,17 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                   scrolledUnderElevation: 1,
                   shadowColor: Colors.black.withOpacity(0.04),
                   titleSpacing: 20,
-                  title: const Row(
+                  title: Row(
                     children: [
                       Icon(
                         Icons.medical_services_rounded,
-                        color: Color(0xFFB1002C),
+                        color: AppColors.primaryActionDark,
                         size: 28,
                       ),
-                      SizedBox(width: 8),
+                      const SizedBox(width: 8),
                       Text(
-                        'Home',
-                        style: TextStyle(
+                        context.tr('Home'),
+                        style: const TextStyle(
                           color: Color(0xFF1B1B1B),
                           fontSize: 24,
                           fontWeight: FontWeight.w700,
@@ -251,10 +271,47 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                   ),
                   actions: [
                     IconButton(
-                      icon: const Icon(
-                        Icons.notifications_none_rounded,
-                        color: Color(0xFF1B1B1B),
-                        size: 26,
+                      icon: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          const Icon(
+                            Icons.notifications_none_rounded,
+                            color: Color(0xFF1B1B1B),
+                            size: 26,
+                          ),
+                          if (unreadNotifications > 0)
+                            Positioned(
+                              right: -7,
+                              top: -6,
+                              child: Container(
+                                constraints: const BoxConstraints(
+                                  minWidth: 18,
+                                  minHeight: 18,
+                                ),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 4),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primaryAction,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: const Color(0xFFF9F9F9),
+                                    width: 1.5,
+                                  ),
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  unreadNotifications > 99
+                                      ? '99+'
+                                      : '$unreadNotifications',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                       onPressed: () =>
                           context.push(RouteNames.notificationCentre),
@@ -341,10 +398,10 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.calendar_today_rounded,
                       size: 15,
-                      color: Color(0xFFB1002C),
+                      color: AppColors.primaryActionDark,
                     ),
                     const SizedBox(width: 6),
                     Flexible(
@@ -377,9 +434,9 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
               const SizedBox(height: 2),
 
               // Subtitle
-              const Text(
-                'Stay healthy, stay on track.',
-                style: TextStyle(
+              Text(
+                context.tr('Stay healthy, stay on track.'),
+                style: const TextStyle(
                   color: Color(0xFF545F73),
                   fontSize: 15,
                   fontWeight: FontWeight.w400,
@@ -452,17 +509,17 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Row(
+                Row(
                   children: [
                     Icon(
                       Icons.switch_account_rounded,
                       size: 18,
-                      color: Color(0xFFB1002C),
+                      color: AppColors.primaryActionDark,
                     ),
-                    SizedBox(width: 6),
+                    const SizedBox(width: 6),
                     Text(
-                      'ACTIVE VIEW',
-                      style: TextStyle(
+                      context.tr('ACTIVE VIEW'),
+                      style: const TextStyle(
                         color: Color(0xFF545F73),
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
@@ -485,8 +542,8 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                         Container(
                           width: 6,
                           height: 6,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFB1002C),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryActionDark,
                             shape: BoxShape.circle,
                           ),
                         ),
@@ -540,7 +597,8 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                         borderRadius: BorderRadius.circular(6),
                         border: _isPatientMode
                             ? Border.all(
-                                color: const Color(0xFFB1002C).withOpacity(0.2))
+                                color: AppColors.primaryActionDark
+                                    .withOpacity(0.2))
                             : null,
                         boxShadow: _isPatientMode
                             ? [
@@ -563,15 +621,15 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                                 Icons.person_rounded,
                                 size: 19,
                                 color: _isPatientMode
-                                    ? const Color(0xFFB1002C)
+                                    ? AppColors.primaryActionDark
                                     : const Color(0xFF545F73),
                               ),
                               const SizedBox(width: 6),
                               Text(
-                                'Patient Mode',
+                                context.tr('Patient Mode'),
                                 style: TextStyle(
                                   color: _isPatientMode
-                                      ? const Color(0xFFB1002C)
+                                      ? AppColors.primaryActionDark
                                       : const Color(0xFF545F73),
                                   fontWeight: _isPatientMode
                                       ? FontWeight.w700
@@ -593,6 +651,14 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                   child: InkWell(
                     onTap: () {
                       if (_isPatientMode) {
+                        ref.invalidate(allocatedPatientsProvider);
+                        ref.invalidate(caregiverPatientDataSyncProvider);
+                        ref.invalidate(caregiverPatientMedicationsProvider);
+                        ref.invalidate(caregiverPatientOccurrencesProvider);
+                        ref.invalidate(caregiverPatientWeeklyAdherenceProvider);
+                        ref.invalidate(caregiverPatientLowStockProvider);
+                        ref.invalidate(
+                            caregiverPatientLowestStockMedicationProvider);
                         setState(() => _isPatientMode = false);
                       }
                     },
@@ -605,7 +671,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                         borderRadius: BorderRadius.circular(6),
                         border: !_isPatientMode
                             ? Border.all(
-                                color: const Color(0xFFDC143C),
+                                color: AppColors.primaryAction,
                                 width: 1.2,
                               )
                             : null,
@@ -630,15 +696,15 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                                 Icons.volunteer_activism_rounded,
                                 size: 19,
                                 color: !_isPatientMode
-                                    ? const Color(0xFFB1002C)
+                                    ? AppColors.primaryActionDark
                                     : const Color(0xFF545F73),
                               ),
                               const SizedBox(width: 6),
                               Text(
-                                'Caregiver Mode',
+                                context.tr('Caregiver Mode'),
                                 style: TextStyle(
                                   color: !_isPatientMode
-                                      ? const Color(0xFFB1002C)
+                                      ? AppColors.primaryActionDark
                                       : const Color(0xFF545F73),
                                   fontWeight: !_isPatientMode
                                       ? FontWeight.w700
@@ -701,9 +767,9 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                     color: const Color(0xFFFFDAD9),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Text(
-                    'MEDICATIONS',
-                    style: TextStyle(
+                  child: Text(
+                    context.tr('MEDICATIONS'),
+                    style: const TextStyle(
                       color: Color(0xFF40000A),
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
@@ -718,18 +784,18 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                     color: const Color(0xFFFFDAD9).withOpacity(0.4),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.medication_outlined,
-                    color: Color(0xFFB1002C),
+                    color: AppColors.primaryActionDark,
                     size: 28,
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 12),
-            const Text(
-              'No Medications Added Yet',
-              style: TextStyle(
+            Text(
+              context.tr('No Medications Added Yet'),
+              style: const TextStyle(
                 color: Color(0xFF1B1B1B),
                 fontSize: 22,
                 fontWeight: FontWeight.w700,
@@ -737,9 +803,10 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
               ),
             ),
             const SizedBox(height: 4),
-            const Text(
-              'Add your prescriptions to track your daily doses, schedules, and adherence.',
-              style: TextStyle(
+            Text(
+              context.tr(
+                  'Add your prescriptions to track your daily doses, schedules, and adherence.'),
+              style: const TextStyle(
                 color: Color(0xFF545F73),
                 fontSize: 14.5,
                 fontWeight: FontWeight.w400,
@@ -751,12 +818,12 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
               child: ElevatedButton.icon(
                 onPressed: () => context.push(RouteNames.addMedication),
                 icon: const Icon(Icons.add_rounded, size: 20),
-                label: const Text(
-                  'Add Your First Medication',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                label: Text(
+                  context.tr('Add Your First Medication'),
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFDC143C),
+                  backgroundColor: AppColors.primaryAction,
                   foregroundColor: Colors.white,
                   elevation: 0,
                   minimumSize: const Size(double.infinity, 48),
@@ -855,13 +922,13 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
               child: OutlinedButton.icon(
                 onPressed: () => context.push(RouteNames.medications),
                 icon: const Icon(Icons.medication_rounded, size: 18),
-                label: const Text(
-                  'View Medications',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                label: Text(
+                  context.tr('View Medications'),
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                 ),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFFB1002C),
-                  side: const BorderSide(color: Color(0xFFB1002C)),
+                  foregroundColor: AppColors.primaryActionDark,
+                  side: BorderSide(color: AppColors.primaryActionDark),
                   minimumSize: const Size(double.infinity, 44),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
@@ -917,9 +984,9 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                   color: const Color(0xFFFFDAD9),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Text(
-                  'NEXT MEDICATION',
-                  style: TextStyle(
+                child: Text(
+                  context.tr('NEXT MEDICATION'),
+                  style: const TextStyle(
                     color: Color(0xFF40000A),
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
@@ -934,15 +1001,20 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                   color: const Color(0xFFFFDAD9).withOpacity(0.4),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.medication_rounded,
-                  color: Color(0xFFB1002C),
+                  color: AppColors.primaryActionDark,
                   size: 28,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          if (matchedMed?.imageUrl?.trim().isNotEmpty ?? false) ...[
+            const SizedBox(height: 16),
+            _buildNextMedicationImage(matchedMed!.imageUrl),
+            const SizedBox(height: 16),
+          ] else
+            const SizedBox(height: 8),
 
           // Medication Title & Dosage
           Text(
@@ -974,7 +1046,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Scheduled Time + Log Dose Button
+          // Scheduled time
           Container(
             padding: const EdgeInsets.only(top: 14),
             decoration: const BoxDecoration(
@@ -983,90 +1055,33 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
               ),
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
+                Icon(
+                  Icons.schedule_rounded,
+                  color: AppColors.primaryActionDark,
+                  size: 24,
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(
-                      Icons.schedule_rounded,
-                      color: Color(0xFFB1002C),
-                      size: 24,
+                    Text(
+                      context.tr('Scheduled'),
+                      style: const TextStyle(
+                        color: Color(0xFF545F73),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                    const SizedBox(width: 8),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Scheduled',
-                          style: TextStyle(
-                            color: Color(0xFF545F73),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        Text(
-                          scheduledTime,
-                          style: const TextStyle(
-                            color: Color(0xFF1B1B1B),
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
+                    Text(
+                      scheduledTime,
+                      style: const TextStyle(
+                        color: Color(0xFF1B1B1B),
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ],
-                ),
-                ElevatedButton(
-                  onPressed: () async {
-                    await ref
-                        .read(doseRepositoryProvider)
-                        .updateOccurrenceStatus(next.id, DoseStatus.taken);
-                    if (matchedMed != null) {
-                      ref
-                          .read(refillRepositoryProvider)
-                          .recordDeduction(
-                            medicationId: matchedMed.id,
-                            userId: next.userId,
-                            amount: matchedMed.amountPerDose,
-                            doseEventId: next.id,
-                          )
-                          .ignore();
-                    }
-                    ref.invalidate(todayOccurrencesProvider);
-                    ref.invalidate(todayAdherenceProvider);
-                    ref.invalidate(lowStockProvider);
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('✓ Marked $medName as taken!'),
-                          backgroundColor: const Color(0xFF157F5D),
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFDC143C),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    minimumSize: const Size(120, 48),
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Log Dose',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
                 ),
               ],
             ),
@@ -1077,12 +1092,77 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
   }
 
   // â”€â”€ 4. Today's Schedule Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  Widget _buildNextMedicationImage(String? imageUrl) {
+    Widget fallback() => Container(
+          color: const Color(0xFFFFE8EC),
+          alignment: Alignment.center,
+          child: Icon(
+            Icons.medication_rounded,
+            color: AppColors.primaryActionDark,
+            size: 48,
+          ),
+        );
+
+    Widget image = fallback();
+    final url = imageUrl?.trim();
+    if (url != null && url.isNotEmpty) {
+      if (url.startsWith('data:image')) {
+        try {
+          final separator = url.indexOf(',');
+          if (separator >= 0) {
+            image = Image.memory(
+              base64Decode(url.substring(separator + 1)),
+              key: const ValueKey('next-medication-image'),
+              width: double.infinity,
+              height: 156,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => fallback(),
+            );
+          }
+        } catch (_) {}
+      } else if (url.startsWith('http://') || url.startsWith('https://')) {
+        image = Image.network(
+          url,
+          key: const ValueKey('next-medication-image'),
+          width: double.infinity,
+          height: 156,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => fallback(),
+        );
+      }
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        width: double.infinity,
+        height: 156,
+        child: image,
+      ),
+    );
+  }
+
   Widget _buildTodayScheduleSection(
     AsyncValue<List<DoseOccurrence>> occsAsync,
     AsyncValue<List<Medication>> medsAsync,
   ) {
-    final occs = (occsAsync.asData?.value ?? [])
-      ..sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
+    final allOccurrences = occsAsync.asData?.value ?? [];
+    final occs = allOccurrences
+        .where(
+          (occ) =>
+              occ.status == DoseStatus.pending ||
+              occ.status == DoseStatus.snoozed,
+        )
+        .toList()
+      ..sort((a, b) {
+        final aTime = a.status == DoseStatus.snoozed && a.snoozeUntil != null
+            ? a.snoozeUntil!
+            : a.scheduledAt;
+        final bTime = b.status == DoseStatus.snoozed && b.snoozeUntil != null
+            ? b.snoozeUntil!
+            : b.scheduledAt;
+        return aTime.compareTo(bTime);
+      });
     final meds = medsAsync.asData?.value ?? [];
 
     return Column(
@@ -1108,21 +1188,21 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
             InkWell(
               onTap: () => context.go(RouteNames.medications),
               borderRadius: BorderRadius.circular(6),
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                 child: Row(
                   children: [
                     Text(
-                      'See All',
+                      context.tr('See All'),
                       style: TextStyle(
-                        color: Color(0xFFB1002C),
+                        color: AppColors.primaryActionDark,
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     Icon(
                       Icons.chevron_right_rounded,
-                      color: Color(0xFFB1002C),
+                      color: AppColors.primaryActionDark,
                       size: 18,
                     ),
                   ],
@@ -1146,24 +1226,31 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                   final title = med?.name ?? 'Medication';
                   final timeStr =
                       DateFormat('h:mm a').format(occ.scheduledAt.toLocal());
+                  final snoozeTime = occ.snoozeUntil == null
+                      ? null
+                      : DateFormat('h:mm a').format(occ.snoozeUntil!.toLocal());
                   final strengthStr = med != null ? med.displayStrength : '';
-                  final subtitle = strengthStr.isNotEmpty
-                      ? '$strengthStr • $timeStr'
+                  final scheduleText = occ.status == DoseStatus.snoozed
+                      ? 'Snoozed until ${snoozeTime ?? timeStr}'
                       : timeStr;
-                  final isTaken = occ.status == DoseStatus.taken;
+                  final subtitle = strengthStr.isNotEmpty
+                      ? '$strengthStr • $scheduleText'
+                      : scheduleText;
 
                   return _buildScheduleItem(
                     occurrenceId: occ.id,
                     title: title,
                     subtitle: subtitle,
+                    imageUrl: med?.imageUrl,
                     status: occ.status,
-                    isTaken: isTaken,
                     onTap: () => context.push('/reminder/${occ.id}'),
                   );
                 }(),
               ],
             ],
           )
+        else if (allOccurrences.isNotEmpty)
+          _buildCompletedScheduleState()
         else
           Container(
             width: double.infinity,
@@ -1189,26 +1276,27 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                     color: const Color(0xFFFFDAD9).withOpacity(0.5),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.event_available_rounded,
-                    color: Color(0xFFB1002C),
+                    color: AppColors.primaryActionDark,
                     size: 24,
                   ),
                 ),
                 const SizedBox(height: 10),
-                const Text(
-                  'No medications scheduled for today',
-                  style: TextStyle(
+                Text(
+                  context.tr('No medications scheduled for today'),
+                  style: const TextStyle(
                     color: Color(0xFF1B1B1B),
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 4),
-                const Text(
-                  'Add your medications to see today\'s dose schedule here.',
+                Text(
+                  context.tr(
+                      'Add your medications to see today\'s dose schedule here.'),
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: Color(0xFF545F73),
                     fontSize: 13,
                   ),
@@ -1217,10 +1305,10 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                 OutlinedButton.icon(
                   onPressed: () => context.push(RouteNames.addMedication),
                   icon: const Icon(Icons.add, size: 16),
-                  label: const Text('Add Medication'),
+                  label: Text(context.tr('Add Medication')),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFFB1002C),
-                    side: const BorderSide(color: Color(0xFFB1002C)),
+                    foregroundColor: AppColors.primaryActionDark,
+                    side: BorderSide(color: AppColors.primaryActionDark),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -1233,48 +1321,126 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     );
   }
 
+  Widget _buildCompletedScheduleState() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFEEEEEE)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: const BoxDecoration(
+              color: Color(0xFFE8F7F0),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.done_all_rounded,
+              color: Color(0xFF157F5D),
+              size: 24,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            context.tr('You are all caught up'),
+            style: const TextStyle(
+              color: Color(0xFF1B1B1B),
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            context.tr(
+                'Upcoming and snoozed medication reminders will appear here.'),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Color(0xFF545F73),
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScheduleMedicationImage({
+    required String? imageUrl,
+    required Color backgroundColor,
+    required Color iconColor,
+    required IconData fallbackIcon,
+  }) {
+    Widget fallback() => Container(
+          color: backgroundColor,
+          child: Icon(fallbackIcon, color: iconColor, size: 25),
+        );
+
+    Widget image = fallback();
+    final url = imageUrl?.trim();
+    if (url != null && url.isNotEmpty) {
+      if (url.startsWith('data:image')) {
+        try {
+          final separator = url.indexOf(',');
+          if (separator >= 0) {
+            image = Image.memory(
+              base64Decode(url.substring(separator + 1)),
+              key: const ValueKey('schedule-medication-image'),
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => fallback(),
+            );
+          }
+        } catch (_) {}
+      } else if (url.startsWith('http://') || url.startsWith('https://')) {
+        image = Image.network(
+          url,
+          key: const ValueKey('schedule-medication-image'),
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => fallback(),
+        );
+      }
+    }
+
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFEEEEEE)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(11),
+        child: image,
+      ),
+    );
+  }
+
   Widget _buildScheduleItem({
     required String occurrenceId,
     required String title,
     required String subtitle,
+    required String? imageUrl,
     required DoseStatus status,
-    required bool isTaken,
     VoidCallback? onTap,
   }) {
-    final isMissed = status == DoseStatus.missed;
-    final isSkipped = status == DoseStatus.skipped;
+    final isSnoozed = status == DoseStatus.snoozed;
 
-    Color iconBg = const Color(0xFFEEEEEE);
-    Color iconColor = const Color(0xFF545F73);
-    IconData iconData = Icons.radio_button_unchecked_rounded;
+    final iconBg =
+        isSnoozed ? const Color(0xFFFFF1DB) : const Color(0xFFFFE8EC);
+    final iconColor =
+        isSnoozed ? const Color(0xFF9A5A00) : AppColors.primaryActionDark;
+    final iconData = isSnoozed ? Icons.alarm_rounded : Icons.medication_rounded;
 
-    Color badgeBg = const Color(0xFFEEEEEE);
-    Color badgeColor = const Color(0xFF5C3F3F);
-    IconData badgeIcon = Icons.schedule_rounded;
-    String badgeText = 'Upcoming';
-
-    if (isTaken) {
-      iconBg = const Color(0xFF97F5CC);
-      iconColor = const Color(0xFF002115);
-      iconData = Icons.check_circle_rounded;
-
-      badgeBg = const Color(0xFF97F5CC);
-      badgeColor = const Color(0xFF002115);
-      badgeIcon = Icons.check_rounded;
-      badgeText = 'Taken';
-    } else if (isMissed) {
-      iconBg = const Color(0xFFFFDAD6);
-      iconColor = const Color(0xFF93000A);
-      iconData = Icons.error_outline_rounded;
-
-      badgeBg = const Color(0xFFFFDAD6);
-      badgeColor = const Color(0xFF93000A);
-      badgeIcon = Icons.warning_rounded;
-      badgeText = 'Missed';
-    } else if (isSkipped) {
-      badgeText = 'Skipped';
-      badgeIcon = Icons.redo_rounded;
-    }
+    final badgeBg =
+        isSnoozed ? const Color(0xFFFFF1DB) : const Color(0xFFFFE8EC);
+    final badgeColor =
+        isSnoozed ? const Color(0xFF9A5A00) : AppColors.primaryActionDark;
+    final badgeIcon = isSnoozed ? Icons.alarm_rounded : Icons.schedule_rounded;
+    final badgeText = isSnoozed ? 'Snoozed' : 'Upcoming';
 
     return InkWell(
       onTap: onTap,
@@ -1294,19 +1460,11 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
         ),
         child: Row(
           children: [
-            // Circular status icon
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: iconBg,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                iconData,
-                color: iconColor,
-                size: 24,
-              ),
+            _buildScheduleMedicationImage(
+              imageUrl: imageUrl,
+              backgroundColor: iconBg,
+              iconColor: iconColor,
+              fallbackIcon: iconData,
             ),
             const SizedBox(width: 14),
 
@@ -1420,12 +1578,12 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Expanded(
+                      Expanded(
                         child: Text(
-                          'Adherence',
+                          context.tr('Adherence'),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
+                          style: const TextStyle(
                             color: Color(0xFF545F73),
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
@@ -1531,12 +1689,12 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Flexible(
+                            Flexible(
                               child: Text(
-                                'Refills',
+                                context.tr('Refills'),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
+                                style: const TextStyle(
                                   color: Color(0xFF545F73),
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
@@ -1630,18 +1788,18 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                                 hasLowStock ? 'Order Now' : 'View Stock',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Color(0xFFB1002C),
+                                style: TextStyle(
+                                  color: AppColors.primaryActionDark,
                                   fontSize: 12,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ),
                             const SizedBox(width: 3),
-                            const Icon(
+                            Icon(
                               Icons.arrow_forward_rounded,
                               size: 13,
-                              color: Color(0xFFB1002C),
+                              color: AppColors.primaryActionDark,
                             ),
                           ],
                         ),
@@ -1671,12 +1829,12 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     final header = Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Expanded(
+        Expanded(
           child: Text(
-            'My Caregivers',
+            context.tr('My Caregivers'),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(
+            style: const TextStyle(
               color: Color(0xFF1B1B1B),
               fontSize: 19,
               fontWeight: FontWeight.w700,
@@ -1688,18 +1846,18 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
         InkWell(
           onTap: () => context.push(RouteNames.inviteCaregiver),
           borderRadius: BorderRadius.circular(6),
-          child: const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(Icons.person_add_rounded,
-                    color: Color(0xFFB1002C), size: 16),
-                SizedBox(width: 4),
+                    color: AppColors.primaryActionDark, size: 16),
+                const SizedBox(width: 4),
                 Text(
-                  'Add Caregiver',
+                  context.tr('Add Caregiver'),
                   style: TextStyle(
-                    color: Color(0xFFB1002C),
+                    color: AppColors.primaryActionDark,
                     fontSize: 13.5,
                     fontWeight: FontWeight.w600,
                   ),
@@ -1740,37 +1898,38 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                     color: const Color(0xFFFFDAD9).withOpacity(0.6),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.volunteer_activism_rounded,
-                    color: Color(0xFFB1002C),
+                    color: AppColors.primaryActionDark,
                     size: 26,
                   ),
                 ),
                 const SizedBox(height: 12),
-                const Text(
-                  'No Caregivers Added',
-                  style: TextStyle(
+                Text(
+                  context.tr('No Caregivers Added'),
+                  style: const TextStyle(
                     color: Color(0xFF1B1B1B),
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 6),
-                const Text(
-                  'Add a family member or caregiver to monitor your medications and stay connected.',
+                Text(
+                  context.tr(
+                      'Add a family member or caregiver to monitor your medications and stay connected.'),
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Color(0xFF545F73), fontSize: 13.5),
+                  style: const TextStyle(color: Color(0xFF545F73), fontSize: 13.5),
                 ),
                 const SizedBox(height: 16),
                 ElevatedButton.icon(
                   onPressed: () => context.push(RouteNames.inviteCaregiver),
                   icon: const Icon(Icons.add_rounded, size: 18),
-                  label: const Text(
-                    'Add First Caregiver',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  label: Text(
+                    context.tr('Add First Caregiver'),
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFDC143C),
+                    backgroundColor: AppColors.primaryAction,
                     foregroundColor: Colors.white,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(
@@ -1883,7 +2042,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
-                            '${caregiver.lastActive} • ${caregiver.location}',
+                            '${formatLastActive(caregiver.lastActive)} • ${caregiver.location}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -1904,11 +2063,17 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   InkWell(
-                    onTap: () {
+                    onTap: () async {
                       final phone = caregiver.phoneNumber;
-                      _showCaregiverToast(phone != null && phone.isNotEmpty
-                          ? 'Calling ${caregiver.fullName} at $phone...'
-                          : 'Calling ${caregiver.fullName} via in-app audio...');
+                      if (phone == null || phone.trim().isEmpty) {
+                        _showCaregiverToast(
+                            '${caregiver.fullName} has not added a phone number.');
+                        return;
+                      }
+                      final opened = await PhoneDialerService.open(phone);
+                      if (!opened && mounted) {
+                        _showCaregiverToast('Could not open the phone app.');
+                      }
                     },
                     borderRadius: BorderRadius.circular(24),
                     child: Container(
@@ -1918,9 +2083,9 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                         color: Color(0xFFEEEEEE),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.call_rounded,
-                        color: Color(0xFFDC143C),
+                        color: AppColors.primaryAction,
                         size: 21,
                       ),
                     ),
@@ -1956,35 +2121,76 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                       if (value == 'add') {
                         context.push(RouteNames.inviteCaregiver);
                       } else if (value == 'remove') {
-                        await ref
-                            .read(caregiverRepositoryProvider)
-                            .removeCaregiver(caregiver.id);
-                        ref.invalidate(patientCaregiversListProvider);
-                        _showCaregiverToast(
-                            'Removed ${caregiver.fullName} from caregivers.');
+                        final confirmed = await showDialog<bool>(
+                          context: context,
+                          builder: (dialogContext) => AlertDialog(
+                            title: Text(context.tr('Remove Caregiver')),
+                            content: Text(
+                              'Remove ${caregiver.fullName}? This connection will be removed from both your app and the caregiver’s app.',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.pop(dialogContext, false),
+                                child: Text(context.tr('Cancel')),
+                              ),
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.pop(dialogContext, true),
+                                child: Text(
+                                  context.tr('Remove'),
+                                  style:
+                                      TextStyle(color: AppColors.primaryAction),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirmed != true) return;
+
+                        try {
+                          final removedFromCloud = await ref
+                              .read(caregiverRepositoryProvider)
+                              .removeCaregiver(caregiver.id);
+                          ref.invalidate(patientCaregiversListProvider);
+                          ref.invalidate(caregiversProvider);
+                          ref.invalidate(notificationsProvider);
+                          ref.invalidate(unreadNotificationCountProvider);
+                          _showCaregiverToast(removedFromCloud
+                              ? 'Removed ${caregiver.fullName} from both accounts.'
+                              : 'Removed ${caregiver.fullName} here. Cloud removal is pending.');
+                        } catch (_) {
+                          _showCaregiverToast(
+                              'Could not remove ${caregiver.fullName}. Please try again.');
+                        }
                       }
                     },
                     itemBuilder: (context) => [
-                      const PopupMenuItem(
+                      PopupMenuItem(
                         value: 'add',
                         child: Row(
                           children: [
-                            Icon(Icons.person_add_rounded,
+                            const Icon(Icons.person_add_rounded,
                                 size: 18, color: Color(0xFF1B1B1B)),
-                            SizedBox(width: 8),
-                            Text('Add Another Caregiver'),
+                            const SizedBox(width: 8),
+                            Flexible(
+                                child:
+                                    Text(context.tr('Add Another Caregiver'))),
                           ],
                         ),
                       ),
-                      const PopupMenuItem(
+                      PopupMenuItem(
                         value: 'remove',
                         child: Row(
                           children: [
                             Icon(Icons.person_remove_rounded,
-                                size: 18, color: Color(0xFFDC143C)),
-                            SizedBox(width: 8),
-                            Text('Remove Caregiver',
-                                style: TextStyle(color: Color(0xFFDC143C))),
+                                size: 18, color: AppColors.primaryAction),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(context.tr('Remove Caregiver'),
+                                  style: TextStyle(
+                                      color: AppColors.primaryAction)),
+                            ),
                           ],
                         ),
                       ),
@@ -1996,97 +2202,93 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
           ),
           const SizedBox(height: 14),
 
-          // Live Telemetry Pill Bar
+          // Caregiver account details
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: const Color(0xFFF3F3F3),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Phone Battery
-                Expanded(
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.battery_5_bar_rounded,
-                        color: Color(0xFF545F73),
-                        size: 22,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Phone Battery',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Color(0xFF545F73),
-                              ),
-                            ),
-                            Text(
-                              '${caregiver.phoneBattery}% • ${caregiver.batteryStatus}',
-                              style: const TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF1B1B1B),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                Text(
+                  context.tr('Caregiver account'),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF545F73),
+                    letterSpacing: 0.2,
                   ),
                 ),
-                Container(
-                  width: 1,
-                  height: 28,
-                  color: const Color(0xFFE2E2E2),
+                const SizedBox(height: 10),
+                _buildCaregiverAccountDetail(
+                  icon: Icons.family_restroom_rounded,
+                  label: 'Relationship',
+                  value: caregiver.relationship.trim().isEmpty
+                      ? 'Caregiver'
+                      : caregiver.relationship,
                 ),
-                const SizedBox(width: 12),
-
-                // Smart Hub & Band
-                Expanded(
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.wifi_rounded,
-                        color: Color(0xFF006448),
-                        size: 22,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Smart Hub & Band',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Color(0xFF545F73),
-                              ),
-                            ),
-                            Text(
-                              caregiver.smartHubStatus,
-                              style: const TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF1B1B1B),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                const SizedBox(height: 9),
+                _buildCaregiverAccountDetail(
+                  icon: Icons.email_outlined,
+                  label: 'Email',
+                  value: caregiver.email?.trim().isNotEmpty == true
+                      ? caregiver.email!.trim()
+                      : 'Not provided',
+                ),
+                const SizedBox(height: 9),
+                _buildCaregiverAccountDetail(
+                  icon: Icons.phone_outlined,
+                  label: 'Phone',
+                  value: caregiver.phoneNumber?.trim().isNotEmpty == true
+                      ? caregiver.phoneNumber!.trim()
+                      : 'Not provided',
                 ),
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildCaregiverAccountDetail({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 19, color: const Color(0xFF006448)),
+        const SizedBox(width: 9),
+        SizedBox(
+          width: 88,
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12.5,
+              color: Color(0xFF545F73),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+            style: const TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF1B1B1B),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -2135,14 +2337,14 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    const Row(
+                    Row(
                       children: [
                         Icon(Icons.person_add_rounded,
-                            color: Color(0xFFDC143C), size: 24),
-                        SizedBox(width: 8),
+                            color: AppColors.primaryAction, size: 24),
+                        const SizedBox(width: 8),
                         Text(
-                          'Add Caregiver',
-                          style: TextStyle(
+                          context.tr('Add Caregiver'),
+                          style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.w700,
                             color: Color(0xFF1B1B1B),
@@ -2151,15 +2353,16 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                       ],
                     ),
                     const SizedBox(height: 6),
-                    const Text(
-                      'Enter caregiver details to display their card and live telemetry in Patient Mode.',
-                      style: TextStyle(fontSize: 13, color: Color(0xFF545F73)),
+                    Text(
+                      context.tr(
+                          'Enter caregiver details to display their card and live telemetry in Patient Mode.'),
+                      style: const TextStyle(fontSize: 13, color: Color(0xFF545F73)),
                     ),
                     const SizedBox(height: 18),
 
                     // Full Name
-                    const Text('Caregiver Full Name *',
-                        style: TextStyle(
+                    Text(context.tr('Caregiver Full Name *'),
+                        style: const TextStyle(
                             fontWeight: FontWeight.w600, fontSize: 13)),
                     const SizedBox(height: 6),
                     TextField(
@@ -2180,33 +2383,40 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                     const SizedBox(height: 14),
 
                     // Relationship
-                    const Text('Relationship',
-                        style: TextStyle(
+                    Text(context.tr('Relationship'),
+                        style: const TextStyle(
                             fontWeight: FontWeight.w600, fontSize: 13)),
                     const SizedBox(height: 6),
                     DropdownButtonFormField<String>(
                       value: selectedRelationship,
-                      items: const [
+                      items: [
                         DropdownMenuItem(
-                            value: 'Daughter', child: Text('Daughter')),
-                        DropdownMenuItem(value: 'Son', child: Text('Son')),
+                            value: 'Daughter',
+                            child: Text(context.tr('Daughter'))),
                         DropdownMenuItem(
-                            value: 'Spouse', child: Text('Spouse / Partner')),
+                            value: 'Son', child: Text(context.tr('Son'))),
+                        DropdownMenuItem(
+                            value: 'Spouse',
+                            child: Text(context.tr('Spouse / Partner'))),
                         DropdownMenuItem(
                             value: 'Family Member',
-                            child: Text('Family Member')),
+                            child: Text(context.tr('Family Member'))),
                         DropdownMenuItem(
-                            value: 'Nurse', child: Text('Nurse / Home Care')),
+                            value: 'Nurse',
+                            child: Text(context.tr('Nurse / Home Care'))),
                         DropdownMenuItem(
-                            value: 'Doctor', child: Text('Doctor / Physician')),
+                            value: 'Doctor',
+                            child: Text(context.tr('Doctor / Physician'))),
                         DropdownMenuItem(
                             value: 'Caregiver',
-                            child: Text('Caregiver / Carer')),
-                        DropdownMenuItem(value: 'Other', child: Text('Other')),
+                            child: Text(context.tr('Caregiver / Carer'))),
+                        DropdownMenuItem(
+                            value: 'Other', child: Text(context.tr('Other'))),
                       ],
                       onChanged: (val) {
-                        if (val != null)
+                        if (val != null) {
                           setSheetState(() => selectedRelationship = val);
+                        }
                       },
                       decoration: InputDecoration(
                         filled: true,
@@ -2222,8 +2432,8 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                     const SizedBox(height: 14),
 
                     // Location
-                    const Text('Location',
-                        style: TextStyle(
+                    Text(context.tr('Location'),
+                        style: const TextStyle(
                             fontWeight: FontWeight.w600, fontSize: 13)),
                     const SizedBox(height: 6),
                     TextField(
@@ -2243,8 +2453,8 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                     const SizedBox(height: 14),
 
                     // Phone Number
-                    const Text('Phone Number (Optional)',
-                        style: TextStyle(
+                    Text(context.tr('Phone Number (Optional)'),
+                        style: const TextStyle(
                             fontWeight: FontWeight.w600, fontSize: 13)),
                     const SizedBox(height: 6),
                     TextField(
@@ -2302,7 +2512,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                             'Added caregiver $fullName successfully!');
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFDC143C),
+                        backgroundColor: AppColors.primaryAction,
                         foregroundColor: Colors.white,
                         minimumSize: const Size(double.infinity, 48),
                         shape: RoundedRectangleBorder(
@@ -2310,7 +2520,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                         textStyle: const TextStyle(
                             fontSize: 15, fontWeight: FontWeight.w700),
                       ),
-                      child: const Text('Save & Add Caregiver'),
+                      child: Text(context.tr('Save & Add Caregiver')),
                     ),
                   ],
                 ),

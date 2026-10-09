@@ -67,18 +67,25 @@ class CountryRegion {
     CountryRegion(name: 'India', code: 'IN', dialCode: '+91', flag: '🇮🇳'),
     CountryRegion(name: 'Maldives', code: 'MV', dialCode: '+960', flag: '🇲🇻'),
     CountryRegion(name: 'Pakistan', code: 'PK', dialCode: '+92', flag: '🇵🇰'),
-    CountryRegion(name: 'Bangladesh', code: 'BD', dialCode: '+880', flag: '🇧🇩'),
+    CountryRegion(
+        name: 'Bangladesh', code: 'BD', dialCode: '+880', flag: '🇧🇩'),
     CountryRegion(name: 'Nepal', code: 'NP', dialCode: '+977', flag: '🇳🇵'),
     CountryRegion(name: 'Singapore', code: 'SG', dialCode: '+65', flag: '🇸🇬'),
     CountryRegion(name: 'Malaysia', code: 'MY', dialCode: '+60', flag: '🇲🇾'),
-    CountryRegion(name: 'Philippines', code: 'PH', dialCode: '+63', flag: '🇵🇭'),
+    CountryRegion(
+        name: 'Philippines', code: 'PH', dialCode: '+63', flag: '🇵🇭'),
     CountryRegion(name: 'Indonesia', code: 'ID', dialCode: '+62', flag: '🇮🇩'),
     CountryRegion(name: 'Thailand', code: 'TH', dialCode: '+66', flag: '🇹🇭'),
     CountryRegion(name: 'Vietnam', code: 'VN', dialCode: '+84', flag: '🇻🇳'),
 
     // Middle East
-    CountryRegion(name: 'United Arab Emirates', code: 'AE', dialCode: '+971', flag: '🇦🇪'),
-    CountryRegion(name: 'Saudi Arabia', code: 'SA', dialCode: '+966', flag: '🇸🇦'),
+    CountryRegion(
+        name: 'United Arab Emirates',
+        code: 'AE',
+        dialCode: '+971',
+        flag: '🇦🇪'),
+    CountryRegion(
+        name: 'Saudi Arabia', code: 'SA', dialCode: '+966', flag: '🇸🇦'),
     CountryRegion(name: 'Qatar', code: 'QA', dialCode: '+974', flag: '🇶🇦'),
     CountryRegion(name: 'Kuwait', code: 'KW', dialCode: '+965', flag: '🇰🇼'),
     CountryRegion(name: 'Oman', code: 'OM', dialCode: '+968', flag: '🇴🇲'),
@@ -88,7 +95,8 @@ class CountryRegion {
     CountryRegion(name: 'Israel', code: 'IL', dialCode: '+972', flag: '🇮🇱'),
 
     // Americas
-    CountryRegion(name: 'United States', code: 'US', dialCode: '+1', flag: '🇺🇸'),
+    CountryRegion(
+        name: 'United States', code: 'US', dialCode: '+1', flag: '🇺🇸'),
     CountryRegion(name: 'Canada', code: 'CA', dialCode: '+1', flag: '🇨🇦'),
     CountryRegion(name: 'Brazil', code: 'BR', dialCode: '+55', flag: '🇧🇷'),
     CountryRegion(name: 'Mexico', code: 'MX', dialCode: '+52', flag: '🇲🇽'),
@@ -98,15 +106,19 @@ class CountryRegion {
     CountryRegion(name: 'Peru', code: 'PE', dialCode: '+51', flag: '🇵🇪'),
 
     // Europe
-    CountryRegion(name: 'United Kingdom', code: 'GB', dialCode: '+44', flag: '🇬🇧'),
+    CountryRegion(
+        name: 'United Kingdom', code: 'GB', dialCode: '+44', flag: '🇬🇧'),
     CountryRegion(name: 'Australia', code: 'AU', dialCode: '+61', flag: '🇦🇺'),
-    CountryRegion(name: 'New Zealand', code: 'NZ', dialCode: '+64', flag: '🇳🇿'),
+    CountryRegion(
+        name: 'New Zealand', code: 'NZ', dialCode: '+64', flag: '🇳🇿'),
     CountryRegion(name: 'Germany', code: 'DE', dialCode: '+49', flag: '🇩🇪'),
     CountryRegion(name: 'France', code: 'FR', dialCode: '+33', flag: '🇫🇷'),
     CountryRegion(name: 'Italy', code: 'IT', dialCode: '+39', flag: '🇮🇹'),
     CountryRegion(name: 'Spain', code: 'ES', dialCode: '+34', flag: '🇪🇸'),
-    CountryRegion(name: 'Netherlands', code: 'NL', dialCode: '+31', flag: '🇳🇱'),
-    CountryRegion(name: 'Switzerland', code: 'CH', dialCode: '+41', flag: '🇨🇭'),
+    CountryRegion(
+        name: 'Netherlands', code: 'NL', dialCode: '+31', flag: '🇳🇱'),
+    CountryRegion(
+        name: 'Switzerland', code: 'CH', dialCode: '+41', flag: '🇨🇭'),
     CountryRegion(name: 'Sweden', code: 'SE', dialCode: '+46', flag: '🇸🇪'),
     CountryRegion(name: 'Norway', code: 'NO', dialCode: '+47', flag: '🇳🇴'),
     CountryRegion(name: 'Denmark', code: 'DK', dialCode: '+45', flag: '🇩🇰'),
@@ -116,20 +128,24 @@ class CountryRegion {
     CountryRegion(name: 'Austria', code: 'AT', dialCode: '+43', flag: '🇦🇹'),
     CountryRegion(name: 'Belgium', code: 'BE', dialCode: '+32', flag: '🇧🇪'),
     CountryRegion(name: 'Poland', code: 'PL', dialCode: '+48', flag: '🇵🇱'),
-    CountryRegion(name: 'Czech Republic', code: 'CZ', dialCode: '+420', flag: '🇨🇿'),
+    CountryRegion(
+        name: 'Czech Republic', code: 'CZ', dialCode: '+420', flag: '🇨🇿'),
     CountryRegion(name: 'Greece', code: 'GR', dialCode: '+30', flag: '🇬🇷'),
     CountryRegion(name: 'Turkey', code: 'TR', dialCode: '+90', flag: '🇹🇷'),
     CountryRegion(name: 'Ukraine', code: 'UA', dialCode: '+380', flag: '🇺🇦'),
 
     // East Asia
     CountryRegion(name: 'Japan', code: 'JP', dialCode: '+81', flag: '🇯🇵'),
-    CountryRegion(name: 'South Korea', code: 'KR', dialCode: '+82', flag: '🇰🇷'),
+    CountryRegion(
+        name: 'South Korea', code: 'KR', dialCode: '+82', flag: '🇰🇷'),
     CountryRegion(name: 'China', code: 'CN', dialCode: '+86', flag: '🇨🇳'),
-    CountryRegion(name: 'Hong Kong', code: 'HK', dialCode: '+852', flag: '🇭🇰'),
+    CountryRegion(
+        name: 'Hong Kong', code: 'HK', dialCode: '+852', flag: '🇭🇰'),
     CountryRegion(name: 'Taiwan', code: 'TW', dialCode: '+886', flag: '🇹🇼'),
 
     // Africa
-    CountryRegion(name: 'South Africa', code: 'ZA', dialCode: '+27', flag: '🇿🇦'),
+    CountryRegion(
+        name: 'South Africa', code: 'ZA', dialCode: '+27', flag: '🇿🇦'),
     CountryRegion(name: 'Egypt', code: 'EG', dialCode: '+20', flag: '🇪🇬'),
     CountryRegion(name: 'Nigeria', code: 'NG', dialCode: '+234', flag: '🇳🇬'),
     CountryRegion(name: 'Kenya', code: 'KE', dialCode: '+254', flag: '🇰🇪'),
@@ -210,7 +226,7 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.public_rounded,
                   color: AppColors.primaryAction,
                   size: 22,
@@ -239,7 +255,8 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
               controller: _searchController,
               decoration: InputDecoration(
                 hintText: 'Search country or dial code (e.g. +94)',
-                prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textTertiary),
+                prefixIcon: const Icon(Icons.search_rounded,
+                    color: AppColors.textTertiary),
                 suffixIcon: _searchController.text.isNotEmpty
                     ? IconButton(
                         icon: const Icon(Icons.clear_rounded, size: 18),
@@ -248,7 +265,8 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
                     : null,
                 filled: true,
                 fillColor: const Color(0xFFF6F7F9),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: const BorderSide(color: AppColors.borderLight),
@@ -259,7 +277,8 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.primaryAction, width: 1.5),
+                  borderSide:
+                      BorderSide(color: AppColors.primaryAction, width: 1.5),
                 ),
               ),
             ),
@@ -282,7 +301,8 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
                         const SizedBox(height: 8),
                         Text(
                           'No country found',
-                          style: AppTextStyles.bodyLg(color: AppColors.textSecondary),
+                          style: AppTextStyles.bodyLg(
+                              color: AppColors.textSecondary),
                         ),
                       ],
                     ),
@@ -297,8 +317,9 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
                     ),
                     itemBuilder: (context, index) {
                       final item = _filteredCountries[index];
-                      final isSelected = widget.currentRegion?.code == item.code &&
-                          widget.currentRegion?.dialCode == item.dialCode;
+                      final isSelected =
+                          widget.currentRegion?.code == item.code &&
+                              widget.currentRegion?.dialCode == item.dialCode;
 
                       return InkWell(
                         onTap: () => Navigator.of(context).pop(item),
@@ -340,7 +361,7 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
                               ),
                               if (isSelected) ...[
                                 const SizedBox(width: 10),
-                                const Icon(
+                                Icon(
                                   Icons.check_circle_rounded,
                                   size: 18,
                                   color: AppColors.primaryAction,
@@ -438,7 +459,8 @@ class DdPhoneInput extends StatelessWidget {
             hintText: hint,
             filled: true,
             fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
               borderSide: const BorderSide(color: AppColors.borderLight),
@@ -449,7 +471,8 @@ class DdPhoneInput extends StatelessWidget {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: AppColors.primaryAction, width: 1.5),
+              borderSide:
+                  BorderSide(color: AppColors.primaryAction, width: 1.5),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
@@ -476,7 +499,8 @@ class DdPhoneInput extends StatelessWidget {
                     : null,
                 borderRadius: BorderRadius.circular(8),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF3F4F6),
                     borderRadius: BorderRadius.circular(8),

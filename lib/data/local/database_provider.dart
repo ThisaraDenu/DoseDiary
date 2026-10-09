@@ -34,6 +34,15 @@ class AppDatabase {
     await db.execute(_createAllocatedPatientsTable);
     await db.execute(_createPatientCaregiverLinksTable);
     await db.execute(_createAllocatedCaregiversTable);
+    await db.execute(_createAppNotificationsTable);
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_app_notifications_user_created '
+      'ON app_notifications(user_id, created_at DESC)',
+    );
+    try {
+      await db.execute(
+          'ALTER TABLE app_notifications ADD COLUMN sender_user_id TEXT');
+    } catch (_) {/* column already exists - safe to ignore */}
     // Add patient_user_id column if upgrading from older schema
     try {
       await db.execute(
@@ -51,6 +60,17 @@ class AppDatabase {
     } catch (_) {/* column already exists — safe to ignore */}
     try {
       await db.execute('ALTER TABLE profiles ADD COLUMN public_id TEXT');
+    } catch (_) {/* column already exists - safe to ignore */}
+    for (final statement in const [
+      'ALTER TABLE allocated_patients ADD COLUMN patient_email TEXT',
+      'ALTER TABLE allocated_patients ADD COLUMN gender TEXT',
+    ]) {
+      try {
+        await db.execute(statement);
+      } catch (_) {/* column already exists - safe to ignore */}
+    }
+    try {
+      await db.execute('ALTER TABLE medications ADD COLUMN image_url TEXT');
     } catch (_) {/* column already exists - safe to ignore */}
     await db.execute(
       'CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_public_id '
@@ -86,6 +106,11 @@ class AppDatabase {
     await db.execute(_createAllocatedPatientsTable);
     await db.execute(_createPatientCaregiverLinksTable);
     await db.execute(_createAllocatedCaregiversTable);
+    await db.execute(_createAppNotificationsTable);
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_app_notifications_user_created '
+      'ON app_notifications(user_id, created_at DESC)',
+    );
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -132,11 +157,13 @@ class AppDatabase {
     CREATE TABLE IF NOT EXISTS medications (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
+      sender_user_id TEXT,
       name TEXT NOT NULL,
       strength REAL NOT NULL DEFAULT 0,
       strength_unit TEXT NOT NULL DEFAULT 'mg',
       amount_per_dose REAL NOT NULL DEFAULT 1,
       dose_unit TEXT NOT NULL DEFAULT 'tablet(s)',
+      image_url TEXT,
       instructions TEXT,
       is_active INTEGER NOT NULL DEFAULT 1,
       is_as_needed INTEGER NOT NULL DEFAULT 0,
@@ -280,6 +307,21 @@ class AppDatabase {
     )
   ''';
 
+  static const _createAppNotificationsTable = '''
+    CREATE TABLE IF NOT EXISTS app_notifications (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      priority TEXT NOT NULL DEFAULT 'normal',
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      source_id TEXT,
+      route TEXT,
+      is_read INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    )
+  ''';
+
   static const _createAllocatedPatientsTable = '''
     CREATE TABLE IF NOT EXISTS allocated_patients (
       id TEXT PRIMARY KEY,
@@ -294,6 +336,8 @@ class AppDatabase {
       battery_status TEXT NOT NULL DEFAULT 'Balanced',
       smart_hub_status TEXT NOT NULL DEFAULT 'Synced 2m ago',
       phone_number TEXT,
+      patient_email TEXT,
+      gender TEXT,
       created_at TEXT NOT NULL
     )
   ''';
@@ -364,6 +408,7 @@ class AppDatabase {
     await db.delete('caregiver_permissions');
     await db.delete('caregiver_invitations');
     await db.delete('notification_attempts');
+    await db.delete('app_notifications');
     await db.delete('profiles');
     await db.delete('allocated_patients');
     await db.delete('allocated_caregivers');
@@ -375,8 +420,15 @@ class AppDatabase {
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 
-final appDatabaseProvider =
-    Provider<AppDatabase>((ref) => AppDatabase.instance);
+/// Changes whenever authentication moves to a different account. All
+/// account-scoped repositories depend on this value through
+/// [appDatabaseProvider], so advancing it clears their Riverpod caches.
+final accountSessionEpochProvider = StateProvider<int>((ref) => 0);
+
+final appDatabaseProvider = Provider<AppDatabase>((ref) {
+  ref.watch(accountSessionEpochProvider);
+  return AppDatabase.instance;
+});
 
 class DatabaseProvider {
   static Future<void> initialize() async {

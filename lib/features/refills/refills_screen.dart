@@ -11,6 +11,7 @@ import '../../core/widgets/dd_loading.dart';
 import '../../core/widgets/dd_text_field.dart';
 import '../../data/local/models/app_models.dart';
 import '../../data/repositories/app_repositories.dart';
+import '../../data/repositories/notification_repository.dart';
 import '../../data/remote/auth_service.dart';
 import '../home/home_dashboard_screen.dart';
 
@@ -49,7 +50,8 @@ class RefillsScreen extends ConsumerWidget {
                 data: (lowMeds) {
                   if (lowMeds.isEmpty) return const SizedBox.shrink();
                   return Padding(
-                    padding: const EdgeInsets.only(bottom: AppDimensions.stackLg),
+                    padding:
+                        const EdgeInsets.only(bottom: AppDimensions.stackLg),
                     child: DdCard(
                       borderColor: AppColors.skippedForeground.withOpacity(0.4),
                       child: Column(
@@ -57,15 +59,19 @@ class RefillsScreen extends ConsumerWidget {
                         children: [
                           Row(
                             children: [
-                              const Icon(Icons.warning_amber_rounded, color: AppColors.skippedForeground),
+                              const Icon(Icons.warning_amber_rounded,
+                                  color: AppColors.skippedForeground),
                               const SizedBox(width: 8),
-                              Text('Low Stock Alert', style: AppTextStyles.bodyBold(color: AppColors.skippedForeground)),
+                              Text('Low Stock Alert',
+                                  style: AppTextStyles.bodyBold(
+                                      color: AppColors.skippedForeground)),
                             ],
                           ),
                           const SizedBox(height: AppDimensions.stackSm),
                           Text(
                             '${lowMeds.length} medication${lowMeds.length > 1 ? 's are' : ' is'} running low',
-                            style: AppTextStyles.bodyLg(color: AppColors.textSecondary),
+                            style: AppTextStyles.bodyLg(
+                                color: AppColors.textSecondary),
                           ),
                         ],
                       ),
@@ -117,14 +123,16 @@ class _RefillCard extends StatelessWidget {
               ),
               if (isLow)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: AppColors.skippedBackground,
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     'LOW',
-                    style: AppTextStyles.statusBadge(color: AppColors.skippedForeground),
+                    style: AppTextStyles.statusBadge(
+                        color: AppColors.skippedForeground),
                   ),
                 ),
             ],
@@ -132,11 +140,15 @@ class _RefillCard extends StatelessWidget {
           const SizedBox(height: AppDimensions.stackMd),
           Row(
             children: [
-              const Icon(Icons.inventory_2_outlined, size: 16, color: AppColors.textSecondary),
+              const Icon(Icons.inventory_2_outlined,
+                  size: 16, color: AppColors.textSecondary),
               const SizedBox(width: 6),
               Text(
                 '${qty.toStringAsFixed(qty.truncateToDouble() == qty ? 0 : 1)} ${med.quantityUnit} remaining',
-                style: AppTextStyles.bodyLg(color: isLow ? AppColors.skippedForeground : AppColors.textSecondary),
+                style: AppTextStyles.bodyLg(
+                    color: isLow
+                        ? AppColors.skippedForeground
+                        : AppColors.textSecondary),
               ),
             ],
           ),
@@ -144,7 +156,8 @@ class _RefillCard extends StatelessWidget {
             const SizedBox(height: AppDimensions.stackSm),
             Row(
               children: [
-                const Icon(Icons.notifications_outlined, size: 16, color: AppColors.textTertiary),
+                const Icon(Icons.notifications_outlined,
+                    size: 16, color: AppColors.textTertiary),
                 const SizedBox(width: 6),
                 Text(
                   'Refill reminder at ${threshold.toStringAsFixed(0)} ${med.quantityUnit}',
@@ -172,7 +185,8 @@ class RefillConfirmScreen extends ConsumerStatefulWidget {
   final String medicationId;
 
   @override
-  ConsumerState<RefillConfirmScreen> createState() => _RefillConfirmScreenState();
+  ConsumerState<RefillConfirmScreen> createState() =>
+      _RefillConfirmScreenState();
 }
 
 class _RefillConfirmScreenState extends ConsumerState<RefillConfirmScreen> {
@@ -200,16 +214,20 @@ class _RefillConfirmScreenState extends ConsumerState<RefillConfirmScreen> {
     try {
       final userId = AuthService.currentUser?.id ?? med.userId;
       await ref.read(refillRepositoryProvider).recordRefill(
-        medicationId: med.id,
-        userId: userId,
-        quantityAdded: qty,
-        note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
-      );
+            medicationId: med.id,
+            userId: userId,
+            quantityAdded: qty,
+            note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+          );
       ref.invalidate(allActiveMedsProvider);
       ref.invalidate(lowStockProvider);
+      ref.invalidate(notificationsProvider);
+      ref.invalidate(unreadNotificationCountProvider);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Refill recorded: +${qty.toStringAsFixed(0)} ${med.quantityUnit}')),
+        SnackBar(
+            content: Text(
+                'Refill recorded: +${qty.toStringAsFixed(0)} ${med.quantityUnit}')),
       );
       context.pop();
     } catch (e) {
@@ -239,12 +257,15 @@ class _RefillConfirmScreenState extends ConsumerState<RefillConfirmScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(med.name, style: AppTextStyles.headlineLg()),
-                Text(med.displayStrength, style: AppTextStyles.bodyLg(color: AppColors.textSecondary)),
+                Text(med.displayStrength,
+                    style:
+                        AppTextStyles.bodyLg(color: AppColors.textSecondary)),
                 const SizedBox(height: AppDimensions.stackLg),
                 DdCard(
                   child: Row(
                     children: [
-                      const Icon(Icons.inventory_2_outlined, color: AppColors.textSecondary),
+                      const Icon(Icons.inventory_2_outlined,
+                          color: AppColors.textSecondary),
                       const SizedBox(width: 8),
                       Text(
                         'Current stock: ${med.quantityOnHand.toStringAsFixed(0)} ${med.quantityUnit}',
@@ -258,7 +279,8 @@ class _RefillConfirmScreenState extends ConsumerState<RefillConfirmScreen> {
                   label: 'Quantity added (${med.quantityUnit})',
                   hint: 'e.g. 30',
                   controller: _qtyCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
                   autofocus: true,
                 ),
                 const SizedBox(height: AppDimensions.stackLg),

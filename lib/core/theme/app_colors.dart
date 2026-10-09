@@ -1,5 +1,59 @@
 import 'package:flutter/material.dart';
 
+/// Accessible app accent choices. Each colour is dark enough to keep white
+/// labels readable and is identified by text as well as colour in the UI.
+enum AppThemeColor {
+  crimson(
+    label: 'Crimson',
+    description: 'DoseDiary classic',
+    color: Color(0xFFDC143C),
+    darkColor: Color(0xFFB91032),
+  ),
+  oceanBlue(
+    label: 'Ocean Blue',
+    description: 'Clear and calm',
+    color: Color(0xFF0057B8),
+    darkColor: Color(0xFF003F87),
+  ),
+  teal(
+    label: 'Teal',
+    description: 'Colour-vision friendly',
+    color: Color(0xFF006B5E),
+    darkColor: Color(0xFF004D43),
+  ),
+  violet(
+    label: 'Violet',
+    description: 'Distinct and balanced',
+    color: Color(0xFF5B3FC4),
+    darkColor: Color(0xFF40279B),
+  ),
+  highContrast(
+    label: 'High Contrast',
+    description: 'Strongest definition',
+    color: Color(0xFF111827),
+    darkColor: Color(0xFF030712),
+  );
+
+  const AppThemeColor({
+    required this.label,
+    required this.description,
+    required this.color,
+    required this.darkColor,
+  });
+
+  final String label;
+  final String description;
+  final Color color;
+  final Color darkColor;
+
+  static AppThemeColor fromName(String? name) {
+    return AppThemeColor.values.firstWhere(
+      (option) => option.name == name,
+      orElse: () => AppThemeColor.crimson,
+    );
+  }
+}
+
 /// DoseDiary brand colour palette.
 /// Matches the "MediCare Accessible UI Prototype" Stitch design system.
 class AppColors {
@@ -7,14 +61,25 @@ class AppColors {
 
   // ── Brand ────────────────────────────────────────────────
   static const Color primaryBackground = Color(0xFFF9F9F9); // Clean modern grey
-  static const Color primaryAction = Color(0xFFDC143C);     // Crimson
-  static const Color primaryActionDark = Color(0xFFB91032); // Pressed crimson
+  static Color _primaryAction = AppThemeColor.crimson.color;
+  static Color _primaryActionDark = AppThemeColor.crimson.darkColor;
+
+  static Color get primaryAction => _primaryAction;
+  static Color get primaryActionDark => _primaryActionDark;
+
+  /// Keeps legacy components that use AppColors in sync with Material theme.
+  static void applyThemeColor(AppThemeColor themeColor) {
+    _primaryAction = themeColor.color;
+    _primaryActionDark = themeColor.darkColor;
+  }
 
   // ── Surface ───────────────────────────────────────────────
   static const Color cardSurface = Color(0xFFFFFFFF);
   static const Color scaffoldBackground = Color(0xFFF9F9F9);
-  static const Color onboardingBackground = Color(0xFFF3EFE8); // Warm cream from design mockups
-  static const Color onboardingDotInactive = Color(0xFFD1CDC5); // Neutral inactive dot
+  static const Color onboardingBackground =
+      Color(0xFFF3EFE8); // Warm cream from design mockups
+  static const Color onboardingDotInactive =
+      Color(0xFFD1CDC5); // Neutral inactive dot
 
   // ── Text ─────────────────────────────────────────────────
   static const Color textPrimary = Color(0xFF000000);
@@ -31,7 +96,7 @@ class AppColors {
   static const Color navBarBackground = Color(0xFFFFFFFF);
   static const Color navBarBorder = Color(0xFFEEEEEE);
   static const Color navBarInactive = Color(0xFF64748B);
-  static const Color navBarActive = Color(0xFFDC143C);
+  static Color get navBarActive => _primaryAction;
 
   // ── Status: Taken ─────────────────────────────────────────
   static const Color takenForeground = Color(0xFF047857);

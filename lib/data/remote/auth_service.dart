@@ -13,6 +13,8 @@ import 'supabase_sync_service.dart';
 class AuthService {
   AuthService._();
 
+  static bool _awaitingGoogleOAuthRedirect = false;
+
   static SupabaseClient? get _clientSafe {
     try {
       return Supabase.instance.client;
@@ -42,6 +44,14 @@ class AuthService {
   }
 
   static bool get isLoggedIn => currentUser != null;
+
+  /// Returns true once after a browser-based Google OAuth flow signs in.
+  /// The app uses this to finish navigation when the deep link returns.
+  static bool consumeGoogleOAuthRedirect() {
+    if (!_awaitingGoogleOAuthRedirect) return false;
+    _awaitingGoogleOAuthRedirect = false;
+    return true;
+  }
 
   static bool get isGoogleUser {
     final metadata = currentUser?.appMetadata;
@@ -128,12 +138,19 @@ class AuthService {
 
   // ── Google Sign In ────────────────────────────────────────────────────────
 
-  /// Performs Google Sign-In.
-  /// If [SupabaseConfig.googleWebClientId] is set, uses native Google Sign-In
-  /// with ID Token verification. Otherwise, falls back to Supabase browser OAuth.
+  /// Performs native Google Sign-In when this APK's certificate is registered.
+  ///
+  /// Development builds made by collaborators have different SHA certificates.
+  /// If native sign-in cannot obtain Google tokens, automatically use the
+  /// Supabase browser OAuth flow, which returns through the app deep link.
   static Future<AuthResponse?> signInWithGoogle() async {
-    if (SupabaseConfig.googleWebClientId.isNotEmpty) {
-      // 1. Native Google Sign-In via google_sign_in package
+    if (SupabaseConfig.googleWebClientId.isEmpty) {
+      return _signInWithGoogleBrowser();
+    }
+
+    GoogleSignInAccount? googleUser;
+    GoogleSignInAuthentication? googleAuth;
+    try {
       final googleSignIn = GoogleSignIn(
         serverClientId: SupabaseConfig.googleWebClientId,
         clientId: SupabaseConfig.googleIosClientId.isNotEmpty
@@ -141,45 +158,60 @@ class AuthService {
             : null,
       );
 
-      final googleUser = await googleSignIn.signIn();
+      googleUser = await googleSignIn.signIn();
       if (googleUser == null) {
-        // User cancelled the sign-in modal
+        // The user intentionally closed the account chooser.
         return null;
       }
+      googleAuth = await googleUser.authentication;
+    } catch (_) {
+      // Most commonly Android DEVELOPER_ERROR (SHA/package mismatch) or an
+      // unconfigured iOS client. Browser OAuth remains portable in both cases.
+      return _signInWithGoogleBrowser();
+    }
 
-      final googleAuth = await googleUser.authentication;
-      final idToken = googleAuth.idToken;
-      final accessToken = googleAuth.accessToken;
+    final idToken = googleAuth.idToken;
+    final accessToken = googleAuth.accessToken;
+    if (idToken == null || accessToken == null) {
+      return _signInWithGoogleBrowser();
+    }
 
-      if (idToken == null) {
-        throw 'No ID token returned by Google Sign-In.';
-      }
+    final response = await _client.auth.signInWithIdToken(
+      provider: OAuthProvider.google,
+      idToken: idToken,
+      accessToken: accessToken,
+    );
 
-      final response = await _client.auth.signInWithIdToken(
-        provider: OAuthProvider.google,
-        idToken: idToken,
-        accessToken: accessToken,
-      );
+    if (response.user != null) {
+      final name = response.user!.userMetadata?['full_name'] as String? ??
+          googleUser.displayName;
+      await _upsertProfile(response.user!, fullName: name);
+      await ensurePublicId();
+      try {
+        await AppDatabase.instance.clearAllUserData();
+        await SupabaseSyncService.pullFromCloud();
+      } catch (_) {}
+    }
+    return response;
+  }
 
-      if (response.user != null) {
-        final name = response.user!.userMetadata?['full_name'] as String? ??
-            googleUser.displayName;
-        await _upsertProfile(response.user!, fullName: name);
-        await ensurePublicId();
-        try {
-          await AppDatabase.instance.clearAllUserData();
-          await SupabaseSyncService.pullFromCloud();
-        } catch (_) {}
-      }
-      return response;
-    } else {
-      // 2. Web browser OAuth redirect fallback
-      await _client.auth.signInWithOAuth(
+  static Future<AuthResponse?> _signInWithGoogleBrowser() async {
+    _awaitingGoogleOAuthRedirect = true;
+    try {
+      final launched = await _client.auth.signInWithOAuth(
         OAuthProvider.google,
         redirectTo: SupabaseConfig.redirectUrl,
+        queryParams: const {'prompt': 'select_account'},
       );
-      return null;
+      if (!launched) {
+        _awaitingGoogleOAuthRedirect = false;
+        throw StateError('Could not open Google authentication.');
+      }
+    } catch (_) {
+      _awaitingGoogleOAuthRedirect = false;
+      rethrow;
     }
+    return null;
   }
 
   // ── Password Reset ────────────────────────────────────────────────────────
@@ -468,6 +500,37 @@ class AuthService {
     await updateProfile({'avatar_url': avatarUrl});
 
     return avatarUrl;
+  }
+
+  /// Stores an image attached to a medication. Signed-in users use Supabase
+  /// Storage; offline/guest users keep the compressed image as a data URI.
+  static Future<String> uploadMedicationImage({
+    required String medicationId,
+    required Uint8List bytes,
+    required String fileExtension,
+  }) async {
+    final ext = fileExtension.replaceAll('.', '').toLowerCase();
+    final mimeExtension = ext == 'jpg' ? 'jpeg' : ext;
+    final fallback = 'data:image/$mimeExtension;base64,${base64Encode(bytes)}';
+    final user = currentUser;
+    if (user == null) return fallback;
+
+    final fileName = '${user.id}/$medicationId.${ext.isEmpty ? 'jpg' : ext}';
+    try {
+      final client = _clientSafe;
+      if (client == null) return fallback;
+      await client.storage.from('medication-images').uploadBinary(
+            fileName,
+            bytes,
+            fileOptions: FileOptions(
+              contentType: 'image/$mimeExtension',
+              upsert: true,
+            ),
+          );
+      return client.storage.from('medication-images').getPublicUrl(fileName);
+    } catch (_) {
+      return fallback;
+    }
   }
 
   // ── Private Helpers ───────────────────────────────────────────────────────

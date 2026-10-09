@@ -10,6 +10,7 @@ import '../../core/services/permission_service.dart';
 import '../../data/remote/auth_service.dart';
 import '../../data/remote/supabase_sync_service.dart';
 import '../../main.dart';
+import '../../services/dose_alarm_scheduler.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -55,7 +56,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     if (!onboardingDone) {
       context.go(RouteNames.onboarding);
     } else if (session != null) {
-      SupabaseSyncService.pullFromCloud().ignore();
+      SupabaseSyncService.pullFromCloud()
+          .then((_) => DoseAlarmScheduler.syncUpcomingAlarms())
+          .ignore();
       final needsGoogleProfile = AuthService.isGoogleUser &&
           await AuthService.needsProfileCompletion();
       if (!mounted) return;
