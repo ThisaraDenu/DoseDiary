@@ -119,7 +119,7 @@ class _ConnectionInvitationPromptState
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
-        icon: const Icon(
+        icon: Icon(
           Icons.people_alt_rounded,
           color: AppColors.primaryAction,
           size: 34,

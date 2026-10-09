@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -78,12 +79,12 @@ class HistoryScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F9),
       appBar: AppBar(
-        title: const Row(
+        title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.medical_services_outlined, size: 18),
-            SizedBox(width: 7),
-            Text('History'),
+            const Icon(Icons.medical_services_outlined, size: 18),
+            const SizedBox(width: 7),
+            Text(context.tr('History')),
           ],
         ),
         automaticallyImplyLeading: false,
@@ -177,22 +178,24 @@ Future<void> _showHistoryExportSheet(
               ),
             ),
             const SizedBox(height: 18),
-            Text('Get history as PDF', style: AppTextStyles.headlineMd()),
+            Text(context.tr('Get history as PDF'),
+                style: AppTextStyles.headlineMd()),
             const SizedBox(height: 4),
             Text(
-              'Choose a period, then select where to download the PDF.',
+              context.tr(
+                  'Choose a period, then select where to download the PDF.'),
               style: AppTextStyles.caption(),
             ),
             const SizedBox(height: 12),
             ListTile(
               key: const ValueKey('export-day-history-pdf'),
               contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-              leading: const CircleAvatar(
-                backgroundColor: Color(0xFFFFE8EE),
+              leading: CircleAvatar(
+                backgroundColor: const Color(0xFFFFE8EE),
                 foregroundColor: AppColors.primaryAction,
-                child: Icon(Icons.today_outlined),
+                child: const Icon(Icons.today_outlined),
               ),
-              title: const Text('Download daily history PDF'),
+              title: Text(context.tr('Download daily history PDF')),
               subtitle: Text(DateFormat('d MMMM yyyy').format(selectedDate)),
               trailing: const Icon(Icons.download_rounded),
               onTap: () {
@@ -213,7 +216,7 @@ Future<void> _showHistoryExportSheet(
                 foregroundColor: Color(0xFF14735C),
                 child: Icon(Icons.date_range_outlined),
               ),
-              title: const Text('Download weekly history PDF'),
+              title: Text(context.tr('Download weekly history PDF')),
               subtitle: Text(
                 '${DateFormat('d MMM').format(selectedDate.subtract(const Duration(days: 6)))} - '
                 '${DateFormat('d MMM yyyy').format(selectedDate)}',
@@ -244,7 +247,7 @@ Future<void> _exportHistoryPdf(
 }) async {
   final messenger = ScaffoldMessenger.of(context);
   messenger.showSnackBar(
-    const SnackBar(content: Text('Creating medication history PDF...')),
+    SnackBar(content: Text(context.tr('Creating medication history PDF...'))),
   );
   try {
     final destination = await HistoryPdfService.export(
@@ -258,21 +261,23 @@ Future<void> _exportHistoryPdf(
     messenger.hideCurrentSnackBar();
     if (destination == null) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('PDF download canceled.')),
+        SnackBar(content: Text(context.tr('PDF download canceled.'))),
       );
       return;
     }
     messenger.showSnackBar(
-      const SnackBar(
-        content: Text('Medication history PDF downloaded successfully.'),
+      SnackBar(
+        content:
+            Text(context.tr('Medication history PDF downloaded successfully.')),
       ),
     );
   } catch (_) {
     if (!context.mounted) return;
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
-      const SnackBar(
-          content: Text('Could not save the history PDF. Try again.')),
+      SnackBar(
+          content:
+              Text(context.tr('Could not save the history PDF. Try again.'))),
     );
   }
 }
@@ -295,7 +300,7 @@ class _HistoryHeader extends StatelessWidget {
         const SizedBox(width: 10),
         Expanded(
           child: Text(
-            'Medication History',
+            context.tr('Medication History'),
             style: AppTextStyles.headlineMd(),
           ),
         ),
@@ -426,7 +431,7 @@ class _PeriodSelector extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child: Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.calendar_today_outlined,
                 size: 18,
                 color: AppColors.primaryAction,
@@ -436,7 +441,8 @@ class _PeriodSelector extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Selected Period', style: AppTextStyles.caption()),
+                    Text(context.tr('Selected Period'),
+                        style: AppTextStyles.caption()),
                     const SizedBox(height: 2),
                     Text(value, style: AppTextStyles.bodyBold()),
                   ],
@@ -499,7 +505,8 @@ class _WeeklyAdherenceCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Weekly Adherence', style: AppTextStyles.bodyBold()),
+                Text(context.tr('Weekly Adherence'),
+                    style: AppTextStyles.bodyBold()),
                 const SizedBox(height: 4),
                 Text(
                   '${data.takenCount} of ${data.scheduledCount} scheduled',
@@ -899,7 +906,8 @@ class _WeekHistory extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Weekly Dose Summary', style: AppTextStyles.bodyBold()),
+          Text(context.tr('Weekly Dose Summary'),
+              style: AppTextStyles.bodyBold()),
           const SizedBox(height: 12),
           for (var index = 0; index < 7; index++) ...[
             _WeekDayRow(
@@ -1009,7 +1017,8 @@ class _StatusReference extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Status Key Reference', style: AppTextStyles.caption()),
+          Text(context.tr('Status Key Reference'),
+              style: AppTextStyles.caption()),
           const SizedBox(height: 8),
           Wrap(
             spacing: 14,
@@ -1064,12 +1073,12 @@ class _HistoryError extends StatelessWidget {
               color: AppColors.error,
             ),
             const SizedBox(height: 12),
-            Text('Could not load medication history',
+            Text(context.tr('Could not load medication history'),
                 style: AppTextStyles.bodyBold()),
             const SizedBox(height: 12),
             OutlinedButton(
               onPressed: onRetry,
-              child: const Text('Try again'),
+              child: Text(context.tr('Try again')),
             ),
           ],
         ),

@@ -87,7 +87,10 @@ class _DoseDiaryAppState extends ConsumerState<DoseDiaryApp> {
     return MaterialApp.router(
       title: 'DoseDiary',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme(textScaleFactor: settings.textScaleFactor),
+      theme: AppTheme.lightTheme(
+        textScaleFactor: settings.textScaleFactor,
+        themeColor: settings.themeColor,
+      ),
       routerConfig: router,
       localizationsDelegates: const [
         AppLocalizations.delegate,

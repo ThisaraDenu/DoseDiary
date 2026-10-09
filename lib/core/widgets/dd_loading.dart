@@ -15,10 +15,12 @@ class DdLoadingScreen extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const CircularProgressIndicator(color: AppColors.primaryAction),
+              CircularProgressIndicator(color: AppColors.primaryAction),
               if (message != null) ...[
                 const SizedBox(height: AppDimensions.stackLg),
-                Text(message!, style: AppTextStyles.bodyLg(color: AppColors.textSecondary)),
+                Text(message!,
+                    style:
+                        AppTextStyles.bodyLg(color: AppColors.textSecondary)),
               ],
             ],
           ),
@@ -31,9 +33,9 @@ class DdLoading extends StatelessWidget {
   const DdLoading({super.key});
 
   @override
-  Widget build(BuildContext context) => const Center(
+  Widget build(BuildContext context) => Center(
         child: Padding(
-          padding: EdgeInsets.all(AppDimensions.stackXl),
+          padding: const EdgeInsets.all(AppDimensions.stackXl),
           child: CircularProgressIndicator(color: AppColors.primaryAction),
         ),
       );
@@ -66,7 +68,8 @@ class DdEmptyState extends StatelessWidget {
           children: [
             Icon(icon, size: 64, color: AppColors.borderMedium),
             const SizedBox(height: AppDimensions.stackLg),
-            Text(title, style: AppTextStyles.headlineMd(), textAlign: TextAlign.center),
+            Text(title,
+                style: AppTextStyles.headlineMd(), textAlign: TextAlign.center),
             if (subtitle != null) ...[
               const SizedBox(height: AppDimensions.stackMd),
               Text(
@@ -79,7 +82,8 @@ class DdEmptyState extends StatelessWidget {
               const SizedBox(height: AppDimensions.stackXl),
               FilledButton(
                 onPressed: onAction,
-                style: FilledButton.styleFrom(backgroundColor: AppColors.primaryAction),
+                style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primaryAction),
                 child: Text(actionLabel!),
               ),
             ],
@@ -105,7 +109,8 @@ class OfflineBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.cloud_off_outlined, size: 16, color: AppColors.snoozedForeground),
+          const Icon(Icons.cloud_off_outlined,
+              size: 16, color: AppColors.snoozedForeground),
           const SizedBox(width: AppDimensions.stackSm),
           Text(
             'Offline — changes will sync when connected',
@@ -148,5 +153,7 @@ class DdAppBar extends StatelessWidget implements PreferredSizeWidget {
       );
 
   @override
-  Size get preferredSize => Size.fromHeight(bottom == null ? kToolbarHeight : kToolbarHeight + bottom!.preferredSize.height);
+  Size get preferredSize => Size.fromHeight(bottom == null
+      ? kToolbarHeight
+      : kToolbarHeight + bottom!.preferredSize.height);
 }

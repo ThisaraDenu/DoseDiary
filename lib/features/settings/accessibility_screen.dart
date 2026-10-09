@@ -13,6 +13,7 @@ import '../../services/notification_service.dart';
 import '../../services/dose_alarm_scheduler.dart';
 import '../../data/local/models/app_notification.dart';
 import '../../data/repositories/notification_repository.dart';
+import '../../l10n/app_localizations.dart';
 import 'settings_providers.dart';
 
 export 'account_screen.dart' show AccountScreen;
@@ -27,19 +28,24 @@ class AccessibilityScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.scaffoldBackground,
-      appBar: AppBar(title: const Text('Accessibility')),
+      appBar: AppBar(title: Text(context.tr('Accessibility'))),
       body: ListView(
-        padding: const EdgeInsets.all(AppDimensions.screenMargin),
+        padding: const EdgeInsets.fromLTRB(
+          AppDimensions.screenMargin,
+          AppDimensions.screenMargin,
+          AppDimensions.screenMargin,
+          140,
+        ),
         children: [
           // Text size
           DdCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Text Size', style: AppTextStyles.bodyBold()),
+                Text(context.tr('Text Size'), style: AppTextStyles.bodyBold()),
                 const SizedBox(height: AppDimensions.stackSm),
                 Text(
-                  'Preview text — ${_scaleLabel(settings.textScaleFactor)}',
+                  '${context.tr('Preview text')} — ${context.tr(_scaleLabel(settings.textScaleFactor))}',
                   style: AppTextStyles.bodyLg().copyWith(
                     fontSize: 16 * settings.textScaleFactor,
                   ),
@@ -51,14 +57,90 @@ class AccessibilityScreen extends ConsumerWidget {
                   max: 1.6,
                   divisions: 8,
                   activeColor: AppColors.primaryAction,
-                  label: _scaleLabel(settings.textScaleFactor),
+                  label: context.tr(_scaleLabel(settings.textScaleFactor)),
                   onChanged: (v) => notifier.setTextScale(v),
                 ),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Smaller', style: AppTextStyles.caption()),
-                    Text('Larger', style: AppTextStyles.caption()),
+                    Text(context.tr('Smaller'), style: AppTextStyles.caption()),
+                    Text(context.tr('Larger'), style: AppTextStyles.caption()),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppDimensions.stackLg),
+
+          // App colour
+          DdCard(
+            borderColor: settings.themeColor.color.withOpacity(0.28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: settings.themeColor.color.withOpacity(0.11),
+                        borderRadius: BorderRadius.circular(13),
+                      ),
+                      child: Icon(
+                        Icons.palette_outlined,
+                        color: settings.themeColor.color,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(context.tr('App Colour'),
+                              style: AppTextStyles.bodyBold()),
+                          const SizedBox(height: 2),
+                          Text(
+                            context.tr(
+                                'Choose a comfortable colour for controls across the app.'),
+                            style: AppTextStyles.caption(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppDimensions.stackMd),
+                for (final option in AppThemeColor.values) ...[
+                  _ThemeColourOption(
+                    option: option,
+                    selected: settings.themeColor == option,
+                    onTap: () => notifier.setThemeColor(option),
+                  ),
+                  if (option != AppThemeColor.values.last)
+                    const SizedBox(height: 8),
+                ],
+                const SizedBox(height: 10),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.visibility_outlined,
+                      size: 17,
+                      color: AppColors.textTertiary,
+                    ),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Text(
+                        context.tr(
+                            'Every choice uses high-contrast text. Labels and icons remain visible, so colour is not the only signal.'),
+                        style: AppTextStyles.caption(
+                          color: AppColors.textTertiary,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -74,10 +156,12 @@ class AccessibilityScreen extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Simpler Language', style: AppTextStyles.bodyBold()),
+                      Text(context.tr('Simpler Language'),
+                          style: AppTextStyles.bodyBold()),
                       const SizedBox(height: 4),
                       Text(
-                        'Use shorter, plainer words throughout the app.',
+                        context.tr(
+                            'Use shorter, plainer words throughout the app.'),
                         style: AppTextStyles.bodyLg(
                             color: AppColors.textSecondary),
                       ),
@@ -98,12 +182,12 @@ class AccessibilityScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Language', style: AppTextStyles.bodyBold()),
+                Text(context.tr('Language'), style: AppTextStyles.bodyBold()),
                 const SizedBox(height: AppDimensions.stackSm),
                 for (final lang in [
                   ('en', 'English'),
-                  ('si', 'Sinhala (සිංහල)'),
-                  ('ta', 'Tamil (தமிழ்)')
+                  ('si', 'සිංහල'),
+                  ('ta', 'தமிழ்')
                 ])
                   RadioListTile<String>(
                     title: Text(lang.$2, style: AppTextStyles.bodyXl()),
@@ -133,6 +217,108 @@ class AccessibilityScreen extends ConsumerWidget {
 
 // ── Notification Settings ─────────────────────────────────────────────────────
 
+class _ThemeColourOption extends StatelessWidget {
+  const _ThemeColourOption({
+    required this.option,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final AppThemeColor option;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '${context.tr(option.label)}. ${context.tr(option.description)}',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: ValueKey('theme-colour-${option.name}'),
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(15),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            decoration: BoxDecoration(
+              color: selected
+                  ? option.color.withOpacity(0.08)
+                  : AppColors.scaffoldBackground,
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(
+                color: selected ? option.color : AppColors.borderLight,
+                width: selected ? 2 : 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: option.color,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: option.color.withOpacity(0.22),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: selected
+                      ? const Icon(
+                          Icons.check_rounded,
+                          size: 21,
+                          color: Colors.white,
+                        )
+                      : null,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(context.tr(option.label),
+                          style: AppTextStyles.bodyBold()),
+                      Text(
+                        context.tr(option.description),
+                        style: AppTextStyles.caption(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (selected)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: option.color,
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                    child: Text(
+                      context.tr('Selected'),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class NotificationSettingsScreen extends ConsumerWidget {
   const NotificationSettingsScreen({super.key});
 
@@ -143,7 +329,7 @@ class NotificationSettingsScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.scaffoldBackground,
-      appBar: AppBar(title: const Text('Notifications')),
+      appBar: AppBar(title: Text(context.tr('Notifications'))),
       body: ListView(
         padding: const EdgeInsets.all(AppDimensions.screenMargin),
         children: [
@@ -162,9 +348,10 @@ class NotificationSettingsScreen extends ConsumerWidget {
                       if (!granted) {
                         if (!context.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
+                          SnackBar(
                             content: Text(
-                              'Enable notifications in device settings to receive reminders.',
+                              context.tr(
+                                  'Enable notifications in device settings to receive reminders.'),
                             ),
                           ),
                         );
@@ -200,7 +387,8 @@ class NotificationSettingsScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: AppDimensions.stackXl),
-          Text('Retry & Grace Period', style: AppTextStyles.headlineMd()),
+          Text(context.tr('Retry & Grace Period'),
+              style: AppTextStyles.headlineMd()),
           const SizedBox(height: AppDimensions.stackSm),
           Text(
             'If you don\'t respond, DoseDiary will send up to ${settings.retryCount} follow-up reminders. Caregiver alerts go out after ${settings.gracePeriodMinutes} minutes.',
@@ -287,7 +475,7 @@ class PrivacyScreen extends ConsumerWidget {
     final notifier = ref.read(settingsProvider.notifier);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Privacy')),
+      appBar: AppBar(title: Text(context.tr('Privacy'))),
       backgroundColor: AppColors.scaffoldBackground,
       body: ListView(
         padding: const EdgeInsets.all(AppDimensions.screenMargin),
@@ -306,10 +494,12 @@ class PrivacyScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Data Storage', style: AppTextStyles.bodyBold()),
+                Text(context.tr('Data Storage'),
+                    style: AppTextStyles.bodyBold()),
                 const SizedBox(height: AppDimensions.stackSm),
                 Text(
-                  'Your medication records are stored locally on this device and optionally synced to a secure cloud account when you sign in.',
+                  context.tr(
+                      'Your medication records are stored locally on this device and optionally synced to a secure cloud account when you sign in.'),
                   style: AppTextStyles.bodyLg(color: AppColors.textSecondary),
                 ),
               ],
@@ -328,7 +518,7 @@ class SafetyInfoScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Medical Safety Notice')),
+        appBar: AppBar(title: Text(context.tr('Medical Safety Notice'))),
         backgroundColor: AppColors.scaffoldBackground,
         body: ListView(
           padding: const EdgeInsets.all(AppDimensions.screenMargin),
@@ -340,25 +530,27 @@ class SafetyInfoScreen extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.health_and_safety_rounded,
+                      Icon(Icons.health_and_safety_rounded,
                           color: AppColors.primaryAction),
                       const SizedBox(width: 8),
-                      Text('Important Notice',
+                      Text(context.tr('Important Notice'),
                           style: AppTextStyles.bodyBold(
                               color: AppColors.primaryAction)),
                     ],
                   ),
                   const SizedBox(height: AppDimensions.stackMd),
                   Text(
-                    'DoseDiary is a personal medication reminder and adherence tracking tool.\n\n'
-                    'This app does NOT:\n'
-                    '• Diagnose medical conditions\n'
-                    '• Recommend treatment changes\n'
-                    '• Calculate recommended dosages\n'
-                    '• Give medical instructions\n'
-                    '• Replace professional medical advice\n\n'
-                    'Always follow the instructions of your doctor, pharmacist, or other qualified healthcare provider.\n\n'
-                    'If you have any concerns about your medication, contact your healthcare provider immediately.',
+                    context.tr(
+                      'DoseDiary is a personal medication reminder and adherence tracking tool.\n\n'
+                      'This app does NOT:\n'
+                      '• Diagnose medical conditions\n'
+                      '• Recommend treatment changes\n'
+                      '• Calculate recommended dosages\n'
+                      '• Give medical instructions\n'
+                      '• Replace professional medical advice\n\n'
+                      'Always follow the instructions of your doctor, pharmacist, or other qualified healthcare provider.\n\n'
+                      'If you have any concerns about your medication, contact your healthcare provider immediately.',
+                    ),
                     style: AppTextStyles.bodyLg(color: AppColors.textSecondary),
                   ),
                 ],
@@ -376,7 +568,7 @@ class HelpScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Help & Support')),
+        appBar: AppBar(title: Text(context.tr('Help & Support'))),
         backgroundColor: AppColors.scaffoldBackground,
         body: ListView(
           padding: const EdgeInsets.all(AppDimensions.screenMargin),
@@ -452,14 +644,14 @@ class _NotificationCentreScreenState
     final notificationsAsync = ref.watch(notificationsProvider);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Notifications'),
+        title: Text(context.tr('Notifications')),
         actions: [
           TextButton(
             onPressed: () async {
               await ref.read(notificationRepositoryProvider).markAllRead();
               _refresh();
             },
-            child: const Text('Mark all read'),
+            child: Text(context.tr('Mark all read')),
           ),
           PopupMenuButton<String>(
             onSelected: (value) async {
@@ -468,10 +660,10 @@ class _NotificationCentreScreenState
                 _refresh();
               }
             },
-            itemBuilder: (_) => const [
+            itemBuilder: (_) => [
               PopupMenuItem(
                 value: 'clear_read',
-                child: Text('Clear read notifications'),
+                child: Text(context.tr('Clear read notifications')),
               ),
             ],
           ),
@@ -504,14 +696,14 @@ class _NotificationCentreScreenState
                     child: Row(
                       children: [
                         ChoiceChip(
-                          label: const Text('All'),
+                          label: Text(context.tr('All')),
                           selected: !_unreadOnly,
                           onSelected: (_) =>
                               setState(() => _unreadOnly = false),
                         ),
                         const SizedBox(width: 8),
                         ChoiceChip(
-                          label: const Text('Unread'),
+                          label: Text(context.tr('Unread')),
                           selected: _unreadOnly,
                           onSelected: (_) => setState(() => _unreadOnly = true),
                         ),
@@ -580,14 +772,14 @@ class _NotificationCentreScreenState
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: Colors.white.withOpacity(0.2)),
           ),
-          child: const Row(
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.delete_outline_rounded, color: Colors.white, size: 21),
-              SizedBox(width: 7),
+              const Icon(Icons.delete_outline_rounded, color: Colors.white, size: 21),
+              const SizedBox(width: 7),
               Text(
-                'Delete',
-                style: TextStyle(
+                context.tr('Delete'),
+                style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w700,
                 ),
@@ -779,7 +971,7 @@ class _NotificationCentreScreenState
                             const Spacer(),
                             if (hasDestination) ...[
                               Text(
-                                'View details',
+                                context.tr('View details'),
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: color,
@@ -984,9 +1176,9 @@ class _NotificationUnreadBadge extends StatelessWidget {
           ),
         ],
       ),
-      child: const Text(
-        'NEW',
-        style: TextStyle(
+      child: Text(
+        context.tr('NEW'),
+        style: const TextStyle(
           color: Colors.white,
           fontSize: 9.5,
           height: 1.1,

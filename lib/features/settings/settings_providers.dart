@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../main.dart';
 import '../../data/local/database_provider.dart';
 import '../../data/remote/auth_service.dart';
+import '../../core/theme/app_colors.dart';
 
 // ── Settings state ────────────────────────────────────────────────────────────
 
@@ -19,6 +20,7 @@ class AppSettings {
     this.privacySafePreviews = true,
     this.retryCount = 2,
     this.gracePeriodMinutes = 30,
+    this.themeColor = AppThemeColor.crimson,
   });
 
   final double textScaleFactor;
@@ -30,6 +32,7 @@ class AppSettings {
   final bool privacySafePreviews;
   final int retryCount;
   final int gracePeriodMinutes;
+  final AppThemeColor themeColor;
 
   AppSettings copyWith({
     double? textScaleFactor,
@@ -41,6 +44,7 @@ class AppSettings {
     bool? privacySafePreviews,
     int? retryCount,
     int? gracePeriodMinutes,
+    AppThemeColor? themeColor,
   }) =>
       AppSettings(
         textScaleFactor: textScaleFactor ?? this.textScaleFactor,
@@ -54,6 +58,7 @@ class AppSettings {
         privacySafePreviews: privacySafePreviews ?? this.privacySafePreviews,
         retryCount: retryCount ?? this.retryCount,
         gracePeriodMinutes: gracePeriodMinutes ?? this.gracePeriodMinutes,
+        themeColor: themeColor ?? this.themeColor,
       );
 }
 
@@ -76,6 +81,7 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
     'privacy_previews',
     'retry_count',
     'grace_period',
+    'theme_color',
   ];
 
   String _key(String name) => 'settings.$_ownerKey.$name';
@@ -95,6 +101,7 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
       privacySafePreviews: value<bool>('privacy_previews') ?? true,
       retryCount: value<int>('retry_count') ?? 2,
       gracePeriodMinutes: value<int>('grace_period') ?? 30,
+      themeColor: AppThemeColor.fromName(value<String>('theme_color')),
     );
   }
 
@@ -141,6 +148,11 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
   Future<void> setGracePeriod(int minutes) async {
     await _prefs.setInt(_key('grace_period'), minutes);
     state = state.copyWith(gracePeriodMinutes: minutes);
+  }
+
+  Future<void> setThemeColor(AppThemeColor value) async {
+    await _prefs.setString(_key('theme_color'), value.name);
+    state = state.copyWith(themeColor: value);
   }
 
   Future<void> resetToDefaults() async {

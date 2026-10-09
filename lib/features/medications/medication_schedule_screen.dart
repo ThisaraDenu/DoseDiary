@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -40,7 +41,7 @@ class MedicationScheduleScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.scaffoldBackground,
       appBar: AppBar(
-        title: const Text('Medications'),
+        title: Text(context.tr('Medications')),
         automaticallyImplyLeading: false,
         actions: [
           IconButton(
@@ -65,7 +66,7 @@ class MedicationScheduleScreen extends ConsumerWidget {
             child: occsAsync.when(
               loading: () => const DdLoading(),
               error: (e, _) => Center(
-                child: Text('Error loading schedule',
+                child: Text(context.tr('Error loading schedule'),
                     style: AppTextStyles.bodyLg(color: AppColors.error)),
               ),
               data: (occs) => medsAsync.when(
@@ -340,7 +341,7 @@ class _DoseScheduleList extends StatelessWidget {
             const SizedBox(width: 7),
             Expanded(
               child: Text(
-                'Dose schedule',
+                context.tr('Dose schedule'),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppTextStyles.bodyBold(),
@@ -491,7 +492,7 @@ class _MedicationThumbnail extends StatelessWidget {
     return Container(
       color: AppColors.pendingBackground,
       alignment: Alignment.center,
-      child: const Icon(
+      child: Icon(
         Icons.medication_rounded,
         color: AppColors.primaryAction,
         size: 30,

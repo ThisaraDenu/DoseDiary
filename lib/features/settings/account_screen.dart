@@ -374,7 +374,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
       return Scaffold(
         appBar: AppBar(title: const Text('Profile & Account')),
         backgroundColor: AppColors.scaffoldBackground,
-        body: const Center(
+        body: Center(
           child: CircularProgressIndicator(color: AppColors.primaryAction),
         ),
       );
@@ -486,7 +486,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                                   color: const Color(0xFFFEF2F2),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: const Icon(
+                                child: Icon(
                                   Icons.cake_outlined,
                                   size: 18,
                                   color: AppColors.primaryAction,

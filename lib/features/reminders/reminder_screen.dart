@@ -636,7 +636,7 @@ class _AlarmHeroHeader extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.alarm_rounded,
                     color: AppColors.primaryAction,
                     size: 36,

@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/router/route_names.dart';
+import '../../core/theme/app_colors.dart';
+import '../../l10n/app_localizations.dart';
 import '../../core/services/phone_dialer_service.dart';
 import '../../core/utils/presence_formatters.dart';
 import '../../data/remote/auth_service.dart';
@@ -222,23 +224,24 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                 ),
               ),
               const SizedBox(width: 14),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'No Patient Allocated',
-                      style: TextStyle(
+                      context.tr('No Patient Allocated'),
+                      style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
                         color: Color(0xFF1B1B1B),
                         letterSpacing: -0.2,
                       ),
                     ),
-                    SizedBox(height: 2),
+                    const SizedBox(height: 2),
                     Text(
-                      'Link a patient to view real-time doses & device telemetry',
-                      style: TextStyle(
+                      context.tr(
+                          'Link a patient to view real-time doses & device telemetry'),
+                      style: const TextStyle(
                         fontSize: 12.5,
                         color: Color(0xFF545F73),
                         fontWeight: FontWeight.w500,
@@ -255,9 +258,9 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
             child: ElevatedButton.icon(
               onPressed: () => context.push(RouteNames.inviteCaregiver),
               icon: const Icon(Icons.person_add_rounded, size: 18),
-              label: const Text('Add Patient'),
+              label: Text(context.tr('Add Patient')),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFDC143C),
+                backgroundColor: AppColors.primaryAction,
                 foregroundColor: Colors.white,
                 elevation: 0,
                 minimumSize: const Size(double.infinity, 44),
@@ -406,9 +409,9 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                         color: Color(0xFFEEEEEE),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.call_rounded,
-                        color: Color(0xFFDC143C),
+                        color: AppColors.primaryAction,
                         size: 21,
                       ),
                     ),
@@ -445,19 +448,20 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                         final confirmed = await showDialog<bool>(
                           context: context,
                           builder: (ctx) => AlertDialog(
-                            title: const Text('Remove Patient'),
+                            title: Text(context.tr('Remove Patient')),
                             content: Text(
                               'Remove ${patient.fullName}? This connection will be removed from both your app and the patient’s app.',
                             ),
                             actions: [
                               TextButton(
                                 onPressed: () => Navigator.pop(ctx, false),
-                                child: const Text('Cancel'),
+                                child: Text(context.tr('Cancel')),
                               ),
                               TextButton(
                                 onPressed: () => Navigator.pop(ctx, true),
-                                child: const Text('Remove',
-                                    style: TextStyle(color: Color(0xFFDC143C))),
+                                child: Text(context.tr('Remove'),
+                                    style: TextStyle(
+                                        color: AppColors.primaryAction)),
                               ),
                             ],
                           ),
@@ -482,27 +486,29 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                       }
                     },
                     itemBuilder: (context) => [
-                      const PopupMenuItem(
+                      PopupMenuItem(
                         value: 'add',
                         child: Row(
                           children: [
-                            Icon(Icons.person_add_rounded,
+                            const Icon(Icons.person_add_rounded,
                                 size: 18, color: Color(0xFF1B1B1B)),
-                            SizedBox(width: 8),
-                            Flexible(child: Text('Add Another Patient')),
+                            const SizedBox(width: 8),
+                            Flexible(
+                                child: Text(context.tr('Add Another Patient'))),
                           ],
                         ),
                       ),
-                      const PopupMenuItem(
+                      PopupMenuItem(
                         value: 'remove',
                         child: Row(
                           children: [
                             Icon(Icons.person_remove_rounded,
-                                size: 18, color: Color(0xFFDC143C)),
-                            SizedBox(width: 8),
+                                size: 18, color: AppColors.primaryAction),
+                            const SizedBox(width: 8),
                             Flexible(
-                              child: Text('Remove Patient',
-                                  style: TextStyle(color: Color(0xFFDC143C))),
+                              child: Text(context.tr('Remove Patient'),
+                                  style: TextStyle(
+                                      color: AppColors.primaryAction)),
                             ),
                           ],
                         ),
@@ -526,9 +532,9 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Patient account',
-                  style: TextStyle(
+                Text(
+                  context.tr('Patient account'),
+                  style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
                     color: Color(0xFF545F73),
@@ -662,14 +668,14 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    const Row(
+                    Row(
                       children: [
                         Icon(Icons.person_add_rounded,
-                            color: Color(0xFFDC143C), size: 24),
-                        SizedBox(width: 8),
+                            color: AppColors.primaryAction, size: 24),
+                        const SizedBox(width: 8),
                         Text(
-                          'Allocate Patient',
-                          style: TextStyle(
+                          context.tr('Allocate Patient'),
+                          style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.w700,
                             color: Color(0xFF1B1B1B),
@@ -678,15 +684,16 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                       ],
                     ),
                     const SizedBox(height: 6),
-                    const Text(
-                      'Enter patient details to monitor their doses and live telemetry in Caregiver Mode.',
-                      style: TextStyle(fontSize: 13, color: Color(0xFF545F73)),
+                    Text(
+                      context.tr(
+                          'Enter patient details to monitor their doses and live telemetry in Caregiver Mode.'),
+                      style: const TextStyle(fontSize: 13, color: Color(0xFF545F73)),
                     ),
                     const SizedBox(height: 18),
 
                     // Full Name
-                    const Text('Patient Full Name *',
-                        style: TextStyle(
+                    Text(context.tr('Patient Full Name *'),
+                        style: const TextStyle(
                             fontWeight: FontWeight.w600, fontSize: 13)),
                     const SizedBox(height: 6),
                     TextField(
@@ -707,26 +714,30 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                     const SizedBox(height: 14),
 
                     // Relationship
-                    const Text('Relationship',
-                        style: TextStyle(
+                    Text(context.tr('Relationship'),
+                        style: const TextStyle(
                             fontWeight: FontWeight.w600, fontSize: 13)),
                     const SizedBox(height: 6),
                     DropdownButtonFormField<String>(
                       value: selectedRelationship,
-                      items: const [
+                      items: [
                         DropdownMenuItem(
-                            value: 'Mother', child: Text('Mother')),
+                            value: 'Mother', child: Text(context.tr('Mother'))),
                         DropdownMenuItem(
-                            value: 'Father', child: Text('Father')),
+                            value: 'Father', child: Text(context.tr('Father'))),
                         DropdownMenuItem(
-                            value: 'Spouse', child: Text('Spouse')),
+                            value: 'Spouse', child: Text(context.tr('Spouse'))),
                         DropdownMenuItem(
-                            value: 'Child', child: Text('Child / Dependent')),
+                            value: 'Child',
+                            child: Text(context.tr('Child / Dependent'))),
                         DropdownMenuItem(
-                            value: 'Grandparent', child: Text('Grandparent')),
+                            value: 'Grandparent',
+                            child: Text(context.tr('Grandparent'))),
                         DropdownMenuItem(
-                            value: 'Patient', child: Text('Patient / Client')),
-                        DropdownMenuItem(value: 'Other', child: Text('Other')),
+                            value: 'Patient',
+                            child: Text(context.tr('Patient / Client'))),
+                        DropdownMenuItem(
+                            value: 'Other', child: Text(context.tr('Other'))),
                       ],
                       onChanged: (val) {
                         if (val != null) {
@@ -747,8 +758,8 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                     const SizedBox(height: 14),
 
                     // Location
-                    const Text('Location',
-                        style: TextStyle(
+                    Text(context.tr('Location'),
+                        style: const TextStyle(
                             fontWeight: FontWeight.w600, fontSize: 13)),
                     const SizedBox(height: 6),
                     TextField(
@@ -768,8 +779,8 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                     const SizedBox(height: 14),
 
                     // Phone Number
-                    const Text('Phone Number (Optional)',
-                        style: TextStyle(
+                    Text(context.tr('Phone Number (Optional)'),
+                        style: const TextStyle(
                             fontWeight: FontWeight.w600, fontSize: 13)),
                     const SizedBox(height: 6),
                     TextField(
@@ -825,7 +836,7 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                             'Allocated patient $fullName successfully!');
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFDC143C),
+                        backgroundColor: AppColors.primaryAction,
                         foregroundColor: Colors.white,
                         minimumSize: const Size(double.infinity, 48),
                         shape: RoundedRectangleBorder(
@@ -833,7 +844,7 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                         textStyle: const TextStyle(
                             fontSize: 15, fontWeight: FontWeight.w700),
                       ),
-                      child: const Text('Save & Allocate Patient'),
+                      child: Text(context.tr('Save & Allocate Patient')),
                     ),
                   ],
                 ),
@@ -900,10 +911,10 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
   Widget _buildAvatarFallback() {
     return Container(
       color: const Color(0xFFFFDAD9),
-      child: const Center(
+      child: Center(
         child: Icon(
           Icons.person_rounded,
-          color: Color(0xFFB1002C),
+          color: AppColors.primaryActionDark,
           size: 32,
         ),
       ),
@@ -929,10 +940,10 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
       children: [
         Row(
           children: [
-            const Expanded(
+            Expanded(
               child: Text(
-                'Medication & Today’s Schedule',
-                style: TextStyle(
+                context.tr('Medication & Today’s Schedule'),
+                style: const TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w700,
                   color: Color(0xFF1B1B1B),
@@ -946,15 +957,15 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                 color: const Color(0xFFD5E0F8),
                 borderRadius: BorderRadius.circular(999),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.visibility_outlined,
+                  const Icon(Icons.visibility_outlined,
                       size: 14, color: Color(0xFF111C2D)),
-                  SizedBox(width: 4),
+                  const SizedBox(width: 4),
                   Text(
-                    'View only',
-                    style: TextStyle(
+                    context.tr('View only'),
+                    style: const TextStyle(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w700,
                       color: Color(0xFF111C2D),
@@ -971,9 +982,9 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
           style: const TextStyle(fontSize: 12.5, color: Color(0xFF545F73)),
         ),
         const SizedBox(height: 16),
-        const Text(
-          'Active medications',
-          style: TextStyle(
+        Text(
+          context.tr('Active medications'),
+          style: const TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w700,
             color: Color(0xFF1B1B1B),
@@ -989,9 +1000,9 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: const Color(0xFFE2E2E2)),
             ),
-            child: const Row(
+            child: Row(
               children: [
-                SizedBox(
+                const SizedBox(
                   width: 20,
                   height: 20,
                   child: CircularProgressIndicator(
@@ -999,10 +1010,10 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                     color: Color(0xFF006448),
                   ),
                 ),
-                SizedBox(width: 12),
+                const SizedBox(width: 12),
                 Text(
-                  'Syncing patient medications…',
-                  style: TextStyle(fontSize: 13.5, color: Color(0xFF545F73)),
+                  context.tr('Syncing patient medications…'),
+                  style: const TextStyle(fontSize: 13.5, color: Color(0xFF545F73)),
                 ),
               ],
             ),
@@ -1016,15 +1027,15 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: const Color(0xFFE2E2E2)),
             ),
-            child: const Row(
+            child: Row(
               children: [
-                Icon(Icons.medication_outlined,
+                const Icon(Icons.medication_outlined,
                     color: Color(0xFF545F73), size: 24),
-                SizedBox(width: 12),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'No active medications are available to view.',
-                    style: TextStyle(
+                    context.tr('No active medications are available to view.'),
+                    style: const TextStyle(
                       fontSize: 13.5,
                       color: Color(0xFF545F73),
                     ),
@@ -1060,9 +1071,9 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                             color: const Color(0xFFFFDAD9),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.medication_rounded,
-                            color: Color(0xFFB1002C),
+                            color: AppColors.primaryActionDark,
                             size: 25,
                           ),
                         ),
@@ -1105,14 +1116,14 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        const Column(
+                        Column(
                           children: [
-                            Icon(Icons.chevron_right_rounded,
+                            const Icon(Icons.chevron_right_rounded,
                                 color: Color(0xFF545F73), size: 22),
-                            SizedBox(height: 4),
+                            const SizedBox(height: 4),
                             Text(
-                              'Details',
-                              style: TextStyle(
+                              context.tr('Details'),
+                              style: const TextStyle(
                                 fontSize: 10.5,
                                 color: Color(0xFF545F73),
                               ),
@@ -1132,9 +1143,9 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              'Today’s doses',
-              style: TextStyle(
+            Text(
+              context.tr('Today’s doses'),
+              style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
                 color: Color(0xFF1B1B1B),
@@ -1146,15 +1157,15 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                 color: const Color(0xFFD2FFE8).withOpacity(0.7),
                 borderRadius: BorderRadius.circular(999),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.cloud_done_rounded,
+                  const Icon(Icons.cloud_done_rounded,
                       size: 14, color: Color(0xFF006448)),
-                  SizedBox(width: 4),
+                  const SizedBox(width: 4),
                   Text(
-                    'Updated',
-                    style: TextStyle(
+                    context.tr('Updated'),
+                    style: const TextStyle(
                       color: Color(0xFF006448),
                       fontSize: 11.5,
                       fontWeight: FontWeight.w700,
@@ -1201,14 +1212,15 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
       builder: (dialogContext) => AlertDialog(
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.medication_rounded, color: Color(0xFFB1002C), size: 24),
-            SizedBox(width: 8),
+            Icon(Icons.medication_rounded,
+                color: AppColors.primaryActionDark, size: 24),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Medication details',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                context.tr('Medication details'),
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
               ),
             ),
           ],
@@ -1226,15 +1238,16 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                   color: const Color(0xFFD5E0F8).withOpacity(0.55),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
-                    Icon(Icons.lock_outline_rounded,
+                    const Icon(Icons.lock_outline_rounded,
                         size: 16, color: Color(0xFF111C2D)),
-                    SizedBox(width: 6),
+                    const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        'Read-only access — only the patient can make changes.',
-                        style: TextStyle(
+                        context.tr(
+                            'Read-only access — only the patient can make changes.'),
+                        style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                           color: Color(0xFF111C2D),
@@ -1283,10 +1296,10 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text(
-              'Close',
+            child: Text(
+              context.tr('Close'),
               style: TextStyle(
-                color: Color(0xFFDC143C),
+                color: AppColors.primaryAction,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -1390,8 +1403,8 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
               Container(
                 width: 40,
                 height: 40,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFDC143C),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryAction,
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -1405,9 +1418,9 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'NEXT MEDICATION SOON',
-                      style: TextStyle(
+                    Text(
+                      context.tr('NEXT MEDICATION SOON'),
+                      style: const TextStyle(
                         color: Color(0xFF920022),
                         fontSize: 11.5,
                         fontWeight: FontWeight.w700,
@@ -1473,15 +1486,15 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                         "Gentle reminder sent to $patientFirstName's phone.");
                   },
                   icon: const Icon(Icons.send_to_mobile_rounded, size: 19),
-                  label: const Text(
-                    'Send Gentle Ping',
-                    style: TextStyle(
+                  label: Text(
+                    context.tr('Send Gentle Ping'),
+                    style: const TextStyle(
                       fontSize: 14.5,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFDC143C),
+                    backgroundColor: AppColors.primaryAction,
                     foregroundColor: Colors.white,
                     elevation: 0,
                     minimumSize: const Size(double.infinity, 46),
@@ -1518,9 +1531,9 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-                child: const Text(
-                  'Later',
-                  style: TextStyle(
+                child: Text(
+                  context.tr('Later'),
+                  style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
@@ -1542,9 +1555,9 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE2E2E2)),
       ),
-      child: const Row(
+      child: Row(
         children: [
-          SizedBox(
+          const SizedBox(
             width: 20,
             height: 20,
             child: CircularProgressIndicator(
@@ -1552,10 +1565,10 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
               color: Color(0xFF006448),
             ),
           ),
-          SizedBox(width: 12),
+          const SizedBox(width: 12),
           Text(
-            'Syncing today’s doses…',
-            style: TextStyle(fontSize: 13.5, color: Color(0xFF545F73)),
+            context.tr('Syncing today’s doses…'),
+            style: const TextStyle(fontSize: 13.5, color: Color(0xFF545F73)),
           ),
         ],
       ),
@@ -1596,10 +1609,10 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                 ),
               ),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'No Regimen Scheduled for Today',
-                  style: TextStyle(
+                  context.tr('No Regimen Scheduled for Today'),
+                  style: const TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
                     color: Color(0xFF1B1B1B),
@@ -1609,9 +1622,10 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
             ],
           ),
           const SizedBox(height: 8),
-          const Text(
-            'No doses were found in the patient\'s schedule for today.',
-            style: TextStyle(
+          Text(
+            context.tr(
+                'No doses were found in the patient\'s schedule for today.'),
+            style: const TextStyle(
               fontSize: 13.5,
               color: Color(0xFF545F73),
             ),
@@ -1703,9 +1717,9 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                             color: const Color(0xFF97F5CC),
                             borderRadius: BorderRadius.circular(6),
                           ),
-                          child: const Text(
-                            'Taken',
-                            style: TextStyle(
+                          child: Text(
+                            context.tr('Taken'),
+                            style: const TextStyle(
                               color: Color(0xFF00513A),
                               fontSize: 11.5,
                               fontWeight: FontWeight.w700,
@@ -1749,17 +1763,17 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Row(
+                Row(
                   children: [
-                    Icon(
+                    const Icon(
                       Icons.verified_rounded,
                       size: 16,
                       color: Color(0xFF006448),
                     ),
-                    SizedBox(width: 6),
+                    const SizedBox(width: 6),
                     Text(
-                      'Confirmed on Smart Cap',
-                      style: TextStyle(
+                      context.tr('Confirmed on Smart Cap'),
+                      style: const TextStyle(
                         color: Color(0xFF006448),
                         fontSize: 12.5,
                         fontWeight: FontWeight.w600,
@@ -1774,11 +1788,11 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                         'Confirmed via Smart Cap Sensor & DoseDiary at $scheduledTime.\nStatus: Full dose dispensed.\nOccurrence ID: ${occ.id}',
                   ),
                   borderRadius: BorderRadius.circular(4),
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     child: Text(
-                      'View Log',
-                      style: TextStyle(
+                      context.tr('View Log'),
+                      style: const TextStyle(
                         color: Color(0xFF545F73),
                         fontSize: 12.5,
                         fontWeight: FontWeight.w600,
@@ -1832,7 +1846,7 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: const Color(0xFFDC143C).withOpacity(0.35),
+          color: AppColors.primaryAction.withOpacity(0.35),
           width: 1.8,
         ),
         boxShadow: [
@@ -1871,8 +1885,8 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                       children: [
                         Text(
                           statusText,
-                          style: const TextStyle(
-                            color: Color(0xFFDC143C),
+                          style: TextStyle(
+                            color: AppColors.primaryAction,
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
                           ),
@@ -1885,9 +1899,9 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                             color: const Color(0xFFD5E0F8),
                             borderRadius: BorderRadius.circular(6),
                           ),
-                          child: const Text(
-                            'Pending',
-                            style: TextStyle(
+                          child: Text(
+                            context.tr('Pending'),
+                            style: const TextStyle(
                               color: Color(0xFF111C2D),
                               fontSize: 11.5,
                               fontWeight: FontWeight.w700,
@@ -1957,9 +1971,9 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                     size: 19,
                     color: Color(0xFF006448),
                   ),
-                  label: const Text(
-                    'Mark as Taken',
-                    style: TextStyle(
+                  label: Text(
+                    context.tr('Mark as Taken'),
+                    style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: Color(0xFF1B1B1B),
@@ -2004,7 +2018,7 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                     ),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFDC143C),
+                    backgroundColor: AppColors.primaryAction,
                     foregroundColor: Colors.white,
                     elevation: 0,
                     minimumSize: const Size(double.infinity, 46),
@@ -2233,9 +2247,9 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Weekly Adherence',
-                            style: TextStyle(
+                          Text(
+                            context.tr('Weekly Adherence'),
+                            style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w700,
                               color: Color(0xFF1B1B1B),
@@ -2272,7 +2286,7 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                     fontWeight: FontWeight.w700,
                     color: overallPct >= 80
                         ? const Color(0xFF006448)
-                        : const Color(0xFFDC143C),
+                        : AppColors.primaryAction,
                   ),
                 ),
               ),
@@ -2407,10 +2421,11 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                         color: Color(0xFF006448),
                       ),
                     )
-                  : const Text(
-                      'No adherence data yet — add a medication and log doses.',
+                  : Text(
+                      context.tr(
+                          'No adherence data yet — add a medication and log doses.'),
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 12.5,
                         color: Color(0xFF545F73),
                       ),
@@ -2427,7 +2442,7 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                     ? Icons.warning_amber_rounded
                     : Icons.verified_rounded,
                 color: report != null && report.totalMissed > 0
-                    ? const Color(0xFFDC143C)
+                    ? AppColors.primaryAction
                     : const Color(0xFF006448),
                 size: 18,
               ),
@@ -2470,7 +2485,7 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                       child: Icon(
                         Icons.medication_rounded,
                         color: hasLowStock
-                            ? const Color(0xFFB1002C)
+                            ? AppColors.primaryActionDark
                             : const Color(0xFF006448),
                         size: 22,
                       ),
@@ -2515,7 +2530,7 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                               'Refill request sent for ${targetRefillMed.name} (+30 ${targetRefillMed.quantityUnit}).');
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFDC143C),
+                          backgroundColor: AppColors.primaryAction,
                           foregroundColor: Colors.white,
                           elevation: 0,
                           minimumSize: const Size(68, 38),
@@ -2524,9 +2539,9 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                             borderRadius: BorderRadius.circular(8),
                           ),
                         ),
-                        child: const Text(
-                          'Refill',
-                          style: TextStyle(
+                        child: Text(
+                          context.tr('Refill'),
+                          style: const TextStyle(
                             fontSize: 13.5,
                             fontWeight: FontWeight.w700,
                           ),
@@ -2560,7 +2575,7 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                                 fontSize: 11.5,
                                 fontWeight: FontWeight.w600,
                                 color: hasLowStock
-                                    ? const Color(0xFFB1002C)
+                                    ? AppColors.primaryActionDark
                                     : const Color(0xFF006448),
                               ),
                             ),
@@ -2570,7 +2585,7 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                                 fontSize: 11.5,
                                 fontWeight: FontWeight.w700,
                                 color: hasLowStock
-                                    ? const Color(0xFFDC143C)
+                                    ? AppColors.primaryAction
                                     : const Color(0xFF006448),
                               ),
                             ),
@@ -2585,7 +2600,7 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                             backgroundColor: Colors.white,
                             valueColor: AlwaysStoppedAnimation<Color>(
                               hasLowStock
-                                  ? const Color(0xFFDC143C)
+                                  ? AppColors.primaryAction
                                   : const Color(0xFF006448),
                             ),
                           ),
@@ -2608,11 +2623,11 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
                           Icons.notification_important_rounded,
                           size: 17,
                         ),
-                        label: const Text('Notify Patient to Refill'),
+                        label: Text(context.tr('Notify Patient to Refill')),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFFDC143C),
-                          side: const BorderSide(
-                            color: Color(0xFFDC143C),
+                          foregroundColor: AppColors.primaryAction,
+                          side: BorderSide(
+                            color: AppColors.primaryAction,
                             width: 1.5,
                           ),
                           minimumSize: const Size(double.infinity, 40),
@@ -2645,14 +2660,12 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            const Icon(Icons.verified_rounded,
-                color: Color(0xFF006448), size: 24),
+            const Icon(Icons.verified_rounded, color: Color(0xFF006448), size: 24),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
                 title,
-                style:
-                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
               ),
             ),
           ],
@@ -2662,9 +2675,10 @@ class _CaregiverHomeViewState extends ConsumerState<CaregiverHomeView> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Close',
+            child: Text(context.tr('Close'),
                 style: TextStyle(
-                    color: Color(0xFFDC143C), fontWeight: FontWeight.w600)),
+                    color: AppColors.primaryAction,
+                    fontWeight: FontWeight.w600)),
           ),
         ],
       ),

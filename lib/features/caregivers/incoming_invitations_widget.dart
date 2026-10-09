@@ -104,7 +104,7 @@ class IncomingCaregiverInvitationsWidget extends ConsumerWidget {
             if (showHeader) ...[
               Row(
                 children: [
-                  const Icon(Icons.mail_outline_rounded,
+                  Icon(Icons.mail_outline_rounded,
                       size: 20, color: AppColors.primaryAction),
                   const SizedBox(width: 8),
                   Text('Incoming Invitations',

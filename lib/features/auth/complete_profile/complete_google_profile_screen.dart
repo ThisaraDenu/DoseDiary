@@ -212,7 +212,7 @@ class _CompleteGoogleProfileScreenState
         ),
         body: SafeArea(
           child: _isLoading
-              ? const Center(
+              ? Center(
                   child: CircularProgressIndicator(
                     color: AppColors.primaryAction,
                   ),
@@ -240,7 +240,7 @@ class _CompleteGoogleProfileScreenState
                                 color: const Color(0xFFFFCDD3),
                               ),
                             ),
-                            child: const Icon(
+                            child: Icon(
                               Icons.person_rounded,
                               size: 40,
                               color: AppColors.primaryAction,

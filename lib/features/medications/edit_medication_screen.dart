@@ -874,7 +874,7 @@ class _EditableMedicationImage extends StatelessWidget {
     return Container(
       color: AppColors.pendingBackground,
       alignment: Alignment.center,
-      child: const Icon(
+      child: Icon(
         Icons.add_photo_alternate_outlined,
         size: 42,
         color: AppColors.primaryAction,

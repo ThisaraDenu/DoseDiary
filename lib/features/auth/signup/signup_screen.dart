@@ -285,7 +285,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(
+                        borderSide: BorderSide(
                             color: AppColors.primaryAction, width: 1.5),
                       ),
                       contentPadding: const EdgeInsets.symmetric(

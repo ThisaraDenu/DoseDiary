@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../theme/app_colors.dart';
 import '../router/route_names.dart';
 import '../../features/caregivers/connection_invitation_prompt.dart';
+import '../../l10n/app_localizations.dart';
 
 /// Navigation item definition for DdBottomNav.
 class DdNavItem {
@@ -119,6 +120,7 @@ class _DdBottomNavState extends State<DdBottomNav>
 
   @override
   Widget build(BuildContext context) {
+    final accent = Theme.of(context).colorScheme.primary;
     const double barHeight = 64.0;
     const double horizontalPadding = 6.0;
     const double verticalPadding = 6.0;
@@ -201,11 +203,11 @@ class _DdBottomNavState extends State<DdBottomNav>
                         height: innerHeight,
                         child: Container(
                           decoration: BoxDecoration(
-                            gradient: const LinearGradient(
+                            gradient: LinearGradient(
                               colors: [
-                                Color(0xFFE53935),
-                                Color(0xFFDC143C),
-                                Color(0xFFB91032),
+                                Color.lerp(accent, Colors.white, 0.12)!,
+                                accent,
+                                Color.lerp(accent, Colors.black, 0.18)!,
                               ],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
@@ -214,14 +216,12 @@ class _DdBottomNavState extends State<DdBottomNav>
                                 BorderRadius.circular(innerHeight / 2),
                             boxShadow: [
                               BoxShadow(
-                                color:
-                                    AppColors.primaryAction.withOpacity(0.36),
+                                color: accent.withOpacity(0.36),
                                 blurRadius: 10.0,
                                 offset: const Offset(0, 3),
                               ),
                               BoxShadow(
-                                color:
-                                    AppColors.primaryAction.withOpacity(0.14),
+                                color: accent.withOpacity(0.14),
                                 blurRadius: 4.0,
                                 offset: const Offset(0, 1),
                               ),
@@ -339,8 +339,7 @@ class _DdBottomNavState extends State<DdBottomNav>
                                 child: InkWell(
                                   borderRadius:
                                       BorderRadius.circular(innerHeight / 2),
-                                  splashColor:
-                                      AppColors.primaryAction.withOpacity(0.08),
+                                  splashColor: accent.withOpacity(0.08),
                                   highlightColor: Colors.transparent,
                                   onTap: () {
                                     if (i != widget.currentIndex) {
@@ -398,6 +397,28 @@ class MainShell extends StatelessWidget {
       ),
       bottomNavigationBar: DdBottomNav(
         currentIndex: currentIndex,
+        items: [
+          DdNavItem(
+            icon: Icons.home_outlined,
+            activeIcon: Icons.home_rounded,
+            label: context.tr('Home'),
+          ),
+          DdNavItem(
+            icon: Icons.medication_outlined,
+            activeIcon: Icons.medication_rounded,
+            label: context.tr('Medications'),
+          ),
+          DdNavItem(
+            icon: Icons.history_outlined,
+            activeIcon: Icons.history_rounded,
+            label: context.tr('History'),
+          ),
+          DdNavItem(
+            icon: Icons.settings_outlined,
+            activeIcon: Icons.settings_rounded,
+            label: context.tr('Settings'),
+          ),
+        ],
         onTap: (index) {
           if (index == currentIndex) return;
           context.go(_routes[index]);

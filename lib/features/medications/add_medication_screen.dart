@@ -329,7 +329,7 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
                         ? Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Icon(
+                              Icon(
                                 Icons.add_photo_alternate_outlined,
                                 size: 40,
                                 color: AppColors.primaryAction,

@@ -172,7 +172,7 @@ class _DataSyncSettingsScreenState
             child: Column(
               children: [
                 ListTile(
-                  leading: const Icon(Icons.picture_as_pdf_outlined,
+                  leading: Icon(Icons.picture_as_pdf_outlined,
                       color: AppColors.primaryAction),
                   title: const Text('Download medication history'),
                   subtitle: const Text('Create daily or weekly PDF records'),
@@ -181,7 +181,7 @@ class _DataSyncSettingsScreenState
                 ),
                 const Divider(),
                 ListTile(
-                  leading: const Icon(Icons.manage_accounts_outlined,
+                  leading: Icon(Icons.manage_accounts_outlined,
                       color: AppColors.primaryAction),
                   title: const Text('Profile & account data'),
                   subtitle: const Text(
@@ -299,7 +299,7 @@ class SecuritySettingsScreen extends ConsumerWidget {
                 SwitchListTile(
                   value: settings.privacySafePreviews,
                   activeColor: AppColors.primaryAction,
-                  secondary: const Icon(Icons.visibility_off_outlined,
+                  secondary: Icon(Icons.visibility_off_outlined,
                       color: AppColors.primaryAction),
                   title: const Text('Private notification previews'),
                   subtitle:
@@ -310,7 +310,7 @@ class SecuritySettingsScreen extends ConsumerWidget {
                 ),
                 const Divider(),
                 ListTile(
-                  leading: const Icon(Icons.admin_panel_settings_outlined,
+                  leading: Icon(Icons.admin_panel_settings_outlined,
                       color: AppColors.primaryAction),
                   title: const Text('App permissions'),
                   subtitle:
@@ -321,7 +321,7 @@ class SecuritySettingsScreen extends ConsumerWidget {
                 if (email != null) ...[
                   const Divider(),
                   ListTile(
-                    leading: const Icon(Icons.password_rounded,
+                    leading: Icon(Icons.password_rounded,
                         color: AppColors.primaryAction),
                     title: const Text('Reset password'),
                     subtitle: Text(email),
@@ -335,7 +335,7 @@ class SecuritySettingsScreen extends ConsumerWidget {
           const SizedBox(height: 14),
           _DetailGroup(
             child: ListTile(
-              leading: const Icon(Icons.restart_alt_rounded,
+              leading: Icon(Icons.restart_alt_rounded,
                   color: AppColors.primaryAction),
               title: const Text('Reset app preferences'),
               subtitle: const Text(
@@ -371,7 +371,7 @@ class AboutSettingsScreen extends StatelessWidget {
                     color: Color(0xFFFFE8EE),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.medical_services_rounded,
+                  child: Icon(Icons.medical_services_rounded,
                       size: 34, color: AppColors.primaryAction),
                 ),
                 const SizedBox(height: 12),
@@ -397,7 +397,7 @@ class AboutSettingsScreen extends StatelessWidget {
             child: Column(
               children: [
                 ListTile(
-                  leading: const Icon(Icons.health_and_safety_outlined,
+                  leading: Icon(Icons.health_and_safety_outlined,
                       color: AppColors.primaryAction),
                   title: const Text('Medical safety notice'),
                   trailing: const Icon(Icons.chevron_right_rounded),
@@ -405,7 +405,7 @@ class AboutSettingsScreen extends StatelessWidget {
                 ),
                 const Divider(),
                 ListTile(
-                  leading: const Icon(Icons.help_outline_rounded,
+                  leading: Icon(Icons.help_outline_rounded,
                       color: AppColors.primaryAction),
                   title: const Text('Help & support'),
                   trailing: const Icon(Icons.chevron_right_rounded),
@@ -413,7 +413,7 @@ class AboutSettingsScreen extends StatelessWidget {
                 ),
                 const Divider(),
                 ListTile(
-                  leading: const Icon(Icons.description_outlined,
+                  leading: Icon(Icons.description_outlined,
                       color: AppColors.primaryAction),
                   title: const Text('Open-source licences'),
                   trailing: const Icon(Icons.chevron_right_rounded),

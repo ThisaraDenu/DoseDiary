@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -28,18 +29,19 @@ Future<void> _confirmSignOut(BuildContext context, WidgetRef ref) async {
   final confirmed = await showDialog<bool>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          title: const Text('Sign out of DoseDiary?'),
-          content: const Text(
-            'Your synchronized account data will remain in the cloud. Local account data on this device will be cleared.',
+          title: Text(context.tr('Sign out of DoseDiary?')),
+          content: Text(
+            context.tr(
+                'Your synchronized account data will remain in the cloud. Local account data on this device will be cleared.'),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Cancel'),
+              child: Text(context.tr('Cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Sign out'),
+              child: Text(context.tr('Sign out')),
             ),
           ],
         ),
@@ -66,7 +68,7 @@ class SettingsScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.scaffoldBackground,
       appBar: AppBar(
-        title: const Text('Settings'),
+        title: Text(context.tr('Settings')),
         automaticallyImplyLeading: false,
       ),
       body: ListView(
@@ -86,7 +88,8 @@ class SettingsScreen extends ConsumerWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('DoseDiary', style: AppTextStyles.headlineMd()),
+                          Text(context.tr('DoseDiary'),
+                              style: AppTextStyles.headlineMd()),
                           Text(userName,
                               style: AppTextStyles.bodyLg(
                                   color: AppColors.textSecondary),
@@ -119,7 +122,7 @@ class SettingsScreen extends ConsumerWidget {
                                                     top: 2, bottom: 2),
                                                 child: Text(
                                                   parts.join(' • '),
-                                                  style: const TextStyle(
+                                                  style: TextStyle(
                                                     fontSize: 12.5,
                                                     fontWeight: FontWeight.w600,
                                                     color:
@@ -158,139 +161,148 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const Divider(height: 1),
           const _PublicIdCard(),
-          const _SectionHeader(title: 'Medication & Tracking'),
+          _SectionHeader(title: context.tr('Medication & Tracking')),
           _SettingsGroup(
             children: [
               _SettingTile(
                 icon: Icons.medication_outlined,
-                label: 'My medications',
-                subtitle: 'Schedules, doses, stock, and prescription details',
+                label: context.tr('My medications'),
+                subtitle: context
+                    .tr('Schedules, doses, stock, and prescription details'),
                 onTap: () => context.push(RouteNames.medications),
               ),
               _SettingTile(
                 icon: Icons.history_rounded,
-                label: 'Medication history',
-                subtitle: 'Dose records, weekly charts, and PDF downloads',
+                label: context.tr('Medication history'),
+                subtitle: context
+                    .tr('Dose records, weekly charts, and PDF downloads'),
                 onTap: () => context.push(RouteNames.history),
               ),
               _SettingTile(
                 icon: Icons.insights_outlined,
-                label: 'Adherence insights',
-                subtitle: 'Review medication-taking patterns',
+                label: context.tr('Adherence insights'),
+                subtitle: context.tr('Review medication-taking patterns'),
                 onTap: () => context.push(RouteNames.adherence),
               ),
               _SettingTile(
                 icon: Icons.inventory_2_outlined,
-                label: 'Refills & stock',
-                subtitle: 'Inventory levels and refill reminders',
+                label: context.tr('Refills & stock'),
+                subtitle: context.tr('Inventory levels and refill reminders'),
                 onTap: () => context.push(RouteNames.refills),
               ),
             ],
           ),
-          const _SectionHeader(title: 'Care Network'),
+          _SectionHeader(title: context.tr('Care Network')),
           _SettingsGroup(
             children: [
               _SettingTile(
                 icon: Icons.people_alt_outlined,
-                label: 'Caregivers & patients',
-                subtitle: 'Connections, invitations, and access permissions',
+                label: context.tr('Caregivers & patients'),
+                subtitle: context
+                    .tr('Connections, invitations, and access permissions'),
                 onTap: () => context.push(RouteNames.caregivers),
               ),
               _SettingTile(
                 icon: Icons.notifications_active_outlined,
-                label: 'Notification centre',
-                subtitle: 'Recent reminders and caregiver alerts',
+                label: context.tr('Notification centre'),
+                subtitle: context.tr('Recent reminders and caregiver alerts'),
                 onTap: () => context.push(RouteNames.notificationCentre),
               ),
             ],
           ),
-          const _SectionHeader(title: 'Preferences'),
+          _SectionHeader(title: context.tr('Preferences')),
           _SettingsGroup(
             children: [
               _SettingTile(
                 icon: Icons.notifications_outlined,
-                label: 'Reminders & notifications',
-                subtitle: 'Sound, vibration, retries, and grace period',
+                label: context.tr('Reminders & notifications'),
+                subtitle:
+                    context.tr('Sound, vibration, retries, and grace period'),
                 trailingText:
                     settings.notificationRemindersEnabled ? 'On' : 'Off',
                 onTap: () => context.push(RouteNames.settingsNotifications),
               ),
               _SettingTile(
                 icon: Icons.accessibility_new_rounded,
-                label: 'Accessibility & language',
-                subtitle: 'Text size, simpler wording, and language',
+                label: context.tr('Accessibility & language'),
+                subtitle:
+                    context.tr('Text size, simpler wording, and language'),
                 trailingText: _languageName(settings.locale.languageCode),
                 onTap: () => context.push(RouteNames.settingsAccessibility),
               ),
               _SettingTile(
                 icon: Icons.admin_panel_settings_outlined,
-                label: 'App permissions',
-                subtitle: 'Manage device access used by DoseDiary',
+                label: context.tr('App permissions'),
+                subtitle: context.tr('Manage device access used by DoseDiary'),
                 onTap: () => context.push(RouteNames.permissions),
               ),
             ],
           ),
-          const _SectionHeader(title: 'Data & Security'),
+          _SectionHeader(title: context.tr('Data & Security')),
           _SettingsGroup(
             children: [
               _SettingTile(
                 icon: Icons.account_circle_outlined,
-                label: 'Profile & account',
-                subtitle: 'Photo, phone, birthday, gender, and email',
+                label: context.tr('Profile & account'),
+                subtitle:
+                    context.tr('Photo, phone, birthday, gender, and email'),
                 onTap: () => context.push(RouteNames.settingsAccount),
               ),
               _SettingTile(
                 icon: Icons.sync_rounded,
-                label: 'Data & sync',
-                subtitle: 'Cloud sync, local records, and PDF exports',
+                label: context.tr('Data & sync'),
+                subtitle:
+                    context.tr('Cloud sync, local records, and PDF exports'),
                 trailingText: user == null ? 'Local' : 'Connected',
                 onTap: () => context.push(RouteNames.settingsDataSync),
               ),
               _SettingTile(
                 icon: Icons.privacy_tip_outlined,
-                label: 'Privacy',
-                subtitle: 'Notification previews and data storage',
+                label: context.tr('Privacy'),
+                subtitle: context.tr('Notification previews and data storage'),
                 trailingText:
                     settings.privacySafePreviews ? 'Protected' : 'Detailed',
                 onTap: () => context.push(RouteNames.settingsPrivacy),
               ),
               _SettingTile(
                 icon: Icons.shield_outlined,
-                label: 'Security & permissions',
-                subtitle: 'Password, device access, and preference reset',
+                label: context.tr('Security & permissions'),
+                subtitle:
+                    context.tr('Password, device access, and preference reset'),
                 onTap: () => context.push(RouteNames.settingsSecurity),
               ),
             ],
           ),
-          const _SectionHeader(title: 'Help & Information'),
+          _SectionHeader(title: context.tr('Help & Information')),
           _SettingsGroup(
             children: [
               _SettingTile(
                 icon: Icons.help_outline_rounded,
-                label: 'Help & support',
-                subtitle: 'Answers to common DoseDiary questions',
+                label: context.tr('Help & support'),
+                subtitle: context.tr('Answers to common DoseDiary questions'),
                 onTap: () => context.push(RouteNames.settingsHelp),
               ),
               _SettingTile(
                 icon: Icons.health_and_safety_outlined,
-                label: 'Medical safety notice',
-                subtitle: 'Important information about using this app',
+                label: context.tr('Medical safety notice'),
+                subtitle:
+                    context.tr('Important information about using this app'),
                 onTap: () => context.push(RouteNames.settingsSafety),
               ),
               _SettingTile(
                 icon: Icons.info_outline_rounded,
-                label: 'About DoseDiary',
-                subtitle: 'Version, licences, and app information',
+                label: context.tr('About DoseDiary'),
+                subtitle: context.tr('Version, licences, and app information'),
                 onTap: () => context.push(RouteNames.settingsAbout),
               ),
             ],
           ),
-          const _SectionHeader(title: 'Session'),
+          _SectionHeader(title: context.tr('Session')),
           _SettingsGroup(
             children: [
               _SettingTile(
                 icon: Icons.logout_rounded,
-                label: 'Sign out',
+                label: context.tr('Sign out'),
                 subtitle:
                     'Securely clear local account data and return to login',
                 destructive: true,
@@ -336,7 +348,7 @@ class _PublicIdCard extends ConsumerWidget {
                 color: AppColors.primaryAction.withOpacity(0.12),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.tag_rounded,
                 color: AppColors.primaryAction,
               ),
@@ -346,7 +358,8 @@ class _PublicIdCard extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Your DoseDiary ID', style: AppTextStyles.bodyBold()),
+                  Text(context.tr('Your DoseDiary ID'),
+                      style: AppTextStyles.bodyBold()),
                   const SizedBox(height: 3),
                   publicId.when(
                     data: (id) => Text(
@@ -361,12 +374,13 @@ class _PublicIdCard extends ConsumerWidget {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                     error: (_, __) => Text(
-                      'ID unavailable',
+                      context.tr('ID unavailable'),
                       style: AppTextStyles.bodyLg(color: AppColors.error),
                     ),
                   ),
                   Text(
-                    'Share this ID to connect with a patient or caregiver.',
+                    context.tr(
+                        'Share this ID to connect with a patient or caregiver.'),
                     style: AppTextStyles.caption(),
                   ),
                 ],
@@ -382,7 +396,7 @@ class _PublicIdCard extends ConsumerWidget {
                   );
                   if (!context.mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('DoseDiary ID copied')),
+                    SnackBar(content: Text(context.tr('DoseDiary ID copied'))),
                   );
                 },
               )
