@@ -76,7 +76,8 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
             try {
               _selectedBirthday = DateTime.parse(dobStr);
               final age = AuthService.calculateAge(dobStr);
-              final formatted = DateFormat('dd MMM yyyy').format(_selectedBirthday!);
+              final formatted =
+                  DateFormat('dd MMM yyyy').format(_selectedBirthday!);
               _birthdayController.text =
                   age != null ? '$formatted ($age yrs)' : formatted;
             } catch (_) {
@@ -271,9 +272,9 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: Theme.of(context).colorScheme.copyWith(
-              primary: AppColors.primaryAction,
-              onPrimary: Colors.white,
-            ),
+                  primary: AppColors.primaryAction,
+                  onPrimary: Colors.white,
+                ),
           ),
           child: child!,
         );
@@ -373,7 +374,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
       return Scaffold(
         appBar: AppBar(title: const Text('Profile & Account')),
         backgroundColor: AppColors.scaffoldBackground,
-        body: const Center(
+        body: Center(
           child: CircularProgressIndicator(color: AppColors.primaryAction),
         ),
       );
@@ -429,7 +430,9 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                         elevation: 3,
                         child: InkWell(
                           customBorder: const CircleBorder(),
-                          onTap: _isUploadingPhoto ? null : _showImagePickerOptions,
+                          onTap: _isUploadingPhoto
+                              ? null
+                              : _showImagePickerOptions,
                           child: const Padding(
                             padding: EdgeInsets.all(8),
                             child: Icon(
@@ -455,13 +458,15 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
               Builder(
                 builder: (context) {
                   final age = _selectedBirthday != null
-                      ? AuthService.calculateAge(_selectedBirthday!.toIso8601String())
+                      ? AuthService.calculateAge(
+                          _selectedBirthday!.toIso8601String())
                       : null;
                   final gender = _selectedGender;
                   final phoneTrimmed = _phoneController.text.trim();
 
                   return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(14),
@@ -481,7 +486,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                                   color: const Color(0xFFFEF2F2),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: const Icon(
+                                child: Icon(
                                   Icons.cake_outlined,
                                   size: 18,
                                   color: AppColors.primaryAction,
@@ -668,7 +673,8 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                       hint: '77 123 4567',
                       controller: _phoneController,
                       selectedRegion: _selectedRegion,
-                      onRegionChanged: (region) => setState(() => _selectedRegion = region),
+                      onRegionChanged: (region) =>
+                          setState(() => _selectedRegion = region),
                       isRequired: false,
                     ),
                     const SizedBox(height: AppDimensions.stackMd),
@@ -691,8 +697,10 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                           controller: _birthdayController,
                           decoration: InputDecoration(
                             hintText: 'Select date of birth',
-                            prefixIcon: const Icon(Icons.cake_outlined, size: 20),
-                            suffixIcon: const Icon(Icons.calendar_month_rounded, size: 20),
+                            prefixIcon:
+                                const Icon(Icons.cake_outlined, size: 20),
+                            suffixIcon: const Icon(Icons.calendar_month_rounded,
+                                size: 20),
                             filled: true,
                             fillColor: const Color(0xFFF6F6F6),
                             border: OutlineInputBorder(
@@ -736,10 +744,13 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                         ),
                       ),
                       items: const [
-                        DropdownMenuItem(value: 'Female', child: Text('Female')),
+                        DropdownMenuItem(
+                            value: 'Female', child: Text('Female')),
                         DropdownMenuItem(value: 'Male', child: Text('Male')),
                         DropdownMenuItem(value: 'Other', child: Text('Other')),
-                        DropdownMenuItem(value: 'Prefer not to say', child: Text('Prefer not to say')),
+                        DropdownMenuItem(
+                            value: 'Prefer not to say',
+                            child: Text('Prefer not to say')),
                       ],
                       onChanged: (val) => setState(() => _selectedGender = val),
                     ),
@@ -769,13 +780,15 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                           size: 22,
                         ),
                         const SizedBox(width: 8),
-                        Text('Account & Security', style: AppTextStyles.bodyBold()),
+                        Text('Account & Security',
+                            style: AppTextStyles.bodyBold()),
                       ],
                     ),
                     const SizedBox(height: AppDimensions.stackMd),
                     Text(
                       'Email Address',
-                      style: AppTextStyles.caption(color: AppColors.textTertiary),
+                      style:
+                          AppTextStyles.caption(color: AppColors.textTertiary),
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -787,12 +800,14 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                     const SizedBox(height: AppDimensions.stackSm),
                     Text(
                       'Supabase User ID',
-                      style: AppTextStyles.caption(color: AppColors.textTertiary),
+                      style:
+                          AppTextStyles.caption(color: AppColors.textTertiary),
                     ),
                     const SizedBox(height: 2),
                     SelectableText(
                       _userId ?? 'Local only',
-                      style: AppTextStyles.caption(color: AppColors.textSecondary),
+                      style:
+                          AppTextStyles.caption(color: AppColors.textSecondary),
                     ),
                     const SizedBox(height: AppDimensions.stackSm),
                     Row(

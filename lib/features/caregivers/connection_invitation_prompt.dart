@@ -4,9 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/services/live_presence_service.dart';
 import '../../data/local/models/app_models.dart';
 import '../../data/remote/auth_service.dart';
+import '../../data/remote/supabase_sync_service.dart';
 import '../../data/repositories/app_repositories.dart';
+import '../../data/repositories/notification_repository.dart';
 
 /// Checks for invitations addressed to the current account and presents the
 /// newest one as an in-app popup from any main app tab.
@@ -24,35 +27,68 @@ class _ConnectionInvitationPromptState
     extends ConsumerState<ConnectionInvitationPrompt>
     with WidgetsBindingObserver {
   Timer? _pollTimer;
+  Timer? _presenceTimer;
   final Set<String> _handledInSession = {};
   bool _dialogOpen = false;
+  bool _presenceSyncRunning = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _refresh();
+      unawaited(_syncPresenceAndConnections(forceLocation: true));
+    });
     _pollTimer = Timer.periodic(
       const Duration(seconds: 15),
       (_) => _refresh(),
+    );
+    _presenceTimer = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => unawaited(_syncPresenceAndConnections()),
     );
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _refresh();
+    if (state == AppLifecycleState.resumed) {
+      _refresh();
+      unawaited(_syncPresenceAndConnections(forceLocation: true));
+    }
   }
 
   void _refresh() {
     if (!mounted || !AuthService.isLoggedIn) return;
     ref.invalidate(directIncomingInvitationsProvider);
+    ref.invalidate(notificationsProvider);
+    ref.invalidate(unreadNotificationCountProvider);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _pollTimer?.cancel();
+    _presenceTimer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _syncPresenceAndConnections({bool forceLocation = false}) async {
+    if (!mounted || !AuthService.isLoggedIn || _presenceSyncRunning) return;
+    _presenceSyncRunning = true;
+    try {
+      await LivePresenceService.publishNow(forceLocation: forceLocation);
+      await SupabaseSyncService.pullConnectedPeople();
+      if (!mounted) return;
+      ref.invalidate(allocatedPatientsProvider);
+      ref.invalidate(patientCaregiversListProvider);
+      ref.invalidate(patientCaregiversProvider);
+      ref.invalidate(caregiverPatientsProvider);
+      ref.invalidate(notificationsProvider);
+      ref.invalidate(unreadNotificationCountProvider);
+    } finally {
+      _presenceSyncRunning = false;
+    }
   }
 
   @override
@@ -83,7 +119,7 @@ class _ConnectionInvitationPromptState
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
-        icon: const Icon(
+        icon: Icon(
           Icons.people_alt_rounded,
           color: AppColors.primaryAction,
           size: 34,
@@ -121,6 +157,8 @@ class _ConnectionInvitationPromptState
       ref.invalidate(patientCaregiversProvider);
       ref.invalidate(caregiverPatientsProvider);
       ref.invalidate(caregiversProvider);
+      ref.invalidate(notificationsProvider);
+      ref.invalidate(unreadNotificationCountProvider);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

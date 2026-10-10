@@ -22,9 +22,11 @@ class DdStatusBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(config.icon, size: AppDimensions.iconStatus, color: config.foreground),
+          Icon(config.icon,
+              size: AppDimensions.iconStatus, color: config.foreground),
           const SizedBox(width: 4),
-          Text(config.label, style: AppTextStyles.statusBadge(color: config.foreground)),
+          Text(config.label,
+              style: AppTextStyles.statusBadge(color: config.foreground)),
         ],
       ),
     );

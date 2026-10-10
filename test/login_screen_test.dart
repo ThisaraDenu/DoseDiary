@@ -1,5 +1,6 @@
 import 'package:dose_diary/core/router/route_names.dart';
 import 'package:dose_diary/core/services/permission_service.dart';
+import 'package:dose_diary/data/local/database_provider.dart';
 import 'package:dose_diary/features/auth/login/login_screen.dart';
 import 'package:dose_diary/main.dart';
 import 'package:flutter/material.dart';
@@ -19,6 +20,11 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     String? receivedEmail;
     String? receivedPassword;
+    var accountLabel = 'Previous user data';
+    final cachedAccountProvider = Provider<String>((ref) {
+      ref.watch(accountSessionEpochProvider);
+      return accountLabel;
+    });
 
     final router = GoRouter(
       initialLocation: RouteNames.login,
@@ -29,13 +35,22 @@ void main() {
             emailPasswordSignIn: ({required email, required password}) async {
               receivedEmail = email;
               receivedPassword = password;
+              accountLabel = 'New user data';
             },
           ),
         ),
         GoRoute(
           path: RouteNames.home,
-          builder: (context, state) =>
-              const Scaffold(body: Text('Home destination')),
+          builder: (context, state) => Consumer(
+            builder: (context, ref, _) => Scaffold(
+              body: Column(
+                children: [
+                  const Text('Home destination'),
+                  Text(ref.watch(cachedAccountProvider)),
+                ],
+              ),
+            ),
+          ),
         ),
         GoRoute(
           path: RouteNames.permissions,
@@ -53,6 +68,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(LoginScreen)),
+    );
+    expect(container.read(cachedAccountProvider), 'Previous user data');
+
     await tester.enterText(
       find.widgetWithText(TextFormField, 'you@example.com'),
       ' Patient@Example.com ',
@@ -64,5 +84,7 @@ void main() {
     expect(receivedEmail, 'patient@example.com');
     expect(receivedPassword, 'password123');
     expect(find.text('Home destination'), findsOneWidget);
+    expect(find.text('New user data'), findsOneWidget);
+    expect(find.text('Previous user data'), findsNothing);
   });
 }

@@ -14,6 +14,7 @@ class Medication {
     required this.strengthUnit,
     required this.amountPerDose,
     required this.doseUnit,
+    this.imageUrl,
     this.instructions,
     required this.isActive,
     this.isAsNeeded = false,
@@ -33,6 +34,7 @@ class Medication {
   final String strengthUnit; // e.g. "mg", "mcg", "IU"
   final double amountPerDose;
   final String doseUnit; // e.g. "tablet(s)", "capsule(s)", "ml"
+  final String? imageUrl;
   final String? instructions;
   final bool isActive;
   final bool isAsNeeded;
@@ -51,6 +53,7 @@ class Medication {
     required String strengthUnit,
     required double amountPerDose,
     required String doseUnit,
+    String? imageUrl,
     String? instructions,
     bool isAsNeeded = false,
     double quantityOnHand = 0,
@@ -68,6 +71,7 @@ class Medication {
       strengthUnit: strengthUnit,
       amountPerDose: amountPerDose,
       doseUnit: doseUnit,
+      imageUrl: imageUrl,
       instructions: instructions,
       isActive: true,
       isAsNeeded: isAsNeeded,
@@ -87,13 +91,17 @@ class Medication {
     String? strengthUnit,
     double? amountPerDose,
     String? doseUnit,
+    String? imageUrl,
+    bool clearImageUrl = false,
     String? instructions,
+    bool clearInstructions = false,
     bool? isActive,
     bool? isAsNeeded,
     double? quantityOnHand,
     String? quantityUnit,
     bool? refillReminderEnabled,
     double? refillThresholdQty,
+    bool clearRefillThresholdQty = false,
     DateTime? refillReminderDate,
   }) {
     return Medication(
@@ -104,14 +112,18 @@ class Medication {
       strengthUnit: strengthUnit ?? this.strengthUnit,
       amountPerDose: amountPerDose ?? this.amountPerDose,
       doseUnit: doseUnit ?? this.doseUnit,
-      instructions: instructions ?? this.instructions,
+      imageUrl: clearImageUrl ? null : imageUrl ?? this.imageUrl,
+      instructions:
+          clearInstructions ? null : instructions ?? this.instructions,
       isActive: isActive ?? this.isActive,
       isAsNeeded: isAsNeeded ?? this.isAsNeeded,
       quantityOnHand: quantityOnHand ?? this.quantityOnHand,
       quantityUnit: quantityUnit ?? this.quantityUnit,
       refillReminderEnabled:
           refillReminderEnabled ?? this.refillReminderEnabled,
-      refillThresholdQty: refillThresholdQty ?? this.refillThresholdQty,
+      refillThresholdQty: clearRefillThresholdQty
+          ? null
+          : refillThresholdQty ?? this.refillThresholdQty,
       refillReminderDate: refillReminderDate ?? this.refillReminderDate,
       createdAt: createdAt,
       updatedAt: DateTime.now().toUtc(),
@@ -126,6 +138,7 @@ class Medication {
         'strength_unit': strengthUnit,
         'amount_per_dose': amountPerDose,
         'dose_unit': doseUnit,
+        'image_url': imageUrl,
         'instructions': instructions,
         'is_active': isActive ? 1 : 0,
         'is_as_needed': isAsNeeded ? 1 : 0,
@@ -146,6 +159,7 @@ class Medication {
         strengthUnit: map['strength_unit'] as String,
         amountPerDose: (map['amount_per_dose'] as num).toDouble(),
         doseUnit: map['dose_unit'] as String,
+        imageUrl: map['image_url'] as String?,
         instructions: map['instructions'] as String?,
         isActive: (map['is_active'] as int) == 1,
         isAsNeeded: (map['is_as_needed'] as int?) == 1,
@@ -573,6 +587,8 @@ class AllocatedPatient {
     this.batteryStatus = 'Balanced',
     this.smartHubStatus = 'Synced 2m ago',
     this.phoneNumber,
+    this.patientEmail,
+    this.gender,
     required this.createdAt,
   });
 
@@ -590,6 +606,8 @@ class AllocatedPatient {
   final String batteryStatus;
   final String smartHubStatus;
   final String? phoneNumber;
+  final String? patientEmail;
+  final String? gender;
   final DateTime createdAt;
 
   factory AllocatedPatient.create({
@@ -604,6 +622,8 @@ class AllocatedPatient {
     String batteryStatus = 'Balanced',
     String smartHubStatus = 'Synced 2m ago',
     String? phoneNumber,
+    String? patientEmail,
+    String? gender,
   }) {
     return AllocatedPatient(
       id: _uuid.v4(),
@@ -618,6 +638,8 @@ class AllocatedPatient {
       batteryStatus: batteryStatus,
       smartHubStatus: smartHubStatus,
       phoneNumber: phoneNumber,
+      patientEmail: patientEmail,
+      gender: gender,
       createdAt: DateTime.now().toUtc(),
     );
   }
@@ -633,6 +655,8 @@ class AllocatedPatient {
     String? batteryStatus,
     String? smartHubStatus,
     String? phoneNumber,
+    String? patientEmail,
+    String? gender,
   }) {
     return AllocatedPatient(
       id: id,
@@ -647,6 +671,8 @@ class AllocatedPatient {
       batteryStatus: batteryStatus ?? this.batteryStatus,
       smartHubStatus: smartHubStatus ?? this.smartHubStatus,
       phoneNumber: phoneNumber ?? this.phoneNumber,
+      patientEmail: patientEmail ?? this.patientEmail,
+      gender: gender ?? this.gender,
       createdAt: createdAt,
     );
   }
@@ -664,6 +690,8 @@ class AllocatedPatient {
         'battery_status': batteryStatus,
         'smart_hub_status': smartHubStatus,
         'phone_number': phoneNumber,
+        'patient_email': patientEmail,
+        'gender': gender,
         'created_at': createdAt.toIso8601String(),
       };
 
@@ -681,6 +709,8 @@ class AllocatedPatient {
         batteryStatus: map['battery_status'] as String? ?? 'Balanced',
         smartHubStatus: map['smart_hub_status'] as String? ?? 'Synced 2m ago',
         phoneNumber: map['phone_number'] as String?,
+        patientEmail: map['patient_email'] as String?,
+        gender: map['gender'] as String?,
         createdAt: DateTime.parse(map['created_at'] as String),
       );
 }
@@ -703,6 +733,7 @@ class AllocatedCaregiver {
     this.batteryStatus = 'Balanced',
     this.smartHubStatus = 'Synced 2m ago',
     this.phoneNumber,
+    this.email,
     required this.createdAt,
   });
 
@@ -718,6 +749,7 @@ class AllocatedCaregiver {
   final String batteryStatus;
   final String smartHubStatus;
   final String? phoneNumber;
+  final String? email;
   final DateTime createdAt;
 
   factory AllocatedCaregiver.create({
@@ -732,6 +764,7 @@ class AllocatedCaregiver {
     String batteryStatus = 'Balanced',
     String smartHubStatus = 'Synced 2m ago',
     String? phoneNumber,
+    String? email,
   }) {
     return AllocatedCaregiver(
       id: _uuid.v4(),
@@ -746,6 +779,7 @@ class AllocatedCaregiver {
       batteryStatus: batteryStatus,
       smartHubStatus: smartHubStatus,
       phoneNumber: phoneNumber,
+      email: email,
       createdAt: DateTime.now().toUtc(),
     );
   }
@@ -780,6 +814,7 @@ class AllocatedCaregiver {
         batteryStatus: map['battery_status'] as String? ?? 'Balanced',
         smartHubStatus: map['smart_hub_status'] as String? ?? 'Synced 2m ago',
         phoneNumber: map['phone_number'] as String?,
+        email: map['caregiver_email'] as String?,
         createdAt: DateTime.parse(map['created_at'] as String),
       );
 }

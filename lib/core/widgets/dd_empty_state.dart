@@ -38,7 +38,8 @@ class DdEmptyState extends StatelessWidget {
               child: Icon(icon, size: 40, color: AppColors.textSecondary),
             ),
             const SizedBox(height: AppDimensions.stackLg),
-            Text(title, style: AppTextStyles.headlineMd(), textAlign: TextAlign.center),
+            Text(title,
+                style: AppTextStyles.headlineMd(), textAlign: TextAlign.center),
             if (subtitle != null) ...[
               const SizedBox(height: AppDimensions.stackSm),
               Text(

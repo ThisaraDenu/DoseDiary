@@ -28,7 +28,7 @@ class MedicationAdherenceScreen extends ConsumerWidget {
       backgroundColor: const Color(0xFFF9FAFB),
       body: SafeArea(
         child: adherenceAsync.when(
-          loading: () => const Center(
+          loading: () => Center(
             child: CircularProgressIndicator(color: AppColors.primaryAction),
           ),
           error: (err, stack) => Center(
@@ -190,8 +190,8 @@ class MedicationAdherenceScreen extends ConsumerWidget {
   }
 
   // ── Title & Doctor PDF ───────────────────────────────────────────────────────
-  Widget _buildHeaderTitle(
-      BuildContext context, ComprehensiveAdherenceReport report, String userName) {
+  Widget _buildHeaderTitle(BuildContext context,
+      ComprehensiveAdherenceReport report, String userName) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
@@ -431,7 +431,8 @@ class MedicationAdherenceScreen extends ConsumerWidget {
                 ],
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: report.hasData ? statusBg : const Color(0xFFF2F4F7),
                   borderRadius: BorderRadius.circular(16),
@@ -441,7 +442,8 @@ class MedicationAdherenceScreen extends ConsumerWidget {
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    color: report.hasData ? statusColor : const Color(0xFF667085),
+                    color:
+                        report.hasData ? statusColor : const Color(0xFF667085),
                   ),
                 ),
               ),
@@ -1255,8 +1257,8 @@ class MedicationAdherenceScreen extends ConsumerWidget {
   }
 
   // ── Doctor PDF Export Modal ──────────────────────────────────────────────────
-  void _showDoctorPdfModal(
-      BuildContext context, ComprehensiveAdherenceReport report, String userName) {
+  void _showDoctorPdfModal(BuildContext context,
+      ComprehensiveAdherenceReport report, String userName) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1266,103 +1268,103 @@ class MedicationAdherenceScreen extends ConsumerWidget {
       ),
       builder: (ctx) => SingleChildScrollView(
         child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFEF3F2),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.picture_as_pdf_rounded,
-                    color: Color(0xFFB42318),
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Doctor Adherence Report',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                          color: const Color(0xFF101828),
-                        ),
-                      ),
-                      Text(
-                        'Ready to export for medical reviews',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 12,
-                          color: const Color(0xFF667085),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF9FAFB),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFEAECF0)),
-              ),
-              child: Column(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  _buildPdfRow('Patient Name', userName),
-                  const Divider(height: 16),
-                  _buildPdfRow('Reporting Period', report.dateRangeText),
-                  const Divider(height: 16),
-                  _buildPdfRow(
-                    'Overall Adherence',
-                    report.hasData ? '${report.scorePercentage}%' : 'No Data',
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF3F2),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.picture_as_pdf_rounded,
+                      color: Color(0xFFB42318),
+                      size: 24,
+                    ),
                   ),
-                  const Divider(height: 16),
-                  _buildPdfRow(
-                    'Doses Completed',
-                    '${report.totalTaken} of ${report.totalCountable}',
-                  ),
-                  const Divider(height: 16),
-                  _buildPdfRow(
-                    'Active Prescriptions',
-                    '${report.activePrescriptionsCount}',
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Doctor Adherence Report',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF101828),
+                          ),
+                        ),
+                        Text(
+                          'Ready to export for medical reviews',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 12,
+                            color: const Color(0xFF667085),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 20),
-            DdButton(
-              label: 'Export & Share Report',
-              onPressed: () {
-                Navigator.of(ctx).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Doctor Adherence Report exported successfully.',
-                      style: GoogleFonts.plusJakartaSans(),
+              const SizedBox(height: 18),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF9FAFB),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFEAECF0)),
+                ),
+                child: Column(
+                  children: [
+                    _buildPdfRow('Patient Name', userName),
+                    const Divider(height: 16),
+                    _buildPdfRow('Reporting Period', report.dateRangeText),
+                    const Divider(height: 16),
+                    _buildPdfRow(
+                      'Overall Adherence',
+                      report.hasData ? '${report.scorePercentage}%' : 'No Data',
                     ),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-              },
-            ),
-          ],
+                    const Divider(height: 16),
+                    _buildPdfRow(
+                      'Doses Completed',
+                      '${report.totalTaken} of ${report.totalCountable}',
+                    ),
+                    const Divider(height: 16),
+                    _buildPdfRow(
+                      'Active Prescriptions',
+                      '${report.activePrescriptionsCount}',
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              DdButton(
+                label: 'Export & Share Report',
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Doctor Adherence Report exported successfully.',
+                        style: GoogleFonts.plusJakartaSans(),
+                      ),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildPdfRow(String label, String value) {
     return Row(

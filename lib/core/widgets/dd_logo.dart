@@ -5,7 +5,8 @@ import '../theme/app_dimensions.dart';
 /// DoseDiary official brand logo widget.
 /// Renders the heart-and-pills app logo image from assets.
 class DdLogo extends StatelessWidget {
-  const DdLogo({super.key, this.size = AppDimensions.logoMd, this.onDark = false});
+  const DdLogo(
+      {super.key, this.size = AppDimensions.logoMd, this.onDark = false});
 
   final double size;
   final bool onDark;
@@ -22,7 +23,9 @@ class DdLogo extends StatelessWidget {
           width: size,
           height: size,
           decoration: BoxDecoration(
-            color: onDark ? Colors.white.withOpacity(0.15) : AppColors.primaryAction.withOpacity(0.08),
+            color: onDark
+                ? Colors.white.withOpacity(0.15)
+                : AppColors.primaryAction.withOpacity(0.08),
             shape: BoxShape.circle,
           ),
           child: Icon(

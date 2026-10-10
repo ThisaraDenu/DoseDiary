@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 import '../local/database_provider.dart';
 import '../local/models/adherence_models.dart';
@@ -214,14 +215,16 @@ class DoseRepository {
   }
 
   Future<List<DoseOccurrence>> getOccurrencesForDateRange(
-      DateTime start, DateTime end) async {
+      DateTime start, DateTime end,
+      {bool excludeDeletedHistory = false}) async {
     final db = await _database;
     final userId = _activeUserId;
     final startStr = start.toIso8601String();
     final endStr = end.toIso8601String();
     final rows = await db.query(
       'dose_occurrences',
-      where: 'user_id = ? AND scheduled_at >= ? AND scheduled_at <= ?',
+      where: 'user_id = ? AND scheduled_at >= ? AND scheduled_at <= ?'
+          '${excludeDeletedHistory ? ' AND history_deleted_at IS NULL' : ''}',
       whereArgs: [userId, startStr, endStr],
       orderBy: 'scheduled_at ASC',
     );
@@ -236,11 +239,120 @@ class DoseRepository {
     return DoseOccurrence.fromMap(rows.first);
   }
 
+  /// Removes a dose from history while retaining its schedule and stock record.
+  Future<void> deleteHistoryItem(String occurrenceId) async {
+    final db = await _database;
+    final userId = _activeUserId;
+    final count = await db.update(
+      'dose_occurrences',
+      {'history_deleted_at': DateTime.now().toUtc().toIso8601String()},
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [occurrenceId, userId],
+    );
+    if (count == 0) throw StateError('History item not found');
+    final rows = await db.query(
+      'dose_occurrences',
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [occurrenceId, userId],
+    );
+    SupabaseSyncService.pushDoseOccurrence(rows.single).ignore();
+  }
+
   Future<void> insertOccurrence(DoseOccurrence occ) async {
     final db = await _database;
     await db.insert('dose_occurrences', occ.toMap(),
         conflictAlgorithm: ConflictAlgorithm.ignore);
     SupabaseSyncService.pushDoseOccurrence(occ.toMap()).ignore();
+  }
+
+  /// Saves a manual historical dose or appends a correction to an existing dose.
+  Future<void> saveHistoryEntry({
+    required String medicationId,
+    required DateTime doseTime,
+    required DoseStatus status,
+    String? occurrenceId,
+    String? skipReason,
+  }) async {
+    if (!status.isTerminal || doseTime.isAfter(DateTime.now())) {
+      throw ArgumentError('Select a past time and a recorded dose status');
+    }
+    final db = await _database;
+    final uid = _activeUserId;
+    final now = DateTime.now().toUtc();
+    final eventId = const Uuid().v4();
+    Map<String, dynamic>? schedule;
+    late Map<String, dynamic> occurrence;
+    late Map<String, dynamic> event;
+    await db.transaction((txn) async {
+      final meds = await txn.query('medications',
+          where: 'id = ? AND user_id = ?', whereArgs: [medicationId, uid]);
+      if (meds.isEmpty) throw StateError('Medication not found');
+      if (occurrenceId == null) {
+        final id = const Uuid().v4();
+        final scheduleId = const Uuid().v4();
+        final day = DateFormat('yyyy-MM-dd').format(doseTime.toLocal());
+        // A completed one-day schedule prevents automatic recurring doses.
+        schedule = {
+          'id': scheduleId,
+          'medication_id': medicationId,
+          'user_id': uid,
+          'times_of_day': DateFormat('HH:mm').format(doseTime.toLocal()),
+          'frequency_type': 'daily',
+          'start_date': day,
+          'end_date': day,
+          'timezone': 'UTC',
+          'created_at': now.toIso8601String(),
+          'superseded_at': now.toIso8601String(),
+        };
+        occurrence = DoseOccurrence(
+          id: id,
+          scheduleId: scheduleId,
+          medicationId: medicationId,
+          userId: uid,
+          scheduledAt: doseTime.toUtc(),
+          localDate: day,
+          occurrenceKey: 'manual-$id',
+          status: status,
+          createdAt: now,
+        ).toMap();
+        await txn.insert('schedules', schedule!);
+        await txn.insert('dose_occurrences', occurrence);
+      } else {
+        final rows = await txn.query('dose_occurrences',
+            where: 'id = ? AND user_id = ? AND medication_id = ? '
+                'AND history_deleted_at IS NULL',
+            whereArgs: [occurrenceId, uid, medicationId]);
+        if (rows.isEmpty) throw StateError('History item not found');
+        occurrence = Map<String, dynamic>.from(rows.single);
+        if (DateTime.parse(occurrence['scheduled_at'] as String)
+            .isAfter(DateTime.now())) {
+          throw ArgumentError('This dose has not been scheduled yet');
+        }
+        occurrence['status'] = status.name;
+        occurrence['snooze_until'] = null;
+        await txn.update('dose_occurrences', occurrence,
+            where: 'id = ? AND user_id = ?', whereArgs: [occurrenceId, uid]);
+      }
+      event = DoseEvent(
+        id: eventId,
+        occurrenceId: occurrence['id'] as String,
+        userId: uid,
+        action: status.name,
+        recordedAt: doseTime.toUtc(),
+        skipReason: status == DoseStatus.skipped ? skipReason?.trim() : null,
+        clientId: eventId,
+        createdAt: now,
+      ).toMap();
+      await txn.insert('dose_events', event);
+    });
+    // Push dependencies in order; the normal full sync retries offline writes.
+    Future<void> push() async {
+      if (schedule != null) await SupabaseSyncService.pushSchedule(schedule!);
+      await SupabaseSyncService.pushDoseOccurrence(occurrence);
+      await SupabaseSyncService.pushDoseEvent(event);
+    }
+
+    push().ignore();
   }
 
   Future<void> updateOccurrenceStatus(
@@ -252,8 +364,9 @@ class DoseRepository {
     final updates = <String, dynamic>{
       'status': status.toDbString(),
     };
-    if (snoozeUntil != null)
+    if (snoozeUntil != null) {
       updates['snooze_until'] = snoozeUntil.toIso8601String();
+    }
     await db
         .update('dose_occurrences', updates, where: 'id = ?', whereArgs: [id]);
     final occ = await getOccurrenceById(id);
@@ -832,7 +945,9 @@ final todayOccurrencesProvider =
 
 final todayMedicationsProvider = FutureProvider<List<Medication>>((ref) async {
   final repo = ref.watch(medicationRepositoryProvider);
-  return repo.getMedications();
+  // Keep medication names available for today's occurrences even if a
+  // medication was archived after its schedule was generated.
+  return repo.getMedications(activeOnly: false);
 });
 
 final todayAdherenceProvider = FutureProvider<AdherenceSummary>((ref) async {
@@ -865,6 +980,55 @@ final comprehensiveAdherenceProvider =
 final lowestStockMedicationProvider = FutureProvider<Medication?>((ref) async {
   final repo = ref.watch(refillRepositoryProvider);
   return repo.getLowestStockMedication();
+});
+
+/// Caregiver Mode data is always scoped to the linked patient's user ID.
+/// These providers must never fall back to the currently signed-in caregiver.
+final caregiverPatientDataSyncProvider =
+    FutureProvider.family<void, String>((ref, patientUserId) async {
+  await SupabaseSyncService.pullAuthorizedPatientDataFor(patientUserId);
+});
+
+final caregiverPatientMedicationsProvider =
+    FutureProvider.family<List<Medication>, String>((ref, patientUserId) async {
+  await ref.watch(caregiverPatientDataSyncProvider(patientUserId).future);
+  final repo = ref.watch(medicationRepositoryProvider);
+  return repo.getMedications(activeOnly: false, userId: patientUserId);
+});
+
+final caregiverPatientOccurrencesProvider =
+    FutureProvider.family<List<DoseOccurrence>, String>(
+        (ref, patientUserId) async {
+  await ref.watch(caregiverPatientDataSyncProvider(patientUserId).future);
+  final repo = ref.watch(patientRepositoryProvider);
+  final caregiverUserId = AuthService.currentUser?.id ?? 'guest-user';
+  return repo.getPatientOccurrencesForCaregiver(
+    patientUserId: patientUserId,
+    caregiverUserId: caregiverUserId,
+    date: DateTime.now(),
+  );
+});
+
+final caregiverPatientWeeklyAdherenceProvider =
+    FutureProvider.family<WeeklyAdherenceReport, String>(
+        (ref, patientUserId) async {
+  await ref.watch(caregiverPatientDataSyncProvider(patientUserId).future);
+  final repo = ref.watch(doseRepositoryProvider);
+  return repo.getWeeklyAdherenceReport(userId: patientUserId);
+});
+
+final caregiverPatientLowStockProvider =
+    FutureProvider.family<List<Medication>, String>((ref, patientUserId) async {
+  await ref.watch(caregiverPatientDataSyncProvider(patientUserId).future);
+  final repo = ref.watch(refillRepositoryProvider);
+  return repo.getLowStockMedications(userId: patientUserId);
+});
+
+final caregiverPatientLowestStockMedicationProvider =
+    FutureProvider.family<Medication?, String>((ref, patientUserId) async {
+  await ref.watch(caregiverPatientDataSyncProvider(patientUserId).future);
+  final repo = ref.watch(refillRepositoryProvider);
+  return repo.getLowestStockMedication(userId: patientUserId);
 });
 
 // ── Patient / Allocation Repository ──────────────────────────────────────────
@@ -911,71 +1075,10 @@ class PatientRepository {
     SupabaseSyncService.pushAllocatedPatient(patient.toMap()).ignore();
   }
 
-  /// Updates editable relationship fields for an allocated patient.
-  /// IMPORTANT PRIVACY GUARD:
-  /// Caregiver cannot edit patient password, authentication email, auth identity,
-  /// or unrelated security profile details.
-  Future<void> updateAllocatedPatient({
-    required String patientId,
-    required String relationship,
-    String? location,
-    String? phoneNumber,
-    String? caregiverId,
-  }) async {
-    final cid = caregiverId ?? _activeUserId;
-    final db = await _database;
-
-    final existing = await getPatientById(patientId, caregiverId: cid);
-    if (existing == null) {
-      throw StateError(
-          'Unauthorized: Patient record does not belong to this caregiver.');
-    }
-
-    final trimmedRel = relationship.trim().isEmpty
-        ? existing.relationship
-        : relationship.trim();
-    final nowIso = DateTime.now().toUtc().toIso8601String();
-
-    await db.transaction((txn) async {
-      await txn.update(
-        'allocated_patients',
-        {
-          'relationship': trimmedRel,
-          if (location != null) 'location': location.trim(),
-          if (phoneNumber != null) 'phone_number': phoneNumber.trim(),
-        },
-        where: 'id = ? AND caregiver_id = ?',
-        whereArgs: [patientId, cid],
-      );
-
-      // If linked to real user account, synchronize relationship on junction and reverse allocation
-      if (existing.patientUserId != null) {
-        final pid = existing.patientUserId!;
-        await txn.update(
-          'patient_caregiver_links',
-          {'relationship': trimmedRel, 'updated_at': nowIso},
-          where: 'caregiver_user_id = ? AND patient_user_id = ?',
-          whereArgs: [cid, pid],
-        );
-        await txn.update(
-          'allocated_caregivers',
-          {'relationship': trimmedRel},
-          where: 'patient_id = ? AND caregiver_user_id = ?',
-          whereArgs: [pid, cid],
-        );
-      }
-    });
-
-    final updated = await getPatientById(patientId, caregiverId: cid);
-    if (updated != null) {
-      SupabaseSyncService.pushAllocatedPatient(updated.toMap()).ignore();
-    }
-  }
-
   /// Disconnects the patient from this caregiver.
   /// Removes allocation and revokes bilateral relationship link without deleting
   /// patient account, medications, schedules, or relationships with other caregivers.
-  Future<void> disconnectPatient({
+  Future<bool> disconnectPatient({
     required String patientId,
     String? caregiverId,
   }) async {
@@ -1001,12 +1104,24 @@ class PatientRepository {
 
       // 2. If bilateral link exists, revoke relationship
       if (pid != null) {
-        await txn.update(
+        final updatedLinks = await txn.update(
           'patient_caregiver_links',
           {'status': 'revoked', 'updated_at': nowIso},
           where: 'caregiver_user_id = ? AND patient_user_id = ?',
           whereArgs: [cid, pid],
         );
+        if (updatedLinks == 0) {
+          final revokedLink = PatientCaregiverLink.create(
+            patientUserId: pid,
+            caregiverUserId: cid,
+            relationship: existing.relationship,
+          ).copyWith(status: 'revoked');
+          await txn.insert(
+            'patient_caregiver_links',
+            revokedLink.toMap(),
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
 
         // 3. Remove patient's view of caregiver
         await txn.delete(
@@ -1015,7 +1130,23 @@ class PatientRepository {
           whereArgs: [pid, cid],
         );
 
-        // 4. Update invitations between them to revoked
+        // 4. Revoke every caregiver permission for this relationship.
+        await txn.delete(
+          'caregiver_permissions',
+          where: 'user_id = ? AND caregiver_id = ?',
+          whereArgs: [pid, cid],
+        );
+
+        // Remove patient data cached only for caregiver viewing.
+        await txn.delete('dose_events', where: 'user_id = ?', whereArgs: [pid]);
+        await txn
+            .delete('stock_events', where: 'user_id = ?', whereArgs: [pid]);
+        await txn
+            .delete('dose_occurrences', where: 'user_id = ?', whereArgs: [pid]);
+        await txn.delete('schedules', where: 'user_id = ?', whereArgs: [pid]);
+        await txn.delete('medications', where: 'user_id = ?', whereArgs: [pid]);
+
+        // 5. Update invitations between them to revoked.
         final linkRows = await txn.query(
           'patient_caregiver_links',
           where: 'caregiver_user_id = ? AND patient_user_id = ?',
@@ -1035,6 +1166,10 @@ class PatientRepository {
       }
     });
 
+    final removedFromCloud = pid == null
+        ? true
+        : await SupabaseSyncService.removePatientCaregiverConnection(pid);
+
     if (pid != null) {
       final linkRows = await db.query(
         'patient_caregiver_links',
@@ -1046,6 +1181,7 @@ class PatientRepository {
         SupabaseSyncService.pushPatientCaregiverLink(linkRows.first).ignore();
       }
     }
+    return removedFromCloud;
   }
 
   /// Backward-compatible remove method (delegates to disconnectPatient)
@@ -1115,6 +1251,7 @@ final patientRepositoryProvider = Provider<PatientRepository>((ref) {
 
 final allocatedPatientsProvider =
     FutureProvider<List<AllocatedPatient>>((ref) async {
+  await SupabaseSyncService.pullConnectedPeople();
   final repo = ref.watch(patientRepositoryProvider);
   return repo.getAllocatedPatients();
 });
@@ -1249,12 +1386,20 @@ class CaregiverRepository {
       {String? patientId}) async {
     final pid = patientId ?? _activeUserId;
     final db = await _database;
-    final rows = await db.query(
-      'allocated_caregivers',
-      where: 'patient_id = ?',
-      whereArgs: [pid],
-      orderBy: 'created_at ASC',
-    );
+    final rows = await db.rawQuery('''
+      SELECT ac.*,
+             (
+               SELECT ci.caregiver_email
+               FROM caregiver_invitations ci
+               WHERE ci.user_id = ac.patient_id
+                 AND ci.caregiver_user_id = ac.caregiver_user_id
+               ORDER BY ci.updated_at DESC
+               LIMIT 1
+             ) AS caregiver_email
+      FROM allocated_caregivers ac
+      WHERE ac.patient_id = ?
+      ORDER BY ac.created_at ASC
+    ''', [pid]);
     return rows.map((r) => AllocatedCaregiver.fromMap(r)).toList();
   }
 
@@ -1269,13 +1414,29 @@ class CaregiverRepository {
   }
 
   /// Removes a caregiver by their ID.
-  Future<void> removeCaregiver(String caregiverId) async {
+  Future<bool> removeCaregiver(String caregiverId) async {
     final db = await _database;
-    await db.delete(
+    final rows = await db.query(
       'allocated_caregivers',
-      where: 'id = ?',
-      whereArgs: [caregiverId],
+      where: 'id = ? AND patient_id = ?',
+      whereArgs: [caregiverId, _activeUserId],
+      limit: 1,
     );
+    if (rows.isEmpty) {
+      throw StateError('Caregiver is not connected to this patient.');
+    }
+
+    final caregiverUserId = rows.first['caregiver_user_id'] as String?;
+    if (caregiverUserId == null || caregiverUserId.isEmpty) {
+      await db.delete(
+        'allocated_caregivers',
+        where: 'id = ? AND patient_id = ?',
+        whereArgs: [caregiverId, _activeUserId],
+      );
+      return true;
+    }
+
+    return revokeCaregiverAccess(caregiverUserId: caregiverUserId);
   }
 
   // ── Caregiver Invitations (Patient ↔ Caregiver Onboarding) ───────────────────
@@ -1689,7 +1850,7 @@ class CaregiverRepository {
 
   /// Patient revokes a caregiver's access. Atomically marks the link as revoked,
   /// removes allocations on both sides, and keeps invitation history.
-  Future<void> revokeCaregiverAccess({
+  Future<bool> revokeCaregiverAccess({
     required String caregiverUserId,
     String? patientUserId,
   }) async {
@@ -1702,22 +1863,29 @@ class CaregiverRepository {
       whereArgs: [pid, caregiverUserId],
       limit: 1,
     );
-    if (linkRows.isEmpty) {
-      throw StateError(
-          'Unauthorized: No relationship found with this caregiver.');
-    }
-
-    final invitationId = linkRows.first['invitation_id'] as String?;
+    final invitationId =
+        linkRows.isEmpty ? null : linkRows.first['invitation_id'] as String?;
     final nowIso = DateTime.now().toUtc().toIso8601String();
 
     await db.transaction((txn) async {
       // 1. Mark relationship link as revoked
-      await txn.update(
+      final updatedLinks = await txn.update(
         'patient_caregiver_links',
         {'status': 'revoked', 'updated_at': nowIso},
         where: 'patient_user_id = ? AND caregiver_user_id = ?',
         whereArgs: [pid, caregiverUserId],
       );
+      if (updatedLinks == 0) {
+        final revokedLink = PatientCaregiverLink.create(
+          patientUserId: pid,
+          caregiverUserId: caregiverUserId,
+        ).copyWith(status: 'revoked');
+        await txn.insert(
+          'patient_caregiver_links',
+          revokedLink.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
 
       // 2. Remove allocated caregiver from patient's view
       await txn.delete(
@@ -1733,7 +1901,14 @@ class CaregiverRepository {
         whereArgs: [pid, caregiverUserId],
       );
 
-      // 4. Mark invitation as revoked
+      // 4. Revoke every permission granted to this caregiver.
+      await txn.delete(
+        'caregiver_permissions',
+        where: 'user_id = ? AND caregiver_id = ?',
+        whereArgs: [pid, caregiverUserId],
+      );
+
+      // 5. Mark invitation as revoked.
       if (invitationId != null) {
         await txn.update(
           'caregiver_invitations',
@@ -1743,6 +1918,10 @@ class CaregiverRepository {
         );
       }
     });
+
+    final removedFromCloud =
+        await SupabaseSyncService.removePatientCaregiverConnection(
+            caregiverUserId);
 
     final linkRow = await db.query(
       'patient_caregiver_links',
@@ -1760,6 +1939,7 @@ class CaregiverRepository {
         SupabaseSyncService.pushCaregiverInvitation(invRow.first).ignore();
       }
     }
+    return removedFromCloud;
   }
 
   // ── Caregiver-Side Incoming Invitations ────────────────────────────────────
@@ -1959,6 +2139,12 @@ class CaregiverRepository {
     final patientAvatar = patientProfRows.isNotEmpty
         ? patientProfRows.first['avatar_url'] as String?
         : null;
+    final patientPhoneNumber = patientProfRows.isNotEmpty
+        ? patientProfRows.first['phone_number'] as String?
+        : null;
+    final patientGender = patientProfRows.isNotEmpty
+        ? patientProfRows.first['gender'] as String?
+        : null;
 
     final caregiverProfRows = await db.query(
       'profiles',
@@ -1976,6 +2162,9 @@ class CaregiverRepository {
             : 'Caregiver');
     final caregiverAvatar = caregiverProfRows.isNotEmpty
         ? caregiverProfRows.first['avatar_url'] as String?
+        : null;
+    final caregiverPhoneNumber = caregiverProfRows.isNotEmpty
+        ? caregiverProfRows.first['phone_number'] as String?
         : null;
 
     final permRows = await db.query(
@@ -1996,7 +2185,12 @@ class CaregiverRepository {
       // Step A: Update caregiver_invitations status to accepted
       await txn.update(
         'caregiver_invitations',
-        {'status': 'accepted', 'updated_at': nowIso},
+        {
+          'status': 'accepted',
+          'caregiver_user_id': effectiveCaregiverUserId,
+          'receiver_user_id': effectiveCaregiverUserId,
+          'updated_at': nowIso,
+        },
         where: 'id = ?',
         whereArgs: [invitationId],
       );
@@ -2041,6 +2235,8 @@ class CaregiverRepository {
           fullName: patientFullName,
           relationship: relationshipStr,
           avatarUrl: patientAvatar,
+          phoneNumber: patientPhoneNumber,
+          gender: patientGender,
         );
         createdAllocatedPatient = allocPatient;
         await txn.insert(
@@ -2055,6 +2251,8 @@ class CaregiverRepository {
             'full_name': patientFullName,
             'relationship': relationshipStr,
             if (patientAvatar != null) 'avatar_url': patientAvatar,
+            if (patientPhoneNumber != null) 'phone_number': patientPhoneNumber,
+            if (patientGender != null) 'gender': patientGender,
           },
           where: 'caregiver_id = ? AND patient_user_id = ?',
           whereArgs: [effectiveCaregiverUserId, patientUserId],
@@ -2074,6 +2272,7 @@ class CaregiverRepository {
           fullName: caregiverFullName,
           relationship: relationshipStr,
           avatarUrl: caregiverAvatar,
+          phoneNumber: caregiverPhoneNumber,
         );
         createdAllocatedCaregiver = allocCaregiver;
         await txn.insert(
@@ -2088,6 +2287,8 @@ class CaregiverRepository {
             'full_name': caregiverFullName,
             'relationship': relationshipStr,
             if (caregiverAvatar != null) 'avatar_url': caregiverAvatar,
+            if (caregiverPhoneNumber != null)
+              'phone_number': caregiverPhoneNumber,
           },
           where: 'patient_id = ? AND caregiver_user_id = ?',
           whereArgs: [patientUserId, effectiveCaregiverUserId],

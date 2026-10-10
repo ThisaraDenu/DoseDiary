@@ -45,5 +45,8 @@ class RouteNames {
   static const String settingsAccount = '/settings/account';
   static const String settingsSafety = '/settings/safety';
   static const String settingsHelp = '/settings/help';
+  static const String settingsDataSync = '/settings/data-sync';
+  static const String settingsSecurity = '/settings/security';
+  static const String settingsAbout = '/settings/about';
   static const String notificationCentre = '/settings/notifications/centre';
 }

@@ -8,6 +8,7 @@ import '../../core/router/route_names.dart';
 import '../../core/services/permission_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../main.dart';
+import '../../services/notification_service.dart';
 
 class PermissionsScreen extends ConsumerStatefulWidget {
   const PermissionsScreen({super.key});
@@ -56,10 +57,12 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen>
       if (mounted) {
         final state = ref.read(permissionsControllerProvider);
         if (state.statuses[AppPermissionType.notification] ?? false) {
+          await NotificationService.requestAlarmPermissions();
           await _finishAndNavigateHome();
         }
       }
     } else {
+      await NotificationService.requestAlarmPermissions();
       await _finishAndNavigateHome();
     }
   }
@@ -445,8 +448,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen>
                 width: double.infinity,
                 height: 54,
                 child: ElevatedButton(
-                  onPressed: () =>
-                      _handlePrimaryAction(isNotificationGranted),
+                  onPressed: () => _handlePrimaryAction(isNotificationGranted),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryAction,
                     foregroundColor: Colors.white,

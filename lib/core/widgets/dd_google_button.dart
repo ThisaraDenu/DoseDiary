@@ -62,7 +62,7 @@ class DdGoogleButton extends StatelessWidget {
             ? Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const SizedBox(
+                  SizedBox(
                     height: 18,
                     width: 18,
                     child: CircularProgressIndicator(
@@ -73,7 +73,8 @@ class DdGoogleButton extends StatelessWidget {
                   const SizedBox(width: 12),
                   Text(
                     'Signing in...',
-                    style: AppTextStyles.labelLg(color: AppColors.textSecondary),
+                    style:
+                        AppTextStyles.labelLg(color: AppColors.textSecondary),
                   ),
                 ],
               )

@@ -29,21 +29,26 @@ class DdButton extends StatelessWidget {
       DdButtonVariant.primary => ElevatedButton(
           onPressed: isEnabled ? onPressed : null,
           style: ElevatedButton.styleFrom(
-            backgroundColor: isEnabled ? AppColors.primaryAction : AppColors.borderLight,
+            backgroundColor: isEnabled
+                ? Theme.of(context).colorScheme.primary
+                : AppColors.borderLight,
             foregroundColor: AppColors.textOnPrimary,
-            minimumSize: const Size(double.infinity, AppDimensions.buttonHeight),
+            minimumSize:
+                const Size(double.infinity, AppDimensions.buttonHeight),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(AppDimensions.buttonRadius),
             ),
             elevation: 0,
           ),
-          child: _ButtonChild(label: label, isLoading: isLoading, icon: icon, onPrimary: true),
+          child: _ButtonChild(
+              label: label, isLoading: isLoading, icon: icon, onPrimary: true),
         ),
       DdButtonVariant.secondary => OutlinedButton(
           onPressed: isEnabled ? onPressed : null,
           style: OutlinedButton.styleFrom(
             foregroundColor: AppColors.textPrimary,
-            minimumSize: const Size(double.infinity, AppDimensions.buttonHeight),
+            minimumSize:
+                const Size(double.infinity, AppDimensions.buttonHeight),
             side: BorderSide(
               color: isEnabled ? AppColors.textPrimary : AppColors.borderLight,
               width: 1.5,
@@ -52,24 +57,28 @@ class DdButton extends StatelessWidget {
               borderRadius: BorderRadius.circular(AppDimensions.buttonRadius),
             ),
           ),
-          child: _ButtonChild(label: label, isLoading: isLoading, icon: icon, onPrimary: false),
+          child: _ButtonChild(
+              label: label, isLoading: isLoading, icon: icon, onPrimary: false),
         ),
       DdButtonVariant.text => TextButton(
           onPressed: isEnabled ? onPressed : null,
-          child: _ButtonChild(label: label, isLoading: isLoading, icon: icon, onPrimary: false),
+          child: _ButtonChild(
+              label: label, isLoading: isLoading, icon: icon, onPrimary: false),
         ),
       DdButtonVariant.danger => ElevatedButton(
           onPressed: isEnabled ? onPressed : null,
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.error,
             foregroundColor: AppColors.textOnPrimary,
-            minimumSize: const Size(double.infinity, AppDimensions.buttonHeight),
+            minimumSize:
+                const Size(double.infinity, AppDimensions.buttonHeight),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(AppDimensions.buttonRadius),
             ),
             elevation: 0,
           ),
-          child: _ButtonChild(label: label, isLoading: isLoading, icon: icon, onPrimary: true),
+          child: _ButtonChild(
+              label: label, isLoading: isLoading, icon: icon, onPrimary: true),
         ),
     };
   }
@@ -97,7 +106,9 @@ class _ButtonChild extends StatelessWidget {
         width: 20,
         child: CircularProgressIndicator(
           strokeWidth: 2,
-          color: onPrimary ? AppColors.textOnPrimary : AppColors.primaryAction,
+          color: onPrimary
+              ? AppColors.textOnPrimary
+              : Theme.of(context).colorScheme.primary,
         ),
       );
     }

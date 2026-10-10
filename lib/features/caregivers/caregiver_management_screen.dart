@@ -270,7 +270,7 @@ class _CaregiverCard extends ConsumerWidget {
                     label: const Text('Edit Access'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.primaryAction,
-                      side: const BorderSide(color: AppColors.primaryAction),
+                      side: BorderSide(color: AppColors.primaryAction),
                       minimumSize: const Size(0, 44),
                     ),
                   ),
@@ -350,7 +350,7 @@ class _CaregiverCard extends ConsumerWidget {
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    const Icon(Icons.tune_rounded,
+                    Icon(Icons.tune_rounded,
                         color: AppColors.primaryAction, size: 22),
                     const SizedBox(width: 8),
                     Text('Edit Caregiver Access',
