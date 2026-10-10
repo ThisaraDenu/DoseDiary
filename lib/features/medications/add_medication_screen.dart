@@ -18,6 +18,7 @@ import '../../data/repositories/app_repositories.dart';
 import '../../data/remote/auth_service.dart';
 import '../../data/remote/supabase_sync_service.dart';
 import '../home/home_dashboard_screen.dart';
+// End local imports
 
 const _uuid = Uuid();
 
