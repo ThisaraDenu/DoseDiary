@@ -22,11 +22,12 @@ class HistoryEntryEditor extends ConsumerStatefulWidget {
   final DateTime initialDate;
   final DoseOccurrence? occurrence;
   final DoseEvent? event;
+  // Creates a state for the history entry editor.
 
   @override
   ConsumerState<HistoryEntryEditor> createState() => _HistoryEntryEditorState();
 }
-
+// The state for the history entry editor.
 class _HistoryEntryEditorState extends ConsumerState<HistoryEntryEditor> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _reason;
@@ -35,6 +36,7 @@ class _HistoryEntryEditorState extends ConsumerState<HistoryEntryEditor> {
   late DoseStatus _status;
   bool _saving = false;
   String? _error;
+  // Initializes the state of the history entry editor.
 
   @override
   void initState() {
@@ -53,7 +55,7 @@ class _HistoryEntryEditorState extends ConsumerState<HistoryEntryEditor> {
     if (_doseTime.isAfter(now)) _doseTime = now;
     _reason = TextEditingController(text: widget.event?.skipReason ?? '');
   }
-
+// Disposes of the text editing controller when the widget is removed from the tree.
   @override
   void dispose() {
     _reason.dispose();
@@ -72,7 +74,7 @@ class _HistoryEntryEditorState extends ConsumerState<HistoryEntryEditor> {
     setState(() => _doseTime = DateTime(
         date.year, date.month, date.day, _doseTime.hour, _doseTime.minute));
   }
-
+// Shows a time picker dialog and updates the dose time if a time is selected.
   Future<void> _chooseTime() async {
     final time = await showTimePicker(
       context: context,
@@ -82,7 +84,7 @@ class _HistoryEntryEditorState extends ConsumerState<HistoryEntryEditor> {
     setState(() => _doseTime = DateTime(_doseTime.year, _doseTime.month,
         _doseTime.day, time.hour, time.minute));
   }
-
+// Saves the history entry to the repository and handles any errors that may occur.
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     if (_doseTime.isAfter(DateTime.now())) {
