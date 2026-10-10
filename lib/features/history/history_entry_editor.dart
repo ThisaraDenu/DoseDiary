@@ -84,7 +84,7 @@ class _HistoryEntryEditorState extends ConsumerState<HistoryEntryEditor> {
     setState(() => _doseTime = DateTime(_doseTime.year, _doseTime.month,
         _doseTime.day, time.hour, time.minute));
   }
-
+// Saves the history entry to the repository and handles any errors that may occur.
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     if (_doseTime.isAfter(DateTime.now())) {
