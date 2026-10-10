@@ -47,7 +47,7 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
   List<String> _timesOfDay = ['08:00'];
   bool _refillReminderEnabled = false;
   bool _isLoading = false;
-
+// Constants
   static const _strengthUnits = ['mg', 'mcg', 'g', 'IU', 'mmol', 'mEq', '%', 'ml'];
   static const _doseUnits = ['tablet(s)', 'capsule(s)', 'ml', 'drop(s)', 'patch(es)', 'unit(s)'];
 
