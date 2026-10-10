@@ -36,6 +36,7 @@ class _HistoryEntryEditorState extends ConsumerState<HistoryEntryEditor> {
   late DoseStatus _status;
   bool _saving = false;
   String? _error;
+  // Initializes the state of the history entry editor.
 
   @override
   void initState() {
