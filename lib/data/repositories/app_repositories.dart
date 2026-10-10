@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 import '../local/database_provider.dart';
 import '../local/models/adherence_models.dart';
@@ -214,14 +215,16 @@ class DoseRepository {
   }
 
   Future<List<DoseOccurrence>> getOccurrencesForDateRange(
-      DateTime start, DateTime end) async {
+      DateTime start, DateTime end,
+      {bool excludeDeletedHistory = false}) async {
     final db = await _database;
     final userId = _activeUserId;
     final startStr = start.toIso8601String();
     final endStr = end.toIso8601String();
     final rows = await db.query(
       'dose_occurrences',
-      where: 'user_id = ? AND scheduled_at >= ? AND scheduled_at <= ?',
+      where: 'user_id = ? AND scheduled_at >= ? AND scheduled_at <= ?'
+          '${excludeDeletedHistory ? ' AND history_deleted_at IS NULL' : ''}',
       whereArgs: [userId, startStr, endStr],
       orderBy: 'scheduled_at ASC',
     );
@@ -236,11 +239,120 @@ class DoseRepository {
     return DoseOccurrence.fromMap(rows.first);
   }
 
+  /// Removes a dose from history while retaining its schedule and stock record.
+  Future<void> deleteHistoryItem(String occurrenceId) async {
+    final db = await _database;
+    final userId = _activeUserId;
+    final count = await db.update(
+      'dose_occurrences',
+      {'history_deleted_at': DateTime.now().toUtc().toIso8601String()},
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [occurrenceId, userId],
+    );
+    if (count == 0) throw StateError('History item not found');
+    final rows = await db.query(
+      'dose_occurrences',
+      where: 'id = ? AND user_id = ?',
+      whereArgs: [occurrenceId, userId],
+    );
+    SupabaseSyncService.pushDoseOccurrence(rows.single).ignore();
+  }
+
   Future<void> insertOccurrence(DoseOccurrence occ) async {
     final db = await _database;
     await db.insert('dose_occurrences', occ.toMap(),
         conflictAlgorithm: ConflictAlgorithm.ignore);
     SupabaseSyncService.pushDoseOccurrence(occ.toMap()).ignore();
+  }
+
+  /// Saves a manual historical dose or appends a correction to an existing dose.
+  Future<void> saveHistoryEntry({
+    required String medicationId,
+    required DateTime doseTime,
+    required DoseStatus status,
+    String? occurrenceId,
+    String? skipReason,
+  }) async {
+    if (!status.isTerminal || doseTime.isAfter(DateTime.now())) {
+      throw ArgumentError('Select a past time and a recorded dose status');
+    }
+    final db = await _database;
+    final uid = _activeUserId;
+    final now = DateTime.now().toUtc();
+    final eventId = const Uuid().v4();
+    Map<String, dynamic>? schedule;
+    late Map<String, dynamic> occurrence;
+    late Map<String, dynamic> event;
+    await db.transaction((txn) async {
+      final meds = await txn.query('medications',
+          where: 'id = ? AND user_id = ?', whereArgs: [medicationId, uid]);
+      if (meds.isEmpty) throw StateError('Medication not found');
+      if (occurrenceId == null) {
+        final id = const Uuid().v4();
+        final scheduleId = const Uuid().v4();
+        final day = DateFormat('yyyy-MM-dd').format(doseTime.toLocal());
+        // A completed one-day schedule prevents automatic recurring doses.
+        schedule = {
+          'id': scheduleId,
+          'medication_id': medicationId,
+          'user_id': uid,
+          'times_of_day': DateFormat('HH:mm').format(doseTime.toLocal()),
+          'frequency_type': 'daily',
+          'start_date': day,
+          'end_date': day,
+          'timezone': 'UTC',
+          'created_at': now.toIso8601String(),
+          'superseded_at': now.toIso8601String(),
+        };
+        occurrence = DoseOccurrence(
+          id: id,
+          scheduleId: scheduleId,
+          medicationId: medicationId,
+          userId: uid,
+          scheduledAt: doseTime.toUtc(),
+          localDate: day,
+          occurrenceKey: 'manual-$id',
+          status: status,
+          createdAt: now,
+        ).toMap();
+        await txn.insert('schedules', schedule!);
+        await txn.insert('dose_occurrences', occurrence);
+      } else {
+        final rows = await txn.query('dose_occurrences',
+            where: 'id = ? AND user_id = ? AND medication_id = ? '
+                'AND history_deleted_at IS NULL',
+            whereArgs: [occurrenceId, uid, medicationId]);
+        if (rows.isEmpty) throw StateError('History item not found');
+        occurrence = Map<String, dynamic>.from(rows.single);
+        if (DateTime.parse(occurrence['scheduled_at'] as String)
+            .isAfter(DateTime.now())) {
+          throw ArgumentError('This dose has not been scheduled yet');
+        }
+        occurrence['status'] = status.name;
+        occurrence['snooze_until'] = null;
+        await txn.update('dose_occurrences', occurrence,
+            where: 'id = ? AND user_id = ?', whereArgs: [occurrenceId, uid]);
+      }
+      event = DoseEvent(
+        id: eventId,
+        occurrenceId: occurrence['id'] as String,
+        userId: uid,
+        action: status.name,
+        recordedAt: doseTime.toUtc(),
+        skipReason: status == DoseStatus.skipped ? skipReason?.trim() : null,
+        clientId: eventId,
+        createdAt: now,
+      ).toMap();
+      await txn.insert('dose_events', event);
+    });
+    // Push dependencies in order; the normal full sync retries offline writes.
+    Future<void> push() async {
+      if (schedule != null) await SupabaseSyncService.pushSchedule(schedule!);
+      await SupabaseSyncService.pushDoseOccurrence(occurrence);
+      await SupabaseSyncService.pushDoseEvent(event);
+    }
+
+    push().ignore();
   }
 
   Future<void> updateOccurrenceStatus(

@@ -26,7 +26,7 @@ class AppDatabase {
     final path = join(await getDatabasesPath(), 'dose_diary.db');
     final db = await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -114,7 +114,11 @@ class AppDatabase {
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Future migration logic
+    if (oldVersion < 2) {
+      await db.execute(
+        'ALTER TABLE dose_occurrences ADD COLUMN history_deleted_at TEXT',
+      );
+    }
   }
 
   /// Removes any rows that were inserted by the old seedSampleCaregiverData()
@@ -205,6 +209,7 @@ class AppDatabase {
       occurrence_key TEXT NOT NULL UNIQUE,
       status TEXT NOT NULL DEFAULT 'pending',
       snooze_until TEXT,
+      history_deleted_at TEXT,
       created_at TEXT NOT NULL,
       FOREIGN KEY(medication_id) REFERENCES medications(id),
       FOREIGN KEY(schedule_id) REFERENCES schedules(id)

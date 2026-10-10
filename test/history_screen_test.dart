@@ -1,5 +1,7 @@
 import 'package:dose_diary/data/local/models/app_models.dart';
 import 'package:dose_diary/data/local/models/dose_status.dart';
+import 'package:dose_diary/data/local/database_provider.dart';
+import 'package:dose_diary/data/repositories/app_repositories.dart';
 import 'package:dose_diary/features/history/history_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -153,12 +155,20 @@ void main() {
         },
       );
 
+      final repository = _HistoryDoseRepository();
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
             historySelectedDateProvider.overrideWith((ref) => today),
             historyViewModeProvider.overrideWith((ref) => HistoryViewMode.day),
-            historyDataProvider.overrideWith((ref, date) => data),
+            doseRepositoryProvider.overrideWithValue(repository),
+            historyDataProvider.overrideWith((ref, date) => HistoryData(
+                  occurrences: data.occurrences
+                      .where((item) => !repository.deletedIds.contains(item.id))
+                      .toList(),
+                  medications: data.medications,
+                  latestEvents: data.latestEvents,
+                )),
           ],
           child: const MaterialApp(home: HistoryScreen()),
         ),
@@ -171,9 +181,29 @@ void main() {
       expect(find.text('Weekly Adherence'), findsOneWidget);
       expect(find.text('2 of 5 scheduled'), findsOneWidget);
       expect(find.textContaining('Today,'), findsWidgets);
-      expect(find.textContaining('Yesterday,'), findsOneWidget);
+      expect(find.textContaining('Yesterday,'), findsNothing);
       expect(find.text('Felt unwell'), findsOneWidget);
       expect(find.text('Vitamin D'), findsNothing);
+
+      await tester.enterText(
+          find.byKey(const ValueKey('history-search')), 'aspirin');
+      await tester.pumpAndSettle();
+      expect(find.text('Aspirin'), findsOneWidget);
+      expect(find.text('Amoxicillin'), findsNothing);
+      await tester.enterText(
+          find.byKey(const ValueKey('history-search')), 'unknown');
+      await tester.pumpAndSettle();
+      expect(find.text('No matching history'), findsOneWidget);
+      await tester.enterText(find.byKey(const ValueKey('history-search')), '');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('history-filter-yesterday')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('delete-history-taken-yesterday')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('delete-history-taken-today')),
+          findsNothing);
+      await tester.tap(find.byKey(const ValueKey('history-filter-today')));
+      await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const ValueKey('weekly-adherence-review')));
       await tester.pumpAndSettle();
@@ -195,13 +225,70 @@ void main() {
       await tester.scrollUntilVisible(
         find.text('Status Key Reference'),
         300,
+        scrollable: find
+            .descendant(
+                of: find.byType(ListView), matching: find.byType(Scrollable))
+            .first,
       );
       expect(find.text('Status Key Reference'), findsOneWidget);
 
+      await tester.drag(find.byType(ListView), const Offset(0, 1000));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('history-tab-week')));
       await tester.pumpAndSettle();
       expect(find.text('Weekly Dose Summary'), findsOneWidget);
       expect(tester.takeException(), isNull);
+
+      await tester.tap(find.byKey(const ValueKey('history-tab-day')));
+      await tester.pumpAndSettle();
+      final deleteButton =
+          find.byKey(const ValueKey('delete-history-taken-today'));
+      await tester.ensureVisible(deleteButton);
+      await tester.tap(deleteButton);
+      await tester.pumpAndSettle();
+      expect(find.text('Delete history item?'), findsOneWidget);
+      expect(repository.deleteCalls, isEmpty);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(repository.deleteCalls, isEmpty);
+      expect(deleteButton, findsOneWidget);
+
+      repository.failDeletion = true;
+      await tester.tap(deleteButton);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+      expect(find.text('Could not delete history item. Try again.'),
+          findsOneWidget);
+      expect(deleteButton, findsOneWidget);
+
+      repository.failDeletion = false;
+      await tester.tap(deleteButton);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+      expect(repository.deletedIds, ['taken-today']);
+      expect(deleteButton, findsNothing);
+      expect(find.byKey(const ValueKey('delete-history-skipped-today')),
+          findsOneWidget);
+      expect(find.text('1 of 4 scheduled'), findsOneWidget);
+      expect(find.text('History item deleted.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     },
   );
+}
+
+class _HistoryDoseRepository extends DoseRepository {
+  _HistoryDoseRepository() : super(AppDatabase.instance);
+
+  final deleteCalls = <String>[];
+  final deletedIds = <String>[];
+  bool failDeletion = false;
+
+  @override
+  Future<void> deleteHistoryItem(String occurrenceId) async {
+    deleteCalls.add(occurrenceId);
+    if (failDeletion) throw StateError('Unable to delete');
+    deletedIds.add(occurrenceId);
+  }
 }

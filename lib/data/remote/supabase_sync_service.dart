@@ -404,7 +404,29 @@ class SupabaseSyncService {
 
     final database = await db.database;
     for (final row in rows) {
-      await database.insert('dose_occurrences', _fromCloud(row),
+      final local = _fromCloud(row);
+      // Keep offline deletions when the cloud still has an older record.
+      final existing = await database.query(
+        'dose_occurrences',
+        columns: ['history_deleted_at'],
+        where: 'id = ? AND user_id = ?',
+        whereArgs: [row['id'], userId],
+        limit: 1,
+      );
+      if (existing.isNotEmpty && existing.first['history_deleted_at'] != null) {
+        local['history_deleted_at'] = existing.first['history_deleted_at'];
+      }
+      await database.insert('dose_occurrences', local,
+          conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    final events = await _client
+        .from('dose_events')
+        .select()
+        .eq('user_id', userId)
+        .order('created_at', ascending: false)
+        .limit(1000);
+    for (final event in events) {
+      await database.insert('dose_events', _fromCloud(event),
           conflictAlgorithm: ConflictAlgorithm.replace);
     }
   }
