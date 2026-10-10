@@ -21,7 +21,7 @@ import '../home/home_dashboard_screen.dart';
 // End local imports
 
 const _uuid = Uuid();
-
+// Screen for adding a new medication
 class AddMedicationScreen extends ConsumerStatefulWidget {
   const AddMedicationScreen({super.key});
 
