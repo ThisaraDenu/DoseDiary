@@ -152,6 +152,7 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
+  // Pick a time for the reminder
 
   Future<void> _pickTime(int index) async {
     final parts = _timesOfDay[index].split(':');
