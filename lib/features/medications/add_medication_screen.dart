@@ -85,6 +85,7 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
             ? double.tryParse(_refillThresholdCtrl.text)
             : null,
       );
+      // Insert the medication into the database
 
       await medRepo.insertMedication(med);
 
