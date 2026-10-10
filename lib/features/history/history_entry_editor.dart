@@ -17,7 +17,7 @@ class HistoryEntryEditor extends ConsumerStatefulWidget {
     this.occurrence,
     this.event,
   });
-
+// The list of medications to choose from.
   final List<Medication> medications;
   final DateTime initialDate;
   final DoseOccurrence? occurrence;
