@@ -25,7 +25,7 @@ import '../home/home_dashboard_screen.dart';
 // End local imports
 
 const _uuid = Uuid();
-
+// Screen for adding a new medication
 class AddMedicationScreen extends ConsumerStatefulWidget {
   const AddMedicationScreen({super.key});
 
@@ -84,7 +84,7 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
     _refillThresholdCtrl.dispose();
     super.dispose();
   }
-
+// Save the medication and create a schedule
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
@@ -112,6 +112,7 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
                 ? double.tryParse(_refillThresholdCtrl.text)
                 : null,
       );
+      // Insert the medication into the database
 
       if (_medicationImageBytes != null) {
         final imageUrl = await AuthService.uploadMedicationImage(
@@ -194,6 +195,7 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
+  // Pick a time for the reminder
 
   Future<void> _pickTime(int index) async {
     final parts = _timesOfDay[index].split(':');
