@@ -60,7 +60,7 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
     _refillThresholdCtrl.dispose();
     super.dispose();
   }
-
+// Save the medication and create a schedule
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
