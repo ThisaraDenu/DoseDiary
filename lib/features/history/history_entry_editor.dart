@@ -113,7 +113,7 @@ class _HistoryEntryEditorState extends ConsumerState<HistoryEntryEditor> {
       }
     }
   }
-
+// Builds the widget tree for the history entry editor dialog.
   @override
   Widget build(BuildContext context) {
     final editing = widget.occurrence != null;
