@@ -7,6 +7,8 @@ import '../../data/local/models/dose_status.dart';
 import '../../data/repositories/app_repositories.dart';
 import '../../l10n/app_localizations.dart';
 
+/// A dialog for adding or editing a history entry (dose occurrence).
+
 class HistoryEntryEditor extends ConsumerStatefulWidget {
   const HistoryEntryEditor({
     super.key,
