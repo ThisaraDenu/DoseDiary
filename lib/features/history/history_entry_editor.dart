@@ -74,7 +74,7 @@ class _HistoryEntryEditorState extends ConsumerState<HistoryEntryEditor> {
     setState(() => _doseTime = DateTime(
         date.year, date.month, date.day, _doseTime.hour, _doseTime.minute));
   }
-
+// Shows a time picker dialog and updates the dose time if a time is selected.
   Future<void> _chooseTime() async {
     final time = await showTimePicker(
       context: context,
