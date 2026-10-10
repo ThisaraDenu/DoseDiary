@@ -55,7 +55,7 @@ class _HistoryEntryEditorState extends ConsumerState<HistoryEntryEditor> {
     if (_doseTime.isAfter(now)) _doseTime = now;
     _reason = TextEditingController(text: widget.event?.skipReason ?? '');
   }
-
+// Disposes of the text editing controller when the widget is removed from the tree.
   @override
   void dispose() {
     _reason.dispose();
