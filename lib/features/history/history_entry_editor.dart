@@ -27,7 +27,7 @@ class HistoryEntryEditor extends ConsumerStatefulWidget {
   @override
   ConsumerState<HistoryEntryEditor> createState() => _HistoryEntryEditorState();
 }
-
+// The state for the history entry editor.
 class _HistoryEntryEditorState extends ConsumerState<HistoryEntryEditor> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _reason;
