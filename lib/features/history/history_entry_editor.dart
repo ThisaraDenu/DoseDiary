@@ -22,6 +22,7 @@ class HistoryEntryEditor extends ConsumerStatefulWidget {
   final DateTime initialDate;
   final DoseOccurrence? occurrence;
   final DoseEvent? event;
+  // Creates a state for the history entry editor.
 
   @override
   ConsumerState<HistoryEntryEditor> createState() => _HistoryEntryEditorState();
