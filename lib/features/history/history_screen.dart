@@ -13,6 +13,7 @@ import '../../data/local/models/app_models.dart';
 import '../../data/local/models/dose_status.dart';
 import '../../data/repositories/app_repositories.dart';
 import 'history_pdf_service.dart';
+import 'history_entry_editor.dart';
 import 'weekly_adherence_charts.dart';
 
 enum HistoryViewMode { day, week }
@@ -21,6 +22,7 @@ final historyViewModeProvider =
     StateProvider<HistoryViewMode>((ref) => HistoryViewMode.day);
 final historySelectedDateProvider =
     StateProvider<DateTime>((ref) => DateUtils.dateOnly(DateTime.now()));
+final historySearchProvider = StateProvider.autoDispose<String>((ref) => '');
 
 class HistoryData {
   const HistoryData({
@@ -50,6 +52,7 @@ final historyDataProvider =
   final occurrences = await doseRepo.getOccurrencesForDateRange(
     startDay.toUtc(),
     rangeEnd.subtract(const Duration(microseconds: 1)).toUtc(),
+    excludeDeletedHistory: true,
   );
   final medications = await medicationRepo.getMedications(activeOnly: false);
   final medicationMap = {for (final med in medications) med.id: med};
@@ -75,6 +78,7 @@ class HistoryScreen extends ConsumerWidget {
     final selectedDate = ref.watch(historySelectedDateProvider);
     final viewMode = ref.watch(historyViewModeProvider);
     final historyAsync = ref.watch(historyDataProvider(selectedDate));
+    final query = ref.watch(historySearchProvider).trim().toLowerCase();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F9),
@@ -94,59 +98,215 @@ class HistoryScreen extends ConsumerWidget {
         error: (error, _) => _HistoryError(
           onRetry: () => ref.invalidate(historyDataProvider(selectedDate)),
         ),
-        data: (data) => RefreshIndicator(
-          color: AppColors.primaryAction,
-          onRefresh: () async {
-            ref.invalidate(historyDataProvider(selectedDate));
-            await ref.read(historyDataProvider(selectedDate).future);
-          },
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: EdgeInsets.fromLTRB(
-              12,
-              8,
-              12,
-              AppDimensions.navBarHeight +
-                  MediaQuery.paddingOf(context).bottom +
-                  AppDimensions.stackXl,
-            ),
-            children: [
-              _HistoryHeader(
-                onBack: () {
-                  if (context.canPop()) {
-                    context.pop();
-                  } else {
-                    context.go(RouteNames.home);
-                  }
-                },
-                onExport: () => _showHistoryExportSheet(
-                  context,
-                  data: data,
-                  selectedDate: selectedDate,
+        data: (data) {
+          final filteredData = HistoryData(
+            occurrences: data.occurrences.where((item) {
+              final medication = data.medications[item.medicationId]!;
+              final event = data.latestEvents[item.id];
+              final matchesDay = viewMode == HistoryViewMode.week ||
+                  item.localDate ==
+                      DateFormat('yyyy-MM-dd').format(selectedDate);
+              final searchable =
+                  '${medication.name} ${medication.displayStrength} '
+                          '${item.status.name} ${event?.skipReason ?? ''}'
+                      .toLowerCase();
+              return matchesDay && searchable.contains(query);
+            }).toList(),
+            medications: data.medications,
+            latestEvents: data.latestEvents,
+          );
+          return RefreshIndicator(
+            color: AppColors.primaryAction,
+            onRefresh: () async {
+              ref.invalidate(historyDataProvider(selectedDate));
+              await ref.read(historyDataProvider(selectedDate).future);
+            },
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.fromLTRB(
+                12,
+                8,
+                12,
+                AppDimensions.navBarHeight +
+                    MediaQuery.paddingOf(context).bottom +
+                    AppDimensions.stackXl,
+              ),
+              children: [
+                _HistoryHeader(
+                  onBack: () {
+                    if (context.canPop()) {
+                      context.pop();
+                    } else {
+                      context.go(RouteNames.home);
+                    }
+                  },
+                  onExport: () => _showHistoryExportSheet(
+                    context,
+                    data: data,
+                    selectedDate: selectedDate,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              const _ViewModeTabs(),
-              const SizedBox(height: 10),
-              _PeriodSelector(
-                selectedDate: selectedDate,
-                viewMode: viewMode,
-              ),
-              const SizedBox(height: 12),
-              _WeeklyAdherenceCard(data: data, selectedDate: selectedDate),
-              const SizedBox(height: 14),
-              if (viewMode == HistoryViewMode.day)
-                _DayHistory(data: data, selectedDate: selectedDate)
-              else
-                _WeekHistory(data: data, selectedDate: selectedDate),
-              const SizedBox(height: 14),
-              const _StatusReference(),
-            ],
-          ),
-        ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  key: const ValueKey('add-past-dose'),
+                  onPressed: () => _openHistoryEditor(context, ref,
+                      medications: data.medications.values.toList(),
+                      initialDate: selectedDate),
+                  icon: const Icon(Icons.add),
+                  label: Text(context.tr('Add past dose')),
+                ),
+                const SizedBox(height: 10),
+                const _HistorySearchField(),
+                const SizedBox(height: 10),
+                const _ViewModeTabs(),
+                const SizedBox(height: 10),
+                _PeriodSelector(
+                  selectedDate: selectedDate,
+                  viewMode: viewMode,
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final offset in [0, 1])
+                      ChoiceChip(
+                        key: ValueKey(
+                            'history-filter-${offset == 0 ? 'today' : 'yesterday'}'),
+                        label: Text(
+                            context.tr(offset == 0 ? 'Today' : 'Yesterday')),
+                        selected: DateUtils.isSameDay(selectedDate,
+                            DateTime.now().subtract(Duration(days: offset))),
+                        onSelected: (_) {
+                          ref.read(historySelectedDateProvider.notifier).state =
+                              DateUtils.dateOnly(DateTime.now()
+                                  .subtract(Duration(days: offset)));
+                          ref.read(historyViewModeProvider.notifier).state =
+                              HistoryViewMode.day;
+                        },
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _WeeklyAdherenceCard(data: data, selectedDate: selectedDate),
+                const SizedBox(height: 14),
+                if (filteredData.occurrences.isEmpty && query.isNotEmpty)
+                  const DdEmptyState(
+                    icon: Icons.search_off,
+                    title: 'No matching history',
+                    subtitle:
+                        'Try another medication name or choose a different date.',
+                  )
+                else if (viewMode == HistoryViewMode.day)
+                  _DayHistory(data: filteredData, selectedDate: selectedDate)
+                else
+                  _WeekHistory(data: filteredData, selectedDate: selectedDate),
+                const SizedBox(height: 14),
+                const _StatusReference(),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
+}
+
+class _HistorySearchField extends ConsumerStatefulWidget {
+  const _HistorySearchField();
+
+  @override
+  ConsumerState<_HistorySearchField> createState() =>
+      _HistorySearchFieldState();
+}
+
+class _HistorySearchFieldState extends ConsumerState<_HistorySearchField> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: ref.read(historySearchProvider));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen(historySearchProvider, (_, value) {
+      if (_controller.text != value) _controller.text = value;
+    });
+    return TextFormField(
+      key: const ValueKey('history-search'),
+      controller: _controller,
+      decoration: InputDecoration(
+        hintText: context.tr('Search medication history'),
+        prefixIcon: const Icon(Icons.search),
+        suffixIcon: IconButton(
+          tooltip: context.tr('Clear search'),
+          icon: const Icon(Icons.clear),
+          onPressed: () {
+            _controller.clear();
+            ref.read(historySearchProvider.notifier).state = '';
+          },
+        ),
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+      onChanged: (value) =>
+          ref.read(historySearchProvider.notifier).state = value,
+    );
+  }
+}
+
+Future<void> _openHistoryEditor(
+  BuildContext context,
+  WidgetRef ref, {
+  required List<Medication> medications,
+  required DateTime initialDate,
+  DoseOccurrence? occurrence,
+  DoseEvent? event,
+}) async {
+  if (medications.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+          content: Text(
+              context.tr('Add a medication before recording a past dose.'))),
+    );
+    return;
+  }
+  final result = await showDialog<DateTime>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => HistoryEntryEditor(
+      medications: medications,
+      initialDate: initialDate,
+      occurrence: occurrence,
+      event: event,
+    ),
+  );
+  if (result == null || !context.mounted) return;
+  ref.invalidate(historyDataProvider);
+  ref.invalidate(todayOccurrencesProvider);
+  ref.invalidate(todayAdherenceProvider);
+  ref.invalidate(weeklyAdherenceProvider);
+  ref.invalidate(comprehensiveAdherenceProvider);
+  if (occurrence == null) {
+    ref.read(historySelectedDateProvider.notifier).state =
+        DateUtils.dateOnly(result);
+    ref.read(historyViewModeProvider.notifier).state = HistoryViewMode.day;
+    ref.read(historySearchProvider.notifier).state = '';
+  }
+  final messenger = ScaffoldMessenger.of(context);
+  messenger.hideCurrentSnackBar();
+  messenger.showSnackBar(SnackBar(
+      content: Text(context.tr(
+    occurrence == null ? 'Past dose added.' : 'History updated.',
+  ))));
 }
 
 Future<void> _showHistoryExportSheet(
@@ -418,7 +578,7 @@ class _PeriodSelector extends ConsumerWidget {
           final picked = await showDatePicker(
             context: context,
             initialDate: selected,
-            firstDate: today.subtract(const Duration(days: 730)),
+            firstDate: DateTime(2000),
             lastDate: today,
           );
           if (picked != null) {
@@ -671,6 +831,7 @@ class _HistoryDayGroup extends StatelessWidget {
             children: [
               for (var index = 0; index < occurrences.length; index++) ...[
                 _HistoryDoseRow(
+                  key: ValueKey(occurrences[index].id),
                   occurrence: occurrences[index],
                   medication:
                       data.medications[occurrences[index].medicationId]!,
@@ -687,8 +848,9 @@ class _HistoryDayGroup extends StatelessWidget {
   }
 }
 
-class _HistoryDoseRow extends StatelessWidget {
+class _HistoryDoseRow extends ConsumerStatefulWidget {
   const _HistoryDoseRow({
+    super.key,
     required this.occurrence,
     required this.medication,
     this.event,
@@ -697,6 +859,65 @@ class _HistoryDoseRow extends StatelessWidget {
   final DoseOccurrence occurrence;
   final Medication medication;
   final DoseEvent? event;
+
+  @override
+  ConsumerState<_HistoryDoseRow> createState() => _HistoryDoseRowState();
+}
+
+class _HistoryDoseRowState extends ConsumerState<_HistoryDoseRow> {
+  bool _deleting = false;
+
+  DoseOccurrence get occurrence => widget.occurrence;
+  Medication get medication => widget.medication;
+  DoseEvent? get event => widget.event;
+
+  Future<void> _deleteHistoryItem() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(context.tr('Delete history item?')),
+        content: Text(
+          '${medication.name} · '
+          '${DateFormat('d MMM yyyy, h:mm a').format(occurrence.scheduledAt.toLocal())}\n\n'
+          '${context.tr('This item will be removed from your medication history. This cannot be undone.')}',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(context.tr('Cancel')),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(context.tr('Delete')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _deleting = true);
+    try {
+      await ref.read(doseRepositoryProvider).deleteHistoryItem(occurrence.id);
+      if (!mounted) return;
+      ref.invalidate(historyDataProvider);
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(content: Text(context.tr('History item deleted.'))),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(
+            content:
+                Text(context.tr('Could not delete history item. Try again.'))),
+      );
+    } finally {
+      if (mounted) setState(() => _deleting = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -755,6 +976,26 @@ class _HistoryDoseRow extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+          IconButton(
+            key: ValueKey('edit-history-${occurrence.id}'),
+            tooltip: context.tr('Edit history'),
+            icon: const Icon(Icons.edit_outlined),
+            onPressed:
+                _deleting || occurrence.scheduledAt.isAfter(DateTime.now())
+                    ? null
+                    : () => _openHistoryEditor(context, ref,
+                        medications: [medication],
+                        initialDate: occurrence.scheduledAt.toLocal(),
+                        occurrence: occurrence,
+                        event: event),
+          ),
+          IconButton(
+            key: ValueKey('delete-history-${occurrence.id}'),
+            tooltip: context.tr('Delete history item'),
+            icon: const Icon(Icons.delete_outline_rounded),
+            color: AppColors.error,
+            onPressed: _deleting ? null : _deleteHistoryItem,
           ),
         ],
       ),
